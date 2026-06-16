@@ -1,0 +1,15 @@
+# Node.js dependencies (will be ignored globally in the project)
+**/node_modules/
+**/dist/
+**/coverage/
+**/.angular/
+
+# Python build artifacts and virtual environment
+**/__pycache__/
+*.pyc
+.venv/
+.env
+
+# OS specific files
+.DS_Store
+Thumbs.db

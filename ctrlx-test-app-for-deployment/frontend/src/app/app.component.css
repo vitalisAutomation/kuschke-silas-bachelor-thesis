@@ -1,0 +1,110 @@
+/* Rexroth Corporate Branding Theme Colors */
+:root {
+  --brand-blue: #00ccff;       /* Pure Rexroth Accent Blue */
+  --industrial-dark: #1a1a1a;  /* Dark Graphite Gray */
+  --industrial-light: #f5f5f7; /* High-quality Metallic Gray Background */
+  --success-green: #00b300;    /* Operating Active */
+  --warning-orange: #ff9900;   /* Setup Mode */
+  --service-blue: #005691;     /* Service State */
+}
+
+body {
+  margin: 0;
+  background-color: #f5f5f7;
+}
+
+.dashboard-wrapper {
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 20px;
+  border-bottom: 3px solid #00ccff; /* Famous Rexroth Blue Stripe */
+  margin-bottom: 30px;
+}
+
+.brand-container {
+  display: flex;
+  align-items: center;
+}
+
+.brand-title {
+  font-size: 26px;
+  color: #1a1a1a;
+  font-weight: 700;
+  margin: 0;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: bold;
+}
+
+.status-label {
+  font-size: 16px;
+  color: #1a1a1a;
+  letter-spacing: 1px;
+}
+
+.status-light {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #888;
+}
+
+/* Status Class Color Mapping */
+.status-light.operating { background-color: #00b300; box-shadow: 0 0 10px #00b300; }
+.status-light.setup { background-color: #ff9900; box-shadow: 0 0 10px #ff9900; }
+.status-light.service { background-color: #005691; box-shadow: 0 0 10px #005691; }
+.status-light.error { background-color: #ff3333; box-shadow: 0 0 10px #ff3333; }
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 25px;
+}
+
+.card {
+  background-color: #ffffff;
+  border-radius: 6px;
+  padding: 25px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.card-title {
+  font-size: 16px;
+  color: #888888;
+  text-transform: uppercase;
+  margin: 0 0 20px 0;
+}
+
+.gauge-bar {
+  background-color: #e5e5ea;
+  border-radius: 12px;
+  height: 24px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  background-color: #00ccff;
+  height: 100%;
+  width: 0%;
+  text-align: right;
+  line-height: 24px;
+  padding-right: 10px;
+  box-sizing: border-box;
+  color: #1a1a1a;
+  font-weight: bold;
+  font-size: 12px;
+  transition: width 0.6s ease-in-out;
+}

@@ -1,0 +1,47 @@
+name: ctrlx-dashboard-app
+version: "1.0.0"
+summary: Bosch Rexroth style System Dashboard App for ctrlX CORE
+description: |
+  A read-only system monitoring dashboard app using Flask and Angular
+  running natively on ctrlX OS.
+grade: stable
+confinement: strict
+
+# Interface definitions to communicate with ctrlX OS Services
+plugs:
+  network:
+  network-bind:
+  datalayer: # Enables direct access to the local ctrlX Data Layer
+
+apps:
+  dashboard:
+    command: usr/bin/python3 $SNAP/backend/app.py
+    daemon: simple
+    restart-delay: 10s
+    restart-condition: always
+    plugs:
+      - network
+      - network-bind
+      - datalayer
+
+parts:
+  frontend:
+    plugin: nil
+    source: frontend/
+    build-snaps:
+      - node/18/stable
+    override-build: |
+      npm install
+      npm run build -- --configuration=production
+      # Copy built static files to Flask's web assets directory
+      mkdir -p $SNAPCRAFT_PART_SRC/../backend/static
+      cp -r dist/frontend/* $SNAPCRAFT_PART_SRC/../backend/static/
+
+  backend:
+    plugin: python
+    source: backend/
+    stage-packages:
+      - python3-requests
+      - python3-urllib3
+    after:
+      - frontend
