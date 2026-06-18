@@ -1,5 +1,6 @@
 <div class="dashboard-wrapper">
-  <header class="dashboard-header">
+  <!-- The header now dynamically applies a class based on the machine state -->
+  <header class="dashboard-header" [ngClass]="metrics.state.toLowerCase()">
     <h1 class="brand-title">ctrlX CORE - Live Dashboard</h1>
     
     <div class="status-indicator">

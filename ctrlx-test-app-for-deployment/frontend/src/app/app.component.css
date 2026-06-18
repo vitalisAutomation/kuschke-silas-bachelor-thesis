@@ -2,6 +2,7 @@
 :root {
   --rexroth-red: #DF0024;
   --rexroth-dark-blue: #354956;
+  --rexroth-light-blue: #0099D3; /* Light blue from the brand palette */
   --rexroth-background-gray: #f4f6f8;
   --rexroth-card-background: #ffffff;
   --rexroth-text-dark: #222222;
@@ -33,10 +34,18 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 2rem;
-  border-bottom: 4px solid var(--rexroth-red);
+  /* The border color is now dynamic based on the state */
+  border-bottom: 4px solid var(--rexroth-red); /* Default color */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
+  transition: border-color 0.4s ease-in-out;
 }
+
+/* Classes for dynamic header border color */
+.dashboard-header.operating { border-bottom-color: var(--status-operating); }
+.dashboard-header.setup { border-bottom-color: var(--status-setup); }
+.dashboard-header.service { border-bottom-color: var(--status-service); }
+.dashboard-header.error { border-bottom-color: var(--status-error); }
 
 .brand-title {
   font-size: 24px;
@@ -115,7 +124,8 @@ body {
 }
 
 .gauge-fill {
-  background-color: var(--rexroth-dark-blue);
+  /* Updated to use a blue gradient */
+  background-image: linear-gradient(to right, var(--rexroth-light-blue), var(--rexroth-dark-blue));
   height: 100%;
   width: 0%;
   display: flex;
