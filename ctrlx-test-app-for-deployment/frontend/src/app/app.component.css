@@ -1,43 +1,47 @@
-/* Rexroth Corporate Branding Theme Colors */
+/* Rexroth Corporate Design Inspired Theme */
 :root {
-  --brand-blue: #00ccff;       /* Pure Rexroth Accent Blue */
-  --industrial-dark: #1a1a1a;  /* Dark Graphite Gray */
-  --industrial-light: #f5f5f7; /* High-quality Metallic Gray Background */
-  --success-green: #00b300;    /* Operating Active */
-  --warning-orange: #ff9900;   /* Setup Mode */
-  --service-blue: #005691;     /* Service State */
+  --rexroth-red: #DF0024;
+  --rexroth-dark-blue: #354956;
+  --rexroth-background-gray: #f4f6f8;
+  --rexroth-card-background: #ffffff;
+  --rexroth-text-dark: #222222;
+  --rexroth-text-light: #f5f5f5;
+  --rexroth-border-color: #e0e0e0;
+
+  --status-operating: #00b300;
+  --status-setup: #ff9900;
+  --status-service: #005691;
+  --status-error: #ff3333;
 }
 
 body {
   margin: 0;
-  background-color: #f5f5f7;
+  background-color: var(--rexroth-background-gray);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--rexroth-text-dark);
 }
 
 .dashboard-wrapper {
-  max-width: 1200px;
-  margin: 40px auto;
-  padding: 0 20px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 .dashboard-header {
+  background-color: var(--rexroth-card-background);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 20px;
-  border-bottom: 3px solid #00ccff; /* Famous Rexroth Blue Stripe */
-  margin-bottom: 30px;
-}
-
-.brand-container {
-  display: flex;
-  align-items: center;
+  padding: 1rem 2rem;
+  border-bottom: 4px solid var(--rexroth-red);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
 .brand-title {
-  font-size: 26px;
-  color: #1a1a1a;
-  font-weight: 700;
+  font-size: 24px;
+  color: var(--rexroth-dark-blue);
+  font-weight: 600;
   margin: 0;
 }
 
@@ -45,66 +49,83 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-weight: bold;
+  font-weight: 500;
 }
 
 .status-label {
   font-size: 16px;
-  color: #1a1a1a;
-  letter-spacing: 1px;
+  color: var(--rexroth-dark-blue);
 }
 
 .status-light {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background-color: #888;
+  background-color: #ccc;
+  border: 1px solid rgba(0,0,0,0.1);
 }
 
 /* Status Class Color Mapping */
-.status-light.operating { background-color: #00b300; box-shadow: 0 0 10px #00b300; }
-.status-light.setup { background-color: #ff9900; box-shadow: 0 0 10px #ff9900; }
-.status-light.service { background-color: #005691; box-shadow: 0 0 10px #005691; }
-.status-light.error { background-color: #ff3333; box-shadow: 0 0 10px #ff3333; }
+.status-light.operating { background-color: var(--status-operating); }
+.status-light.setup { background-color: var(--status-setup); }
+.status-light.service { background-color: var(--status-service); }
+.status-light.error { background-color: var(--status-error); }
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  padding: 24px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .card {
-  background-color: #ffffff;
-  border-radius: 6px;
-  padding: 25px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background-color: var(--rexroth-card-background);
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--rexroth-border-color);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
 .card-title {
-  font-size: 16px;
-  color: #888888;
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 600;
   text-transform: uppercase;
   margin: 0 0 20px 0;
+  letter-spacing: 0.5px;
 }
 
 .gauge-bar {
-  background-color: #e5e5ea;
-  border-radius: 12px;
-  height: 24px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  height: 28px;
   width: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .gauge-fill {
-  background-color: #00ccff;
+  background-color: var(--rexroth-dark-blue);
   height: 100%;
   width: 0%;
-  text-align: right;
-  line-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--rexroth-text-light);
+  font-weight: 600;
+  font-size: 13px;
   padding-right: 10px;
   box-sizing: border-box;
-  color: #1a1a1a;
-  font-weight: bold;
-  font-size: 12px;
-  transition: width 0.6s ease-in-out;
+  white-space: nowrap;
+  transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
