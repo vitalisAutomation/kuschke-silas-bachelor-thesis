@@ -1,8 +1,8 @@
-/* Rexroth Corporate Design Inspired Theme */
+/* Rexroth Corporate Design Inspired Theme - Final Polish */
 :root {
   --rexroth-red: #DF0024;
   --rexroth-dark-blue: #354956;
-  --rexroth-light-blue: #0099D3; /* Light blue from the brand palette */
+  --rexroth-light-blue: #0099D3; /* Main accent color */
   --rexroth-background-gray: #f4f6f8;
   --rexroth-card-background: #ffffff;
   --rexroth-text-dark: #222222;
@@ -11,7 +11,8 @@
 
   --status-operating: #00b300;
   --status-setup: #ff9900;
-  --status-service: #005691;
+  /* UPDATED: Service status now uses the brand's light blue */
+  --status-service: var(--rexroth-light-blue);
   --status-error: #ff3333;
 }
 
@@ -34,7 +35,6 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 2rem;
-  /* The border color is now dynamic based on the state */
   border-bottom: 4px solid var(--rexroth-red); /* Default color */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
@@ -97,17 +97,20 @@ body {
   padding: 24px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--rexroth-border-color);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
+/* NEW: Added a hover effect with light blue border */
 .card:hover {
     transform: translateY(-4px);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    border-color: var(--rexroth-light-blue);
 }
 
 .card-title {
+  /* UPDATED: Card titles now use the light blue accent color */
   font-size: 14px;
-  color: #6c757d;
+  color: var(--rexroth-light-blue);
   font-weight: 600;
   text-transform: uppercase;
   margin: 0 0 20px 0;
@@ -124,7 +127,6 @@ body {
 }
 
 .gauge-fill {
-  /* Updated to use a blue gradient */
   background-image: linear-gradient(to right, var(--rexroth-light-blue), var(--rexroth-dark-blue));
   height: 100%;
   width: 0%;
