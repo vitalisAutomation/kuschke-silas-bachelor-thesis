@@ -2,31 +2,20 @@
 """
 Python script to install a Snap App on a Bosch Rexroth ctrlX CORE via REST API.
 
-This script provides a command-line interface to automate the installation of
-a Snap package (.snap file) onto a ctrlX CORE controller. It includes a
-crucial pre-flight check to ensure the architecture of the Snap package
-(ARM64/AMD64) is compatible with the target controller's hardware model
-(e.g., X2/X3 vs. X5/X7).
+This script runs fully interactively. It prompts the user for connection
+details, automatically applying defaults upon pressing Enter, while requiring
+a valid path to a local .snap package.
 
-The process involves:
-1. Authenticating with the controller.
-2. Reading the controller's typeplate to determine its hardware architecture.
-3. Verifying the Snap file's architecture against the controller's.
-4. Switching the controller to "setup" mode if it's in "run" mode.
-5. Uploading and installing the Snap package.
-6. Switching the controller back to its original mode.
+The script switches the controller's Scheduler to SERVICE mode to allow
+installation, uploads/installs the snap, and returns the Scheduler back to
+OPERATING mode.
 
-:Example:
-    python install_snap.py \\
-        --ip 192.168.1.1 \\
-        --user boschrexroth \\
-        --password mysecret \\
-        --file ./path/to/my-app_1.0.0_arm64.snap
+All docstrings in this module conform to the Sphinx documentation standard.
 """
 
 import os
 import time
-import argparse
+import getpass
 import requests
 import urllib3
 
@@ -110,7 +99,7 @@ def get_controller_info(ip) -> tuple[str, str]:
 
 
 def check_architecture_compatibility(
-        snap_path, expected_arch, force=False) -> bool:
+        snap_path, expected_arch) -> bool:
     """
     Check if the Snap filename is compatible with the controller's architecture.
 
@@ -118,9 +107,7 @@ def check_architecture_compatibility(
     :type snap_path: str
     :param expected_arch: The expected architecture ('arm' or 'amd64').
     :type expected_arch: str
-    :param force: If True, bypasses the check and returns True.
-    :type force: bool
-    :return: True if compatible or forced, False on mismatch.
+    :return: True if compatible, False on mismatch.
     :rtype: bool
     """
     if expected_arch == "unknown":
@@ -149,8 +136,12 @@ def check_architecture_compatibility(
         print(f" -> Snap filename '{filename}' implies an ARM build.")
 
     if mismatch:
-        if force:
-            print(" -> [!] Warning ignored as '--force' is active.")
+        # Prompt user if they want to override the safety block
+        override = input(
+            "[Prompt] Override architecture mismatch? (y/N): "
+        ).strip().lower()
+        if override == "y":
+            print("[Info] Proceeding with forced installation.")
             return True
         return False
 
@@ -158,55 +149,66 @@ def check_architecture_compatibility(
     return True
 
 
-def get_system_state(ip) -> str | None:
+def get_scheduler_state(ip) -> str | None:
     """
-    Retrieve the current operating state of the system ('setup' or 'run').
+    Retrieve the current Scheduler state from the Data Layer.
+
+    Expected return states are SERVICE, SETUP, or OPERATING.
 
     :param ip: The IP address of the ctrlX CORE.
     :type ip: str
     :return: The current state as a string, or None if the request fails.
     :rtype: str | None
     """
-    url = f"https://{ip}/system/api/v1/state"
+    url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
     try:
         response = HTTP_SESSION.get(url, timeout=5)
         response.raise_for_status()
-        return response.json().get("state")
+        raw_val = response.json().get("value")
+        if isinstance(raw_val, dict):
+            return raw_val.get("state", "UNKNOWN").upper()
+        return str(raw_val).upper()
     except requests.exceptions.RequestException as e:
         print(f"[Error] Failed to retrieve system state: {e}")
         return None
 
 
-def set_system_state(ip, target_state) -> bool:
+def set_scheduler_state(ip, target_state) -> bool:
     """
-    Request a change of the system's operating state.
+    Request a change of the Scheduler state (SERVICE, SETUP, or OPERATING).
 
     :param ip: The IP address of the ctrlX CORE.
     :type ip: str
-    :param target_state: The desired state, either 'setup' or 'run'.
+    :param target_state: The desired state: 'SERVICE', 'SETUP', or 'OPERATING'.
     :type target_state: str
     :return: True if the request was sent successfully, False otherwise.
     :rtype: bool
     """
-    url = f"https://{ip}/system/api/v1/state"
-    payload = {"state": target_state}
+    url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
+    # The ctrlX Data Layer expects a structured value object
+    payload = {
+        "type": "string",
+        "value": {
+            "state": target_state
+        }
+    }
     try:
-        print(f"[Info] Requesting switch to '{target_state}' mode...")
+        print(f"[Info] Requesting switch to Scheduler state '{target_state}'...")
         response = HTTP_SESSION.put(url, json=payload, timeout=10)
         response.raise_for_status()
         return True
     except requests.exceptions.RequestException as e:
-        print(f"[Error] Failed to switch system state to '{target_state}': {e}")
+        print(f"[Error] Failed to switch Scheduler to '{target_state}': {e}")
         return False
 
 
-def wait_for_state(ip, target_state, timeout_seconds=60) -> bool:
+def wait_for_scheduler_state(ip, target_state, timeout_seconds=60) -> bool:
     """
-    Poll the system state until it reaches the target state or a timeout occurs.
+    Poll the Scheduler state until it reaches the target state or times out.
 
     :param ip: The IP address of the ctrlX CORE.
     :type ip: str
-    :param target_state: The desired state to wait for ('setup' or 'run').
+    :param target_state: The desired state (e.g. 'SERVICE' or 'OPERATING').
     :type target_state: str
     :param timeout_seconds: Maximum time to wait in seconds.
     :type timeout_seconds: int
@@ -214,14 +216,14 @@ def wait_for_state(ip, target_state, timeout_seconds=60) -> bool:
     :rtype: bool
     """
     start_time = time.time()
-    print(f"[Info] Waiting for system to enter '{target_state}' mode...")
+    print(f"[Info] Waiting for Scheduler to enter '{target_state}' mode...")
     while time.time() - start_time < timeout_seconds:
-        current_state = get_system_state(ip)
+        current_state = get_scheduler_state(ip)
         if current_state == target_state:
-            print(f"[Success] System is now in '{target_state}' mode.")
+            print(f"[Success] Scheduler is now in '{target_state}' state.")
             return True
         time.sleep(2)
-    print(f"[Error] Timeout expired while waiting for '{target_state}' mode.")
+    print(f"[Error] Timeout expired while waiting for '{target_state}' state.")
     return False
 
 
@@ -266,69 +268,77 @@ def install_snap(ip, snap_path) -> bool:
 
 def main():
     """
-    Main entry point for the script. Parses arguments and orchestrates the
-    installation process.
+    Main entry point for the script. Collects user input interactively
+    and orchestrates the entire pre-check, switch, and upload flow.
     """
-    parser = argparse.ArgumentParser(
-        description="ctrlX CORE App (Snap) Installer via REST API.",
-        formatter_class=argparse.RawTextHelpFormatter
-    )
-    parser.add_argument(
-        "--ip", default="192.168.1.1", help="ctrlX CORE IP address."
-    )
-    parser.add_argument(
-        "--user", default="boschrexroth", help="Username for login."
-    )
-    parser.add_argument(
-        "--password", default="boschrexroth", help="Password for login."
-    )
-    parser.add_argument(
-        "--file", required=True, help="Path to the .snap installation package."
-    )
-    parser.add_argument(
-        "--force", action="store_true",
-        help="Ignore architecture mismatch warnings and force installation."
-    )
+    print("=== ctrlX CORE App (Snap) Deployment Script ===")
 
-    args = parser.parse_args()
+    # Interactive connection details with fallback defaults
+    ip_in = input("Enter ctrlX IP Address [192.168.1.1]: ").strip()
+    ip = ip_in or "192.168.1.1"
 
-    if not authenticate(args.ip, args.user, args.password):
+    user_in = input("Enter Username [boschrexroth]: ").strip()
+    username = user_in or "boschrexroth"
+
+    pass_in = getpass.getpass("Enter Password [boschrexroth]: ").strip()
+    password = pass_in or "boschrexroth"
+
+    # Strict path input loop (no default allowed)
+    snap_path = ""
+    while not snap_path:
+        path_in = input("Enter path to .snap file: ").strip()
+        if not path_in:
+            print("[Error] Snap file path is required.")
+            continue
+        if not os.path.exists(path_in):
+            print(f"[Error] File does not exist at: '{path_in}'. "
+                  f"Please try again.")
+            continue
+        snap_path = path_in
+
+    # 1. Authenticate
+    if not authenticate(ip, username, password):
         return
 
+    # 2. Hardware and Architecture Check
     print("\n[Sanity Check] Starting pre-flight checks...")
-    model, arch = get_controller_info(args.ip)
+    model, arch = get_controller_info(ip)
     print(f"[Sanity Check] Detected hardware: {model} "
           f"(Expected architecture: {arch.upper()})")
 
-    if not check_architecture_compatibility(args.file, arch, args.force):
-        print("Installation aborted due to architecture mismatch. "
-              "Use '--force' to override.")
+    if not check_architecture_compatibility(snap_path, arch):
+        print("[Error] Aborting installation due to architecture mismatch.")
         return
     print("[Sanity Check] OK. Proceeding with installation.\n")
 
-    initial_state = get_system_state(args.ip)
+    # 3. Retrieve and change scheduler state to SERVICE
+    initial_state = get_scheduler_state(ip)
     if not initial_state:
         return
-    print(f"[Info] Current system state before installation: '{initial_state}'")
+    print(f"[Info] Current Scheduler state before installation: "
+          f"'{initial_state}'")
 
-    switched_to_setup = False
-    if initial_state == "run":
-        if not (set_system_state(args.ip, "setup") and
-                wait_for_state(args.ip, "setup")):
+    switched_to_service = False
+    # If scheduler is running in OPERATING (run) or SETUP mode, switch to SERVICE
+    if initial_state in ["OPERATING", "SETUP", "RUN"]:
+        if not (set_scheduler_state(ip, "SERVICE") and
+                wait_for_scheduler_state(ip, "SERVICE")):
             return
-        switched_to_setup = True
-    elif initial_state != "setup":
-        print(f"[Error] System is in an unknown state: '{initial_state}'. "
-              "Aborting.")
+        switched_to_service = True
+    elif initial_state != "SERVICE":
+        print(f"[Error] Scheduler is in an unsupported state: '{initial_state}'. "
+              f"Aborting.")
         return
 
-    install_ok = install_snap(args.ip, args.file)
+    # 4. Upload and install the app
+    install_ok = install_snap(ip, snap_path)
 
-    if switched_to_setup:
-        print("[Info] Switching system back to 'run' mode.")
-        if not (set_system_state(args.ip, "run") and
-                wait_for_state(args.ip, "run")):
-            print("[Warning] Failed to switch system back to 'run' mode.")
+    # 5. Restore Scheduler state to OPERATING if we changed it
+    if switched_to_service:
+        print("[Info] Restoring system back to OPERATING mode.")
+        if not (set_scheduler_state(ip, "OPERATING") and
+                wait_for_scheduler_state(ip, "OPERATING")):
+            print("[Warning] Failed to switch Scheduler back to OPERATING.")
 
     if install_ok:
         print("\nDeployment completed successfully.")
