@@ -1,43 +1,84 @@
-<div class="dashboard-wrapper">
-  <!-- The header now dynamically applies a class based on the machine state -->
-  <header class="dashboard-header" [ngClass]="metrics.state.toLowerCase()">
-    <h1 class="brand-title">ctrlX CORE - Live Dashboard</h1>
-    
-    <div class="status-indicator">
-      <div class="status-light" [ngClass]="metrics.state.toLowerCase()"></div>
-      <span class="status-label">{{ metrics.state }}</span>
+<div class="dashboard">
+    <!-- Metrik Kreise -->
+    <div class="metrics-row">
+        <!-- CPU Kreis -->
+        <div class="metric-card">
+            <h3>CPU</h3>
+            <div class="progress-circle">
+                <svg>
+                    <circle cx="70" cy="70" r="50"></circle>
+                    <circle cx="70" cy="70" r="50" style="stroke-dashoffset: calc(314 - (314 * 60) / 100);"></circle>
+                </svg>
+                <div class="value">{{ cpuUsage }}%</div>
+            </div>
+        </div>
+
+        <!-- RAM Kreis -->
+        <div class="metric-card">
+            <h3>RAM</h3>
+            <div class="progress-circle">
+                <svg>
+                    <circle cx="70" cy="70" r="50"></circle>
+                    <circle cx="70" cy="70" r="50" style="stroke-dashoffset: calc(314 - (314 * 40) / 100);"></circle>
+                </svg>
+                <div class="value">{{ ramUsage }}%</div>
+            </div>
+        </div>
+
+        <!-- Storage Kreis -->
+        <div class="metric-card">
+            <h3>Storage</h3>
+            <div class="progress-circle">
+                <svg>
+                    <circle cx="70" cy="70" r="50"></circle>
+                    <circle cx="70" cy="70" r="50" style="stroke-dashoffset: calc(314 - (314 * 20) / 100);"></circle>
+                </svg>
+                <div class="value">{{ storageUsage }}%</div>
+            </div>
+        </div>
     </div>
-  </header>
 
-  <main class="dashboard-grid">
-    <!-- CPU CARD -->
-    <section class="card">
-      <h2 class="card-title">CPU Utilization</h2>
-      <div class="gauge-bar">
-        <div class="gauge-fill" [style.width.%]="formatValue(metrics.cpu)">
-          <span>{{ formatValue(metrics.cpu) }}%</span>
+    <!-- Sektion für den Scheduler (Modus-Wechsel) -->
+    <div class="scheduler-card">
+        <h3>ctrlX Scheduler Control</h3>
+        
+        <div class="status-indicator">
+            <span>Aktueller Zustand:</span>
+            <!-- Dynamische Klassen-Färbung je nach State -->
+            <span class="state-badge" [ngClass]="{
+                'state-operating': currentState === 'OPERATING',
+                'state-setup': currentState === 'SETUP',
+                'state-service': currentState === 'SERVICE'
+            }">
+                {{ currentState }}
+            </span>
         </div>
-      </div>
-    </section>
 
-    <!-- RAM CARD -->
-    <section class="card">
-      <h2 class="card-title">Memory (RAM) Usage</h2>
-      <div class="gauge-bar">
-        <div class="gauge-fill" [style.width.%]="formatValue(metrics.ram_used_percent)">
-          <span>{{ formatValue(metrics.ram_used_percent) }}%</span>
+        <!-- Fehlermeldung falls beim Umschalten etwas schief geht (z.B. Achsen noch aktiv) -->
+        <div *ngIf="errorMessage" class="error-banner">
+            ⚠️ {{ errorMessage }}
         </div>
-      </div>
-    </section>
 
-    <!-- STORAGE CARD -->
-    <section class="card">
-      <h2 class="card-title">System Disk Storage</h2>
-      <div class="gauge-bar">
-        <div class="gauge-fill" [style.width.%]="formatValue(metrics.storage_used_percent)">
-          <span>{{ formatValue(metrics.storage_used_percent) }}%</span>
+        <!-- Interaktive Buttons -->
+        <div class="control-buttons">
+            <button 
+                class="btn btn-operating" 
+                (click)="onStateChange('OPERATING')" 
+                [disabled]="loading || currentState === 'OPERATING'">
+                🟢 OPERATING
+            </button>
+            <button 
+                class="btn btn-setup" 
+                (click)="onStateChange('SETUP')" 
+                [disabled]="loading || currentState === 'SETUP'">
+                🟡 SETUP
+            </button>
+            <button 
+                class="btn btn-service" 
+                (click)="onStateChange('SERVICE')" 
+                [disabled]="loading || currentState === 'SERVICE'">
+                🔵 SERVICE
+            </button>
         </div>
-      </div>
-    </section>
-  </main>
+    </div>
 </div>

@@ -1,24 +1,7 @@
-/**
- * Angular controller component for the ctrlX Dashboard.
- *
- * Periodically polls the backend REST API for system metrics. The API URL
- * is determined by the environment configuration.
- */
-
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { DashboardService } from './dashboard.service';
 import { Subscription, interval } from 'rxjs';
 import { startWith, switchMap } from 'rxjs/operators';
-
-// Import the environment configuration to get the correct API URL
-import { environment } from '../environments/environment';
-
-interface SystemMetrics {
-  state: string;
-  cpu: number | string;
-  ram_used_percent: number | string;
-  storage_used_percent: number | string;
-}
 
 @Component({
   selector: 'app-root',
@@ -26,41 +9,60 @@ interface SystemMetrics {
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit, OnDestroy {
-  metrics: SystemMetrics = { state: 'LOADING', cpu: 0, ram_used_percent: 0, storage_used_percent: 0 };
-  private pollSub!: Subscription;
-  
-  // Construct the full API URL based on the current environment
-  private readonly apiUrl = `${environment.apiUrl}/metrics`;
+  // System-Metriken
+  currentState: string = 'UNKNOWN';
+  cpuUsage: number | string = '0';
+  ramUsage: number | string = '0';
+  storageUsage: number | string = '0';
 
-  constructor(private http: HttpClient) {}
+  // UI-Statusvariablen
+  loading: boolean = false;
+  errorMessage: string | null = null;
+  
+  private pollingSub!: Subscription;
+
+  constructor(private dashboardService: DashboardService) {}
 
   ngOnInit(): void {
-    // Poll the backend API endpoint every 3000ms
-    this.pollSub = interval(3000).pipe(
+    // Polling: Alle 3 Sekunden automatisch die Metriken frisch von Flask holen
+    this.pollingSub = interval(3000).pipe(
       startWith(0),
-      // Use the dynamically constructed API URL for the request
-      switchMap(() => this.http.get<SystemMetrics>(this.apiUrl))
+      switchMap(() => this.dashboardService.getMetrics())
     ).subscribe({
-      next: (data) => {
-        this.metrics = data;
+      next: (data: any) => {
+        this.currentState = data.state || 'UNKNOWN';
+        this.cpuUsage = data.cpu !== undefined ? data.cpu : 'N/A';
+        this.ramUsage = data.ram_used_percent !== undefined ? data.ram_used_percent : 'N/A';
+        this.storageUsage = data.storage_used_percent !== undefined ? data.storage_used_percent : 'N/A';
       },
-      error: (err) => {
-        console.error('Error retrieving system metrics:', err);
-        this.metrics.state = 'ERROR';
+      error: (err: any) => {
+        this.errorMessage = 'Verbindung zum ctrlX Dashboard-Backend verloren.';
+        console.error(err);
+      }
+    });
+  }
+
+  // State-Switch Handler für die Buttons
+  onStateChange(targetState: string): void {
+    this.loading = true;
+    this.errorMessage = null;
+
+    this.dashboardService.setSchedulerState(targetState).subscribe({
+      next: (res: any) => {
+        this.currentState = res.state;
+        this.loading = false;
+      },
+      error: (err: any) => {
+        this.errorMessage = `Umschalten in den Modus '${targetState}' wurde von der CORE abgelehnt.`;
+        this.loading = false;
+        console.error(err);
       }
     });
   }
 
   ngOnDestroy(): void {
-    if (this.pollSub) {
-      this.pollSub.unsubscribe();
+    if (this.pollingSub) {
+      this.pollingSub.unsubscribe();
     }
-  }
-
-  /**
-   * Helper to format raw API numeric values cleanly for the UI.
-   */
-  formatValue(value: number | string): number {
-    return typeof value === 'number' ? Math.round(value) : 0;
   }
 }

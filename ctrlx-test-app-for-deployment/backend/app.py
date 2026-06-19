@@ -3,7 +3,6 @@ Flask Backend for the ctrlX Dashboard App.
 
 This single backend supports two run modes based on the APP_ENVIRONMENT
 environment variable:
-
 - 'production': (Default) Runs inside the ctrlX CORE snap. Serves the
   compiled Angular frontend and communicates with the local Data Layer.
 - 'development': Runs on a local PC. Provides a CORS-enabled API for an
@@ -14,11 +13,11 @@ environment variable:
 import os
 import getpass
 from threading import Lock
-
 import requests
 import urllib3
 from dotenv import load_dotenv
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
+
 from flask_cors import CORS
 
 # --- INITIAL SETUP ---
@@ -45,7 +44,6 @@ CONFIG_LOCK = Lock()
 app = Flask(__name__, static_folder="static", static_url_path="")
 
 # --- ENVIRONMENT-SPECIFIC CONFIGURATION ---
-
 if IS_DEVELOPMENT:
     # Allow requests from the local Angular dev server (typically on port 4200)
     CORS(app, resources={r"/api/*": {"origins": "http://localhost:4200"}})
@@ -54,7 +52,6 @@ else:
     print("--- RUNNING IN PRODUCTION MODE ---")
 
 # --- DATA LAYER & AUTHENTICATION ---
-
 METRIC_PATHS = {
     "state": "scheduler/admin/state",
     "cpu": "framework/metrics/system/cpu-utilisation-percent",
@@ -72,7 +69,7 @@ def authenticate_to_core() -> bool:
         # In production on ctrlX, auth is handled by the system context
         print("[Info] Production mode: Assuming local token is available.")
         return True
-
+        
     with CONFIG_LOCK:
         ip = CTRLX_CONFIG.get("ip")
         if not ip: return False
@@ -81,7 +78,7 @@ def authenticate_to_core() -> bool:
             "name": CTRLX_CONFIG["username"],
             "password": CTRLX_CONFIG["password"]
         }
-
+        
     try:
         response = HTTP_SESSION.post(url, json=payload, timeout=5)
         response.raise_for_status()
@@ -104,21 +101,20 @@ def get_metrics() -> tuple:
     with CONFIG_LOCK:
         # In production, the IP is always localhost. In dev, it's the configured IP.
         ip = "127.0.0.1" if not IS_DEVELOPMENT else CTRLX_CONFIG.get("ip", "localhost")
-
+        
     base_url = f"https://{ip}/automation/api/v2/nodes"
     metrics_data = {}
-
+    
     for key, path in METRIC_PATHS.items():
         try:
             response = HTTP_SESSION.get(f"{base_url}/{path}", timeout=2)
-
             if response.status_code == 401:  # Token expired
                 print("[Info] Token expired or invalid. Re-authenticating...")
                 if not authenticate_to_core(): # Re-login
                     metrics_data[key] = "Auth Error"
                     continue
                 response = HTTP_SESSION.get(f"{base_url}/{path}", timeout=2) # Retry
-
+                
             if response.ok:
                 raw_val = response.json().get("value")
                 if key == "state" and isinstance(raw_val, dict):
@@ -129,8 +125,58 @@ def get_metrics() -> tuple:
                 metrics_data[key] = f"HTTP {response.status_code}"
         except requests.exceptions.RequestException:
             metrics_data[key] = "Request Error"
-
+            
     return jsonify(metrics_data), 200
+
+
+@app.route("/api/state", methods=["POST"])
+def set_scheduler_state() -> tuple:
+    """
+    API endpoint to change the controller's scheduler state.
+    Expects JSON body: { "state": "OPERATING" | "SETUP" | "SERVICE" }
+    """
+    data = request.get_json()
+    if not data or "state" not in data:
+        return jsonify({"error": "Missing 'state' in request body"}), 400
+        
+    target_state = data["state"].upper()
+    if target_state not in ["OPERATING", "SETUP", "SERVICE"]:
+        return jsonify({"error": "Invalid state. Choose OPERATING, SETUP or SERVICE."}), 400
+
+    with CONFIG_LOCK:
+        ip = "127.0.0.1" if not IS_DEVELOPMENT else CTRLX_CONFIG.get("ip", "localhost")
+
+    url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
+    
+    # Exact payload structure expected by the ctrlX Datalayer enum types
+    payload = {
+        "type": "object",
+        "value": {
+            "state": target_state
+        }
+    }
+
+    try:
+        print(f"[Info] Sending transition to '{target_state}'...")
+        response = HTTP_SESSION.put(url, json=payload, timeout=5)
+        
+        if response.status_code == 401:  # Retry once with auth-refresh
+            print("[Info] Token expired during transition. Re-authenticating...")
+            if authenticate_to_core():
+                response = HTTP_SESSION.put(url, json=payload, timeout=5)
+
+        if response.ok:
+            return jsonify({"status": "success", "state": target_state}), 200
+        else:
+            return jsonify({
+                "error": "State transition failed",
+                "status_code": response.status_code,
+                "details": response.json() if response.text else "No details"
+            }), response.status_code
+            
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Connection error: {str(e)}"}), 500
+
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
@@ -144,13 +190,12 @@ def serve_frontend(path: str):
             "status": "Backend is running in development mode.",
             "message": "The Angular frontend must be served separately via 'ng serve'."
         })
-
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
 
-# --- MAIN EXECUTION ---
 
+# --- MAIN EXECUTION ---
 if __name__ == "__main__":
     if IS_DEVELOPMENT:
         # Prompt for remote ctrlX details when running locally
