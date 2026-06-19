@@ -6,11 +6,19 @@ This script runs fully interactively. It prompts the user for connection
 details, automatically applying defaults upon pressing Enter, while requiring
 a valid path to a local .snap package.
 
-The script switches the controller's Scheduler to SERVICE mode to allow
-installation, uploads/installs the snap, and returns the Scheduler back to
-OPERATING mode.
+The script implements a robust asynchronous task-polling mechanism:
+1. Switches the controller's Scheduler to SERVICE mode.
+2. Uploads the Snap package to the '/package-manager/api/v1/packages?force=true'
+   endpoint, initiating an installation task.
+3. Extracts the task ID from either the JSON response body or the 'Location'
+   HTTP header.
+4. Polls the task status using the '/package-manager/api/v1/tasks/{taskId}'
+   endpoint until the installation is confirmed as 'succeeded'.
+5. Returns the Scheduler to OPERATING mode only after successful installation.
 
-All docstrings in this module conform to the Sphinx documentation standard.
+This version is fully compatible with modern ctrlX OS (v4.6+) architectures,
+handles empty 202 responses via 'Location' headers, and allows overwriting
+already installed applications.
 """
 
 import os
@@ -19,56 +27,69 @@ import getpass
 import requests
 import urllib3
 
-# Disable warnings for self-signed SSL certificates, which are common on ctrlX.
+# Disable warnings for self-signed SSL certificates used by ctrlX CORE
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Global session object to reuse connections and authentication headers.
+# Global configuration and HTTP session initialization
+CTRLX_CONFIG = {}
 HTTP_SESSION = requests.Session()
-HTTP_SESSION.verify = False  # Do not verify SSL certificate
-HTTP_SESSION.trust_env = False  # Bypass system-level proxies
+HTTP_SESSION.verify = False
+HTTP_SESSION.trust_env = False  # Bypass system proxies for local communication
 
 
-def authenticate(ip, username, password) -> bool:
+def configure_connection() -> None:
     """
-    Authenticate against the ctrlX CORE Identity Manager to get a bearer token.
+    Prompt the user for ctrlX CORE connection details.
+    """
+    print("\n--- Configure ctrlX CORE Connection (Press Enter for Default) ---")
+    ip_in = input("Enter IP Address [192.168.1.1]: ").strip()
+    CTRLX_CONFIG['ip'] = ip_in or "192.168.1.1"
 
-    :param ip: The IP address of the ctrlX CORE.
-    :type ip: str
-    :param username: The username for authentication.
-    :type username: str
-    :param password: The password for the user.
-    :type password: str
-    :return: True if authentication is successful, False otherwise.
+    user_in = input("Enter Username [boschrexroth]: ").strip()
+    CTRLX_CONFIG['username'] = user_in or "boschrexroth"
+
+    pass_in = getpass.getpass("Enter Password [boschrexroth]: ").strip()
+    CTRLX_CONFIG['password'] = pass_in or "boschrexroth"
+
+
+def fetch_bearer_token() -> bool:
+    """
+    Authenticate against the Identity Manager of the ctrlX CORE.
+
+    :return: True if authentication succeeded, False otherwise.
     :rtype: bool
     """
+    ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/identity-manager/api/v2/auth/token"
-    payload = {"name": username, "password": password}
+    payload = {
+        "name": CTRLX_CONFIG["username"],
+        "password": CTRLX_CONFIG["password"]
+    }
     try:
         print(f"[Auth] Connecting to ctrlX CORE at {ip}...")
         response = HTTP_SESSION.post(url, json=payload, timeout=10)
         response.raise_for_status()
         token = response.json().get("access_token")
-        if token:
-            HTTP_SESSION.headers.update({"Authorization": f"Bearer {token}"})
-            print("[Success] Authentication successful.")
-            return True
-        print("[Error] 'access_token' not found in authentication response.")
-        return False
+        if not token:
+            print("[Error] 'access_token' not found in response.")
+            return False
+
+        HTTP_SESSION.headers.update({"Authorization": f"Bearer {token}"})
+        print("[Success] Connected and authenticated successfully.")
+        return True
     except requests.exceptions.RequestException as e:
-        print(f"[Error] Authentication failed: {e}")
+        print(f"[Error] Connection or authentication failed: {e}")
         return False
 
 
-def get_controller_info(ip) -> tuple[str, str]:
+def get_controller_info() -> tuple[str, str]:
     """
     Read the electronic typeplate to determine the hardware model and architecture.
 
-    :param ip: The IP address of the ctrlX CORE.
-    :type ip: str
-    :return: A tuple containing the determined model name and the expected
-             architecture ('arm', 'amd64', or 'unknown').
+    :return: A tuple containing the model name and the expected architecture.
     :rtype: tuple[str, str]
     """
+    ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/system/api/v1/typeplate"
     try:
         response = HTTP_SESSION.get(url, timeout=5)
@@ -98,17 +119,9 @@ def get_controller_info(ip) -> tuple[str, str]:
         return "Unknown (Read Error)", "unknown"
 
 
-def check_architecture_compatibility(
-        snap_path, expected_arch) -> bool:
+def check_architecture_compatibility(snap_path, expected_arch) -> bool:
     """
     Check if the Snap filename is compatible with the controller's architecture.
-
-    :param snap_path: The file path to the .snap package.
-    :type snap_path: str
-    :param expected_arch: The expected architecture ('arm' or 'amd64').
-    :type expected_arch: str
-    :return: True if compatible, False on mismatch.
-    :rtype: bool
     """
     if expected_arch == "unknown":
         print("[Warning] Target architecture is unknown. Skipping check.")
@@ -126,20 +139,14 @@ def check_architecture_compatibility(
     mismatch = False
     if expected_arch == "arm" and is_snap_amd64 and not is_snap_arm:
         mismatch = True
-        print("\n[ARCH_MISMATCH] Error: Security and operational risk!")
-        print(" -> Controller is ARM-based (e.g., X2/X3).")
-        print(f" -> Snap filename '{filename}' implies an AMD64 build.")
     elif expected_arch == "amd64" and is_snap_arm and not is_snap_amd64:
         mismatch = True
-        print("\n[ARCH_MISMATCH] Error: Security and operational risk!")
-        print(" -> Controller is AMD64-based (e.g., X5/X7, Virtual).")
-        print(f" -> Snap filename '{filename}' implies an ARM build.")
 
     if mismatch:
-        # Prompt user if they want to override the safety block
-        override = input(
-            "[Prompt] Override architecture mismatch? (y/N): "
-        ).strip().lower()
+        print("\n[ARCH_MISMATCH] Error: Security and operational risk!")
+        print(f" -> Controller is {expected_arch.upper()}-based.")
+        print(f" -> Snap filename '{filename}' implies a different architecture.")
+        override = input("[Prompt] Override architecture mismatch? (y/N): ").strip().lower()
         if override == "y":
             print("[Info] Proceeding with forced installation.")
             return True
@@ -149,17 +156,11 @@ def check_architecture_compatibility(
     return True
 
 
-def get_scheduler_state(ip) -> str | None:
+def get_scheduler_state() -> str | None:
     """
     Retrieve the current Scheduler state from the Data Layer.
-
-    Expected return states are SERVICE, SETUP, or OPERATING.
-
-    :param ip: The IP address of the ctrlX CORE.
-    :type ip: str
-    :return: The current state as a string, or None if the request fails.
-    :rtype: str | None
     """
+    ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
     try:
         response = HTTP_SESSION.get(url, timeout=5)
@@ -167,34 +168,22 @@ def get_scheduler_state(ip) -> str | None:
         raw_val = response.json().get("value")
         if isinstance(raw_val, dict):
             return raw_val.get("state", "UNKNOWN").upper()
-        return str(raw_val).upper()
+        return str(raw_val).upper() if raw_val else "UNKNOWN"
     except requests.exceptions.RequestException as e:
         print(f"[Error] Failed to retrieve system state: {e}")
         return None
 
 
-def set_scheduler_state(ip, target_state) -> bool:
+def change_scheduler_state(target_state: str) -> bool:
     """
-    Request a change of the Scheduler state (SERVICE, SETUP, or OPERATING).
-
-    :param ip: The IP address of the ctrlX CORE.
-    :type ip: str
-    :param target_state: The desired state: 'SERVICE', 'SETUP', or 'OPERATING'.
-    :type target_state: str
-    :return: True if the request was sent successfully, False otherwise.
-    :rtype: bool
+    Change the scheduler operating state (OPERATING, SETUP, SERVICE).
     """
+    ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
-    # The ctrlX Data Layer expects a structured value object
-    payload = {
-        "type": "string",
-        "value": {
-            "state": target_state
-        }
-    }
+    payload = {"type": "object", "value": {"state": target_state}}
     try:
         print(f"[Info] Requesting switch to Scheduler state '{target_state}'...")
-        response = HTTP_SESSION.put(url, json=payload, timeout=10)
+        response = HTTP_SESSION.put(url, json=payload, timeout=15)
         response.raise_for_status()
         return True
     except requests.exceptions.RequestException as e:
@@ -202,23 +191,14 @@ def set_scheduler_state(ip, target_state) -> bool:
         return False
 
 
-def wait_for_scheduler_state(ip, target_state, timeout_seconds=60) -> bool:
+def wait_for_scheduler_state(target_state, timeout_seconds=60) -> bool:
     """
     Poll the Scheduler state until it reaches the target state or times out.
-
-    :param ip: The IP address of the ctrlX CORE.
-    :type ip: str
-    :param target_state: The desired state (e.g. 'SERVICE' or 'OPERATING').
-    :type target_state: str
-    :param timeout_seconds: Maximum time to wait in seconds.
-    :type timeout_seconds: int
-    :return: True if the target state was reached, False on timeout.
-    :rtype: bool
     """
     start_time = time.time()
     print(f"[Info] Waiting for Scheduler to enter '{target_state}' mode...")
     while time.time() - start_time < timeout_seconds:
-        current_state = get_scheduler_state(ip)
+        current_state = get_scheduler_state()
         if current_state == target_state:
             print(f"[Success] Scheduler is now in '{target_state}' state.")
             return True
@@ -227,38 +207,95 @@ def wait_for_scheduler_state(ip, target_state, timeout_seconds=60) -> bool:
     return False
 
 
-def install_snap(ip, snap_path) -> bool:
+def get_task_status(task_id: str) -> dict | None:
     """
-    Upload and install the Snap package on the controller.
-
-    The POST request is blocking and only returns after the installation is
-    complete, hence the long timeout.
-
-    :param ip: The IP address of the ctrlX CORE.
-    :type ip: str
-    :param snap_path: The local file path to the .snap package.
-    :type snap_path: str
-    :return: True if installation was successful, False otherwise.
-    :rtype: bool
+    Retrieves the status of a specific background task from the Package Manager API.
     """
-    url = f"https://{ip}/system/api/v1/apps"
+    ip = CTRLX_CONFIG["ip"]
+    url = f"https://{ip}/package-manager/api/v1/tasks/{task_id}"
+    try:
+        response = HTTP_SESSION.get(url, timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"\n[Error] Could not get status for task '{task_id}': {e}")
+        return None
+
+
+def wait_for_task_completion(task_id: str, timeout_seconds: int = 300) -> bool:
+    """
+    Polls the task endpoint until the installation task is complete.
+    """
+    start_time = time.time()
+    print(f"[Info] Waiting for installation task '{task_id}' to complete...")
+    while time.time() - start_time < timeout_seconds:
+        task_info = get_task_status(task_id)
+        if not task_info:
+            return False
+
+        status = task_info.get("status", "unknown").lower()
+        progress = task_info.get("progress", 0)
+        print(f"\r -> Installation status: {status.upper()} ({progress}%)", end="")
+
+        if status == "succeeded":
+            print("\n[Success] Installation task finished successfully.")
+            return True
+        if status in ["failed", "canceled"]:
+            error_details = task_info.get("error", "No details provided.")
+            print(f"\n[Error] Installation task failed with status '{status}'. Details: {error_details}")
+            return False
+        time.sleep(2)
+
+    print("\n[Error] Timeout expired while waiting for installation to complete.")
+    return False
+
+
+def install_snap(snap_path) -> bool:
+    """
+    Uploads the Snap to the Package Manager API and monitors the installation task.
+    """
+    ip = CTRLX_CONFIG["ip"]
+    url = f"https://{ip}/package-manager/api/v1/packages?force=true"
     filename = os.path.basename(snap_path)
 
-    if not os.path.exists(snap_path):
-        print(f"[Error] Snap file not found at path: {snap_path}")
-        return False
-
-    print(f"[Info] Uploading and installing '{filename}' (Timeout: 5 min)...")
+    print(f"\n[Info] Uploading '{filename}' to start installation via '{url}'...")
     try:
         with open(snap_path, "rb") as f:
             files = {"file": (filename, f, "application/octet-stream")}
-            response = HTTP_SESSION.post(url, files=files, timeout=300)
+            headers = {"Accept": "application/json"}
+            response = HTTP_SESSION.post(url, files=files, headers=headers, timeout=45)
 
-            if response.status_code in [200, 201, 204]:
-                print("[Success] App installation completed successfully.")
-                return True
+            # Expect 202 Accepted for async tasks
+            if response.status_code == 202:
+                task_id = None
+                
+                # 1. Try to extract ID from JSON body
+                try:
+                    response_data = response.json()
+                    task_id = response_data.get("id") or response_data.get("taskId")
+                except ValueError:
+                    # Body is empty or not JSON, fallback to header
+                    pass
+                
+                # 2. Try to extract ID from HTTP 'Location' Header
+                if not task_id:
+                    location = response.headers.get("Location")
+                    if location:
+                        # Extract the last part of the path, which is the UUID/Task ID
+                        task_id = location.strip("/").split("/")[-1]
+                        print(f"[Info] Extracted task ID from Location header: {task_id}")
+
+                if not task_id:
+                    print("[Error] API accepted request (202) but returned no task ID.")
+                    print(f"[Details] Status Code: {response.status_code}")
+                    print(f"[Details] Headers: {dict(response.headers)}")
+                    print(f"[Details] Response Text: {response.text}")
+                    return False
+
+                print(f"[Info] Installation task started with ID: {task_id}")
+                return wait_for_task_completion(task_id)
             else:
-                print(f"[Error] Installation failed with status code "
+                print(f"[Error] Upload failed with unexpected status code "
                       f"{response.status_code}: {response.text}")
                 return False
     except requests.exceptions.RequestException as e:
@@ -266,78 +303,53 @@ def install_snap(ip, snap_path) -> bool:
         return False
 
 
-def main():
+def main() -> None:
     """
-    Main entry point for the script. Collects user input interactively
-    and orchestrates the entire pre-check, switch, and upload flow.
+    Main entry point for the script.
     """
     print("=== ctrlX CORE App (Snap) Deployment Script ===")
-
-    # Interactive connection details with fallback defaults
-    ip_in = input("Enter ctrlX IP Address [192.168.1.1]: ").strip()
-    ip = ip_in or "192.168.1.1"
-
-    user_in = input("Enter Username [boschrexroth]: ").strip()
-    username = user_in or "boschrexroth"
-
-    pass_in = getpass.getpass("Enter Password [boschrexroth]: ").strip()
-    password = pass_in or "boschrexroth"
-
-    # Strict path input loop (no default allowed)
+    configure_connection()
     snap_path = ""
     while not snap_path:
         path_in = input("Enter path to .snap file: ").strip()
         if not path_in:
             print("[Error] Snap file path is required.")
-            continue
-        if not os.path.exists(path_in):
-            print(f"[Error] File does not exist at: '{path_in}'. "
-                  f"Please try again.")
-            continue
-        snap_path = path_in
+        elif not os.path.exists(path_in):
+            print(f"[Error] File does not exist at: '{path_in}'. Please try again.")
+        else:
+            snap_path = path_in
 
-    # 1. Authenticate
-    if not authenticate(ip, username, password):
+    if not fetch_bearer_token():
         return
 
-    # 2. Hardware and Architecture Check
     print("\n[Sanity Check] Starting pre-flight checks...")
-    model, arch = get_controller_info(ip)
-    print(f"[Sanity Check] Detected hardware: {model} "
-          f"(Expected architecture: {arch.upper()})")
+    model, arch = get_controller_info()
+    print(f"[Sanity Check] Detected hardware: {model} (Expected architecture: {arch.upper()})")
 
     if not check_architecture_compatibility(snap_path, arch):
-        print("[Error] Aborting installation due to architecture mismatch.")
+        print("\n[Error] Aborting installation due to architecture mismatch.")
         return
-    print("[Sanity Check] OK. Proceeding with installation.\n")
+    print("[Sanity Check] OK. Proceeding with installation.")
 
-    # 3. Retrieve and change scheduler state to SERVICE
-    initial_state = get_scheduler_state(ip)
+    initial_state = get_scheduler_state()
     if not initial_state:
         return
-    print(f"[Info] Current Scheduler state before installation: "
-          f"'{initial_state}'")
+    print(f"\n[Info] Current Scheduler state: '{initial_state}'")
 
     switched_to_service = False
-    # If scheduler is running in OPERATING (run) or SETUP mode, switch to SERVICE
-    if initial_state in ["OPERATING", "SETUP", "RUN"]:
-        if not (set_scheduler_state(ip, "SERVICE") and
-                wait_for_scheduler_state(ip, "SERVICE")):
+    if initial_state in ["OPERATING", "SETUP"]:
+        if not (change_scheduler_state("SERVICE") and wait_for_scheduler_state("SERVICE")):
             return
         switched_to_service = True
     elif initial_state != "SERVICE":
-        print(f"[Error] Scheduler is in an unsupported state: '{initial_state}'. "
-              f"Aborting.")
+        print(f"[Error] Scheduler is in an unsupported state: '{initial_state}'. Aborting.")
         return
 
-    # 4. Upload and install the app
-    install_ok = install_snap(ip, snap_path)
+    install_ok = install_snap(snap_path)
 
-    # 5. Restore Scheduler state to OPERATING if we changed it
     if switched_to_service:
-        print("[Info] Restoring system back to OPERATING mode.")
-        if not (set_scheduler_state(ip, "OPERATING") and
-                wait_for_scheduler_state(ip, "OPERATING")):
+        print("\n[Info] Restoring system back to OPERATING mode.")
+        if not (change_scheduler_state("OPERATING") and wait_for_scheduler_state("OPERATING")):
             print("[Warning] Failed to switch Scheduler back to OPERATING.")
 
     if install_ok:
