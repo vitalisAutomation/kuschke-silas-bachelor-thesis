@@ -180,14 +180,26 @@ def change_scheduler_state(target_state: str) -> bool:
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
-    payload = {"type": "object", "value": {"state": target_state}}
+    
+    # Korrigierter, flacher Payload für den ctrlX Data Layer REST-Knoten
+    payload = {"type": "string", "value": target_state}
+    
     try:
         print(f"[Info] Requesting switch to Scheduler state '{target_state}'...")
         response = HTTP_SESSION.put(url, json=payload, timeout=15)
+        
+        # Falls die Steuerung meckert, versuchen wir das alternative Format
+        if response.status_code == 400:
+            # Alternatives Format für ältere/neuere ctrlX Versionen
+            alternative_payload = {"value": {"state": target_state}}
+            response = HTTP_SESSION.put(url, json=alternative_payload, timeout=15)
+            
         response.raise_for_status()
         return True
     except requests.exceptions.RequestException as e:
         print(f"[Error] Failed to switch Scheduler to '{target_state}': {e}")
+        if response := getattr(e, 'response', None):
+            print(f"[Details] API Response: {response.text}")
         return False
 
 
