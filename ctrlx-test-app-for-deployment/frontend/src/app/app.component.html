@@ -1,84 +1,65 @@
-<div class="dashboard">
-    <!-- Metrik Kreise -->
-    <div class="metrics-row">
-        <!-- CPU Kreis -->
-        <div class="metric-card">
-            <h3>CPU</h3>
-            <div class="progress-circle">
-                <svg>
-                    <circle cx="70" cy="70" r="50"></circle>
-                    <circle cx="70" cy="70" r="50" style="stroke-dashoffset: calc(314 - (314 * 60) / 100);"></circle>
-                </svg>
-                <div class="value">{{ cpuUsage }}%</div>
-            </div>
-        </div>
+<div class="dashboard-wrapper">
+  <!-- Der Header wendet dynamisch die Statusklasse an (für die farbige untere Linie) -->
+  <header class="dashboard-header" [ngClass]="metrics.state.toLowerCase()">
+    <h1 class="brand-title">ctrlX CORE - Live Dashboard</h1>
+    
+    <!-- Status-Indikator als interaktives Dropdown-Menü -->
+    <div class="status-indicator-container">
+      <div class="status-indicator" (click)="toggleDropdown()">
+        <div class="status-light" [ngClass]="metrics.state.toLowerCase()"></div>
+        <span class="status-label">{{ metrics.state }}</span>
+        <span class="dropdown-arrow">▼</span>
+      </div>
 
-        <!-- RAM Kreis -->
-        <div class="metric-card">
-            <h3>RAM</h3>
-            <div class="progress-circle">
-                <svg>
-                    <circle cx="70" cy="70" r="50"></circle>
-                    <circle cx="70" cy="70" r="50" style="stroke-dashoffset: calc(314 - (314 * 40) / 100);"></circle>
-                </svg>
-                <div class="value">{{ ramUsage }}%</div>
-            </div>
+      <!-- Dropdown-Optionen im neuen Rexroth Corporate-Look -->
+      <div class="dropdown-menu" *ngIf="isDropdownOpen">
+        <div class="dropdown-item" (click)="onStateChange('OPERATING')" [class.disabled]="metrics.state === 'OPERATING' || loading">
+          <span class="status-light operating"></span> OPERATING
         </div>
-
-        <!-- Storage Kreis -->
-        <div class="metric-card">
-            <h3>Storage</h3>
-            <div class="progress-circle">
-                <svg>
-                    <circle cx="70" cy="70" r="50"></circle>
-                    <circle cx="70" cy="70" r="50" style="stroke-dashoffset: calc(314 - (314 * 20) / 100);"></circle>
-                </svg>
-                <div class="value">{{ storageUsage }}%</div>
-            </div>
+        <div class="dropdown-item" (click)="onStateChange('SETUP')" [class.disabled]="metrics.state === 'SETUP' || loading">
+          <span class="status-light setup"></span> SETUP
         </div>
+        <div class="dropdown-item" (click)="onStateChange('SERVICE')" [class.disabled]="metrics.state === 'SERVICE' || loading">
+          <span class="status-light service"></span> SERVICE
+        </div>
+      </div>
     </div>
+  </header>
 
-    <!-- Sektion für den Scheduler (Modus-Wechsel) -->
-    <div class="scheduler-card">
-        <h3>ctrlX Scheduler Control</h3>
-        
-        <div class="status-indicator">
-            <span>Aktueller Zustand:</span>
-            <!-- Dynamische Klassen-Färbung je nach State -->
-            <span class="state-badge" [ngClass]="{
-                'state-operating': currentState === 'OPERATING',
-                'state-setup': currentState === 'SETUP',
-                'state-service': currentState === 'SERVICE'
-            }">
-                {{ currentState }}
-            </span>
-        </div>
+  <!-- Fehlermeldung bei blockiertem Wechsel -->
+  <div *ngIf="errorMessage" class="error-banner">
+    ⚠️ {{ errorMessage }}
+  </div>
 
-        <!-- Fehlermeldung falls beim Umschalten etwas schief geht (z.B. Achsen noch aktiv) -->
-        <div *ngIf="errorMessage" class="error-banner">
-            ⚠️ {{ errorMessage }}
+  <main class="dashboard-grid">
+    <!-- CPU CARD -->
+    <section class="card">
+      <h2 class="card-title">CPU Utilization</h2>
+      <div class="gauge-bar">
+        <div class="gauge-fill" [style.width.%]="formatValue(metrics.cpu)">
+          <span>{{ formatValue(metrics.cpu) }}%</span>
         </div>
+      </div>
+    </section>
 
-        <!-- Interaktive Buttons -->
-        <div class="control-buttons">
-            <button 
-                class="btn btn-operating" 
-                (click)="onStateChange('OPERATING')" 
-                [disabled]="loading || currentState === 'OPERATING'">
-                🟢 OPERATING
-            </button>
-            <button 
-                class="btn btn-setup" 
-                (click)="onStateChange('SETUP')" 
-                [disabled]="loading || currentState === 'SETUP'">
-                🟡 SETUP
-            </button>
-            <button 
-                class="btn btn-service" 
-                (click)="onStateChange('SERVICE')" 
-                [disabled]="loading || currentState === 'SERVICE'">
-                🔵 SERVICE
-            </button>
+    <!-- RAM CARD -->
+    <section class="card">
+      <h2 class="card-title">Memory (RAM) Usage</h2>
+      <div class="gauge-bar">
+        <div class="gauge-fill" [style.width.%]="formatValue(metrics.ram_used_percent)">
+          <span>{{ formatValue(metrics.ram_used_percent) }}%</span>
         </div>
-    </div>
+      </div>
+    </section>
+
+    <!-- STORAGE CARD -->
+    <section class="card">
+      <h2 class="card-title">System Disk Storage</h2>
+      <div class="gauge-bar">
+        <div class="gauge-fill" [style.width.%]="formatValue(metrics.storage_used_percent)">
+          <span>{{ formatValue(metrics.storage_used_percent) }}%</span>
+        </div>
+      </div>
+    </section>
+  </main>
 </div>

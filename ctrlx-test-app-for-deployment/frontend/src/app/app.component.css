@@ -1,155 +1,213 @@
+/* Rexroth Corporate Design Inspired Theme - Final Polish */
+:root {
+  --rexroth-red: #DF0024;
+  --rexroth-dark-blue: #354956;
+  --rexroth-light-blue: #0099D3; /* Main accent color */
+  --rexroth-background-gray: #f4f6f8;
+  --rexroth-card-background: #ffffff;
+  --rexroth-text-dark: #222222;
+  --rexroth-text-light: #f5f5f5;
+  --rexroth-border-color: #e0e0e0;
+  --status-operating: #00b300;
+  --status-setup: #ff9900;
+  /* UPDATED: Service status now uses the brand's light blue */
+  --status-service: var(--rexroth-light-blue);
+  --status-error: #ff3333;
+}
+
 body {
-    background-color: #121212;
-    color: #ffffff;
-    font-family: Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    margin: 0;
+  margin: 0;
+  background-color: var(--rexroth-background-gray);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--rexroth-text-dark);
 }
 
-.dashboard {
-    text-align: center;
+.dashboard-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
-.metrics-row {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
+.dashboard-header {
+  background-color: var(--rexroth-card-background);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  border-bottom: 4px solid var(--rexroth-red); /* Default color */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+  transition: border-color 0.4s ease-in-out;
 }
 
-.metric-card {
-    background-color: #1e1e1e;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    width: 180px;
-}
+/* Classes for dynamic header border color */
+.dashboard-header.operating { border-bottom-color: var(--status-operating); }
+.dashboard-header.setup { border-bottom-color: var(--status-setup); }
+.dashboard-header.service { border-bottom-color: var(--status-service); }
+.dashboard-header.error { border-bottom-color: var(--status-error); }
 
-h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 1.2rem;
-    color: #aaaaaa;
-}
-
-.progress-circle {
-    position: relative;
-    width: 140px;
-    height: 140px;
-    margin: 0 auto;
-}
-
-svg {
-    width: 140px;
-    height: 140px;
-    transform: rotate(-90deg);
-}
-
-circle {
-    fill: none;
-    stroke-width: 10;
-}
-
-circle:first-child {
-    stroke: #2e2e2e;
-}
-
-circle:last-child {
-    stroke: #007bff;
-    stroke-linecap: round;
-    stroke-dasharray: 314; /* 2 * PI * r (r=50) */
-    transition: stroke-dashoffset 0.5s ease;
-}
-
-.value {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 1.5rem;
-    font-weight: bold;
-}
-
-/* --- SCHEDULER CONTROL CARD & BUTTONS --- */
-.scheduler-card {
-    background-color: #1e1e1e;
-    border-radius: 12px;
-    padding: 20px;
-    margin-top: 25px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+.brand-title {
+  font-size: 24px;
+  color: var(--rexroth-dark-blue);
+  font-weight: 600;
+  margin: 0;
 }
 
 .status-indicator {
-    font-size: 1.1rem;
-    margin: 15px 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #aaaaaa;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+  user-select: none;
 }
 
-.state-badge {
-    padding: 6px 14px;
-    border-radius: 4px;
-    font-weight: bold;
-    color: white;
-    text-transform: uppercase;
-    font-size: 0.95rem;
+.status-indicator:hover {
+  background-color: rgba(0, 0, 0, 0.04);
 }
 
-/* Zustands-Farben (ctrlX CORE standardisiert) */
-.state-operating { background-color: #28a745; }
-.state-setup { background-color: #fd7e14; }
-.state-service { background-color: #005691; }
-
-.control-buttons {
-    display: flex;
-    gap: 15px;
-    margin-top: 10px;
-    width: 100%;
-    justify-content: center;
+.status-label {
+  font-size: 16px;
+  color: var(--rexroth-dark-blue);
 }
 
-.btn {
-    padding: 12px 24px;
-    font-weight: bold;
-    font-size: 0.9rem;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.2s, opacity 0.2s;
-    color: white;
-    min-width: 120px;
+.status-light {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: #ccc;
+  border: 1px solid rgba(0,0,0,0.1);
+  display: inline-block;
 }
 
-.btn:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
+/* Status Class Color Mapping */
+.status-light.operating { background-color: var(--status-operating); }
+.status-light.setup { background-color: var(--status-setup); }
+.status-light.service { background-color: var(--status-service); }
+.status-light.error { background-color: var(--status-error); }
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  padding: 24px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
-.btn-operating { background-color: #28a745; }
-.btn-operating:hover:not(:disabled) { background-color: #218838; }
+.card {
+  background-color: var(--rexroth-card-background);
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--rexroth-border-color);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
 
-.btn-setup { background-color: #fd7e14; }
-.btn-setup:hover:not(:disabled) { background-color: #e06c07; }
+/* NEW: Added a hover effect with light blue border */
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    border-color: var(--rexroth-light-blue);
+}
 
-.btn-service { background-color: #005691; }
-.btn-service:hover:not(:disabled) { background-color: #00446a; }
+.card-title {
+  /* UPDATED: Card titles now use the light blue accent color */
+  font-size: 14px;
+  color: var(--rexroth-light-blue);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin: 0 0 20px 0;
+  letter-spacing: 0.5px;
+}
+
+.gauge-bar {
+  background-color: #e9ecef;
+  border-radius: 4px;
+  height: 28px;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.gauge-fill {
+  background-image: linear-gradient(to right, var(--rexroth-light-blue), var(--rexroth-dark-blue));
+  height: 100%;
+  width: 0%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--rexroth-text-light);
+  font-weight: 600;
+  font-size: 13px;
+  padding-right: 10px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* --- DROPDOWN MECHANICS --- */
+.status-indicator-container {
+  position: relative;
+}
+
+.dropdown-arrow {
+  font-size: 10px;
+  color: var(--rexroth-dark-blue);
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background-color: var(--rexroth-card-background);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--rexroth-border-color);
+  margin-top: 4px;
+  min-width: 180px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--rexroth-text-dark);
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.15s;
+}
+
+.dropdown-item:hover:not(.disabled) {
+  background-color: var(--rexroth-background-gray);
+}
+
+.dropdown-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .error-banner {
-    background-color: #842029;
-    border: 1px solid #842029;
-    color: #ea868f;
-    padding: 10px 15px;
-    border-radius: 6px;
-    margin-bottom: 15px;
-    font-size: 0.9rem;
-    width: 100%;
-    box-sizing: border-box;
-    text-align: center;
+  background-color: #fff5f5;
+  border: 1px solid #ffcccc;
+  color: var(--status-error);
+  padding: 12px 20px;
+  border-radius: 6px;
+  margin: 15px 24px 0 24px;
+  font-weight: bold;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
