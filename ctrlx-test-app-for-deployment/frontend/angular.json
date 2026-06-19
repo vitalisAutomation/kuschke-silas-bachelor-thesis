@@ -20,7 +20,9 @@
               "zone.js"
             ],
             "tsConfig": "tsconfig.json",
-            "assets": [],
+            "assets": [
+              "src/assets"
+            ],
             "styles": [
               "src/app/app.component.css"
             ],
