@@ -3,13 +3,15 @@ Flask Backend for the ctrlX Dashboard App.
 
 This single backend supports two run modes based on the APP_ENVIRONMENT
 environment variable:
+
 - 'production': (Default) Runs inside the ctrlX CORE snap. Serves the
   compiled Angular frontend and communicates with the local Data Layer.
 - 'development': Runs on a local PC. Provides a CORS-enabled API for an
   external Angular development server (ng serve) and connects to a remote
   ctrlX CORE over the network.
 
-Now powered by WebSockets (Flask-SocketIO) for real-time metric pushes.
+Now powered by WebSockets (Flask-SocketIO) for real-time metric pushes and
+encrypted HTTPS / WSS communication.
 """
 
 import os
@@ -21,12 +23,15 @@ import urllib3
 from dotenv import load_dotenv
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit  # <-- Neu hinzugefügt
+from flask_socketio import SocketIO, emit
 
 # --- INITIAL SETUP ---
 load_dotenv()
+
+# Disable warnings for self-signed SSL certificates used by ctrlX CORE
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Determine the run environment
 IS_DEVELOPMENT = os.getenv("APP_ENVIRONMENT") == "development"
 
 # Global store for connection details and session object
@@ -37,23 +42,25 @@ HTTP_SESSION.trust_env = False  # Always bypass system-level proxies
 
 CONFIG_LOCK = Lock()
 
-# Initialize Flask App & SocketIO
+# Initialize Flask App
 app = Flask(__name__, static_folder="static", static_url_path="")
 
-# SocketIO Setup mit CORS-Freigabe für Entwicklungsumgebung
+# Configure SocketIO and CORS based on the environment
 if IS_DEVELOPMENT:
-    CORS(app, resources={r"/api/*": {"origins": "http://localhost:4200"}})
-    socketio = SocketIO(app, cors_allowed_origins="http://localhost:4200", async_mode="eventlet")
-    print("--- RUNNING IN DEVELOPMENT MODE (WEBSOCKETS ACTIVE) ---")
+    # Allow secure connections from the local Angular dev server
+    CORS(app, resources={r"/api/*": {"origins": "https://localhost:4200"}})
+    socketio = SocketIO(app, cors_allowed_origins="https://localhost:4200", async_mode="eventlet")
+    print("--- RUNNING IN DEVELOPMENT MODE (HTTPS & WSS ACTIVE) ---")
 else:
+    # Production uses general CORS; encryption is offloaded to ctrlX Nginx proxy
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-    print("--- RUNNING IN PRODUCTION MODE (WEBSOCKETS ACTIVE) ---")
+    print("--- RUNNING IN PRODUCTION MODE (Nginx Reverse Proxy handles SSL) ---")
 
-# Thread lock für die Hintergrund-Tasks von SocketIO
+# Thread lock for SocketIO background tasks
 THREAD_LOCK = Lock()
 background_thread = None
 
-# --- DATA LAYER & AUTHENTICATION ---
+# --- DATA LAYER CONFIGURATION ---
 METRIC_PATHS = {
     "state": "scheduler/admin/state",
     "cpu": "framework/metrics/system/cpu-utilisation-percent",
@@ -62,7 +69,16 @@ METRIC_PATHS = {
 }
 
 def authenticate_to_core() -> bool:
-    """Authenticates against the ctrlX CORE."""
+    """
+    Authenticate against the Identity Manager of the ctrlX CORE.
+
+    The authentication method depends on the current environment:
+    - Production: Authentication is handled by the system context (assumes token is local).
+    - Development: Performs a remote HTTPS login using configured credentials.
+
+    :return: True if authentication succeeded, False otherwise.
+    :rtype: bool
+    """
     if not IS_DEVELOPMENT:
         print("[Info] Production mode: Assuming local token is available.")
         return True
@@ -91,7 +107,15 @@ def authenticate_to_core() -> bool:
         return False
 
 def fetch_metrics_from_core() -> dict:
-    """Helper method to query all raw metrics from the ctrlX CORE."""
+    """
+    Query all configured system metrics from the ctrlX CORE Data Layer.
+
+    Reads values such as scheduler state, CPU utilization, RAM usage, 
+    and disk storage. Re-authenticates automatically if a 401 Unauthorized status is returned.
+
+    :return: A dictionary containing the retrieved metrics.
+    :rtype: dict
+    """
     with CONFIG_LOCK:
         ip = "127.0.0.1" if not IS_DEVELOPMENT else CTRLX_CONFIG.get("ip", "localhost")
         
@@ -101,7 +125,7 @@ def fetch_metrics_from_core() -> dict:
     for key, path in METRIC_PATHS.items():
         try:
             response = HTTP_SESSION.get(f"{base_url}/{path}", timeout=2)
-            if response.status_code == 401:  # Token abgelaufen
+            if response.status_code == 401:  # Token expired
                 print("[Info] Token expired during polling. Re-authenticating...")
                 if authenticate_to_core():
                     response = HTTP_SESSION.get(f"{base_url}/{path}", timeout=2) # Retry
@@ -120,42 +144,58 @@ def fetch_metrics_from_core() -> dict:
     return metrics_data
 
 # --- WEBSOCKET BACKGROUND LOOP ---
-def metrics_polling_task():
+def metrics_polling_task() -> None:
     """
-    Zyklischer Hintergrund-Task, der die ctrlX-Daten alle 2 Sekunden ausliest
-    und via WebSocket an alle verbundenen Web-Clients pushed.
+    Cyclic background task to poll metrics from the ctrlX CORE.
+
+    Executes infinitely, fetching metrics every 2 seconds and pushing 
+    them to all connected WebSocket clients via the 'metrics_update' event.
     """
     print("[WebSocket] Background polling task started.")
     while True:
         metrics = fetch_metrics_from_core()
-        # Pushe Daten über den Kanal 'metrics_update'
         socketio.emit("metrics_update", metrics)
-        socketio.sleep(2)  # Eventlet-kompatibles Sleep (wichtig!)
+        socketio.sleep(2)  # Eventlet-compatible sleep
 
 # --- WEBSOCKET EVENTS ---
 @socketio.on("connect")
-def handle_connect():
-    """Wird ausgelöst, wenn sich ein Browser-Client verbindet."""
+def handle_connect() -> None:
+    """
+    Handle incoming WebSocket client connections.
+
+    Triggers an immediate metrics push upon connection and starts the 
+    background polling task thread if it is not already running.
+    """
     print(f"[WebSocket] Client connected: {request.sid}")
     
-    # Sofortiger Push beim ersten Verbindungsaufbau, damit das UI nicht leer startet
+    # Send immediate update on connection to prevent empty UI
     initial_metrics = fetch_metrics_from_core()
     emit("metrics_update", initial_metrics)
     
-    # Starte den Hintergrund-Polling-Thread, falls er noch nicht läuft
     global background_thread
     with THREAD_LOCK:
         if background_thread is None:
             background_thread = socketio.start_background_task(target=metrics_polling_task)
 
 @socketio.on("disconnect")
-def handle_disconnect():
+def handle_disconnect() -> None:
+    """
+    Handle WebSocket client disconnections.
+    """
     print(f"[WebSocket] Client disconnected: {request.sid}")
 
-# --- REST-API FÜR STATE-WECHSEL (Bleibt bestehen) ---
+# --- REST-API FOR STATE CHANGES ---
 @app.route("/api/state", methods=["POST"])
 def set_scheduler_state() -> tuple:
-    """API endpoint to change the controller's scheduler state."""
+    """
+    Change the controller's scheduler state (OPERATING, SETUP, SERVICE).
+
+    Expects a JSON body containing the target state. Sends a PUT request to the 
+    ctrlX CORE scheduler node. Pushes updated metrics immediately to all clients.
+
+    :return: A tuple containing a JSON response and the HTTP status code.
+    :rtype: tuple
+    """
     data = request.get_json()
     if not data or "state" not in data:
         return jsonify({"error": "Missing 'state' in request body"}), 400
@@ -185,8 +225,7 @@ def set_scheduler_state() -> tuple:
                 response = HTTP_SESSION.put(url, json=payload, timeout=5)
 
         if response.ok:
-            # Sofort neues Datenpaket über WebSockets an alle Clients senden,
-            # um die Umschaltung augenblicklich im UI zu zeigen!
+            # Emit updated metrics immediately via WebSockets to keep all UIs in sync
             updated_metrics = fetch_metrics_from_core()
             socketio.emit("metrics_update", updated_metrics)
             return jsonify({"status": "success", "state": target_state}), 200
@@ -203,7 +242,16 @@ def set_scheduler_state() -> tuple:
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path: str):
-    """Serves the compiled Angular frontend (production only)."""
+    """
+    Serve the compiled Angular frontend.
+
+    This route is only active in production mode. Serves 'index.html' 
+    for routing fallbacks or specific files if they exist in the static directory.
+
+    :param path: The requested static file path.
+    :type path: str
+    :return: The requested file or the index.html page.
+    """
     if IS_DEVELOPMENT:
         return jsonify({
             "status": "Backend is running in development mode.",
@@ -216,6 +264,7 @@ def serve_frontend(path: str):
 # --- MAIN EXECUTION ---
 if __name__ == "__main__":
     if IS_DEVELOPMENT:
+        # Prompt for remote ctrlX details when running locally
         with CONFIG_LOCK:
             ip_in = input("Enter ctrlX IP Address [192.168.1.1]: ").strip()
             CTRLX_CONFIG['ip'] = ip_in or "192.168.1.1"
@@ -225,6 +274,11 @@ if __name__ == "__main__":
             CTRLX_CONFIG['password'] = pass_in or "boschrexroth"
         
         authenticate_to_core()
-
-    # Wichtig: app.run() wird durch socketio.run() ersetzt!
-    socketio.run(app, host="0.0.0.0", port=5001)
+        
+        # DEVELOPMENT MODE: Start Flask-SocketIO with self-signed SSL (HTTPS & WSS)
+        # 'adhoc' dynamically generates a temporary certificate on startup
+        socketio.run(app, host="0.0.0.0", port=5001, keyfile=None, certfile=None, ssl_context="adhoc")
+    else:
+        # PRODUCTION MODE: Run on unencrypted port 5001 inside the ctrlX CORE snap.
+        # The built-in Nginx reverse proxy of the CORE handles SSL offloading on port 443.
+        socketio.run(app, host="0.0.0.0", port=5001)
