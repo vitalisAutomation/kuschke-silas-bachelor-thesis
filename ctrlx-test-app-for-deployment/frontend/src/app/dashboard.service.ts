@@ -7,48 +7,39 @@ import { io, Socket } from 'socket.io-client';
   providedIn: 'root'
 })
 export class DashboardService {
-  // REST-Endpunkte für den State-Wechsel (bleibt auf /api)
-  private apiUrl = isDevMode() ? 'http://localhost:5001/api' : '/api';
+  // REST-API: Im Dev-Modus HTTPS aktiv, in Produktion relative Pfade
+  private apiUrl = isDevMode() ? 'https://localhost:5001/api' : '/api';
   
-  // WebSocket-Verbindungs-URL (im Dev-Modus Port 5001, im Produktionsmodus relativ)
-  private wsUrl = isDevMode() ? 'http://localhost:5001' : ''; 
+  // WebSockets: Im Dev-Modus WSS aktiv, in Produktion relative Pfade
+  private wsUrl = isDevMode() ? 'https://localhost:5001' : ''; 
   
   private socket!: Socket;
   private metrics$ = new Subject<any>();
 
   constructor(private http: HttpClient) {
-    // Initialisiere die Socket.io-Verbindung
+    // Initialisiere die verschlüsselte Socket.io-Verbindung
     this.socket = io(this.wsUrl, {
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      rejectUnauthorized: false // WICHTIG: Erlaubt selbstsignierte Zertifikate im Dev-Modus
     });
 
-    // Registriere den Listener für den 'metrics_update'-Kanal von Flask
     this.socket.on('metrics_update', (data: any) => {
       this.metrics$.next(data);
     });
 
-    // Logging zur Unterstützung der Inbetriebnahme
     this.socket.on('connect', () => {
-      console.log('[WebSocket] Successfully connected to ctrlX CORE Backend');
+      console.log('[WebSocket] Successfully connected via Secure WSS');
     });
 
     this.socket.on('disconnect', () => {
-      console.warn('[WebSocket] Connection to backend lost');
+      console.warn('[WebSocket] Secure connection lost');
     });
   }
 
-  /**
-   * Gibt den Live-Datenstrom der Steuerung als Observable zurück.
-   * Ersetzt das manuelle getMetrics()-Polling in den Komponenten.
-   */
   getLiveMetrics(): Observable<any> {
     return this.metrics$.asObservable();
   }
 
-  /**
-   * Sendet den Befehl zur Umschaltung des Systemzustands (OPERATING, SETUP, SERVICE)
-   * weiterhin über die REST-Schnittstelle.
-   */
   setSchedulerState(state: string): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/state`, { state });
   }
