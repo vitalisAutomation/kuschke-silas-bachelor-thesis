@@ -273,12 +273,28 @@ if __name__ == "__main__":
             pass_in = getpass.getpass("Enter Password [boschrexroth]: ").strip()
             CTRLX_CONFIG['password'] = pass_in or "boschrexroth"
         
-        authenticate_to_core()
+        # Try to connect, but do not crash the server if the Core is offline
+        try:
+            authenticate_to_core()
+        except Exception as e:
+            print(f"[Warning] Initial connection to ctrlX CORE failed (Core might be offline): {e}")
         
-        # DEVELOPMENT MODE: Start Flask-SocketIO with self-signed SSL (HTTPS & WSS)
-        # 'adhoc' dynamically generates a temporary certificate on startup
-        socketio.run(app, host="0.0.0.0", port=5001, keyfile=None, certfile=None, ssl_context="adhoc")
+        # Secure Eventlet configuration
+        cert_file = "cert.pem"
+        key_file = "key.pem"
+        
+        # Check if local SSL certificates exist
+        if os.path.exists(cert_file) and os.path.exists(key_file):
+            print(f"[SSL] Starting secure server on https://localhost:5001")
+            # For Eventlet, pass certfile and keyfile directly
+            socketio.run(app, host="0.0.0.0", port=5001, certfile=cert_file, keyfile=key_file)
+        else:
+            print("[SSL Warning] 'cert.pem' or 'key.pem' not found in workspace!")
+            print("[SSL Warning] Falling back to unencrypted http://localhost:5001 for development.")
+            print("[SSL Warning] To enable HTTPS, generate certificates or run: pip install trustme")
+            socketio.run(app, host="0.0.0.0", port=5001)
     else:
-        # PRODUCTION MODE: Run on unencrypted port 5001 inside the ctrlX CORE snap.
-        # The built-in Nginx reverse proxy of the CORE handles SSL offloading on port 443.
+        # PRODUCTION MODE (on ctrlX CORE): 
+        # The built-in Nginx reverse proxy of the CORE handles SSL offloading.
+        # Inside the snap container, we communicate via unencrypted HTTP/WS on port 5001.
         socketio.run(app, host="0.0.0.0", port=5001)
