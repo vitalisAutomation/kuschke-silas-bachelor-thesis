@@ -1,7 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
 import { DashboardService } from './dashboard.service';
-import { Subscription, interval } from 'rxjs';
-import { startWith, switchMap } from 'rxjs/operators';
+import { Subscription } from 'rxjs'; // 'interval' wird nicht mehr benötigt
 
 @Component({
   selector: 'app-root',
@@ -9,7 +8,7 @@ import { startWith, switchMap } from 'rxjs/operators';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit, OnDestroy {
-  // Originalstruktur des Metrik-Objekts
+  // Originalstruktur des Metrik-Objekts bleibt absolut identisch
   metrics: any = {
     state: 'UNKNOWN',
     cpu: 0,
@@ -17,12 +16,13 @@ export class AppComponent implements OnInit, OnDestroy {
     storage_used_percent: 0
   };
 
-  // UI-Zustand
+  // UI-Zustand bleibt identisch
   isDropdownOpen: boolean = false;
   loading: boolean = false;
   errorMessage: string | null = null;
   
-  private pollingSub!: Subscription;
+  // Umbenannt von pollingSub zu wsSubscription, da wir nun auf WebSockets lauschen
+  private wsSubscription!: Subscription;
 
   constructor(
     private dashboardService: DashboardService,
@@ -30,16 +30,18 @@ export class AppComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Polling: Alle 3 Sekunden automatisch die Metriken frisch von Flask holen
-    this.pollingSub = interval(3000).pipe(
-      startWith(0),
-      switchMap(() => this.dashboardService.getMetrics())
-    ).subscribe({
+    // REAKTIVE WEBSOCKET-INTEGRATION:
+    // Wir lauschen passiv auf den Echtzeit-Datenstrom von Flask.
+    // Das entlastet die ctrlX CORE massiv von unnötigen HTTP-Pollings.
+    this.wsSubscription = this.dashboardService.getLiveMetrics().subscribe({
       next: (data: any) => {
         this.metrics.state = data.state || 'UNKNOWN';
         this.metrics.cpu = data.cpu !== undefined ? data.cpu : 0;
         this.metrics.ram_used_percent = data.ram_used_percent !== undefined ? data.ram_used_percent : 0;
         this.metrics.storage_used_percent = data.storage_used_percent !== undefined ? data.storage_used_percent : 0;
+        
+        // Lösche eine eventuell bestehende Fehlermeldung, sobald wieder Live-Daten reinkommen
+        this.errorMessage = null;
       },
       error: (err: any) => {
         this.errorMessage = 'Verbindung zum ctrlX Dashboard-Backend verloren.';
@@ -48,7 +50,7 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Schließt das Dropdown, wenn man außerhalb des Indikators klickt
+  // Schließt das Dropdown, wenn man außerhalb des Indikators klickt (Originalmethode)
   @HostListener('document:click', ['$event'])
   clickout(event: any) {
     if (!this.eRef.nativeElement.contains(event.target)) {
@@ -56,6 +58,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Öffnet/Schließt das Dropdown (Originalmethode)
   toggleDropdown(): void {
     if (!this.loading) {
       this.isDropdownOpen = !this.isDropdownOpen;
@@ -72,7 +75,10 @@ export class AppComponent implements OnInit, OnDestroy {
 
     this.dashboardService.setSchedulerState(targetState).subscribe({
       next: (res: any) => {
-        this.metrics.state = res.state;
+        // HINWEIS: Wir müssen 'this.metrics.state' hier nicht manuell setzen!
+        // Sobald die Umschaltung auf der Steuerung erfolgreich war, pusht Flask 
+        // augenblicklich das neue Datenpaket über die WebSockets an uns zurück.
+        // Das UI aktualisiert sich dadurch vollkommen automatisch und ohne Verzögerung.
         this.loading = false;
       },
       error: (err: any) => {
@@ -83,7 +89,7 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Original-Formatierungshilfe für die Gauge-Füllung
+  // Original-Formatierungshilfe für die Gauge-Füllung (Originalmethode)
   formatValue(val: any): string {
     if (val === undefined || val === null || val === 'N/A') return '0';
     const clean = String(val).replace('%', '');
@@ -92,8 +98,9 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.pollingSub) {
-      this.pollingSub.unsubscribe();
+    // Sauber deabonnieren beim Verlassen der Komponente, um Speicherlecks zu verhindern
+    if (this.wsSubscription) {
+      this.wsSubscription.unsubscribe();
     }
   }
 }
