@@ -1,19 +1,9 @@
-#!/usr/bin/env python3
 """
-Python script to install a Snap App on a Bosch Rexroth ctrlX CORE via REST API.
+ctrlX CORE App (Snap) Deployment Automation Script.
 
-This script runs fully interactively. It prompts the user for connection
-details, automatically applying defaults upon pressing Enter, while requiring
-a valid path to a local .snap package.
-
-Optimizations:
-1. Pre-flight check: Verifies if the App is already installed (avoids Bad Requests).
-2. Safety check: Verifies if other service tasks are active.
-3. Universal API Support: Auto-detects the Scheduler API payload format of ctrlX OS.
-4. State Caching: Remembers the working API format to avoid unnecessary requests.
-5. Smart Polling: Resolves terminal 100% hung states and auto-cleanup tasks.
-6. Retry State Restoring: Tries up to 6 times to switch back to OPERATING, giving the 
-   Package Manager time to finish registering the Snap in the background.
+This module provides a robust command-line interface to automate the installation
+and management of Snap applications on Bosch Rexroth ctrlX CORE devices via the
+Package Manager REST API.
 """
 
 import os
@@ -38,6 +28,9 @@ WORKING_PAYLOAD_FORMAT = None
 def configure_connection() -> None:
     """
     Prompt the user for ctrlX CORE connection details.
+
+    Applies default connection parameters (IP: '192.168.1.1', User/Password: 'boschrexroth')
+    upon pressing Enter. Masking is applied to the password input for security.
     """
     print("\n--- Configure ctrlX CORE Connection (Press Enter for Default) ---")
     ip_in = input("Enter IP Address [192.168.1.1]: ").strip()
@@ -50,6 +43,10 @@ def configure_connection() -> None:
 def fetch_bearer_token() -> bool:
     """
     Authenticate against the Identity Manager of the ctrlX CORE.
+
+    Retrieves a valid OAuth2 Bearer token and updates the global HTTP session headers
+    for all subsequent API requests.
+
     :return: True if authentication succeeded, False otherwise.
     :rtype: bool
     """
@@ -77,7 +74,11 @@ def fetch_bearer_token() -> bool:
 def get_controller_info() -> tuple[str, str]:
     """
     Read the electronic typeplate to determine the hardware model and architecture.
-    :return: A tuple containing the model name and the expected architecture.
+
+    Queries the system typeplate API and parses the response to identify whether the target
+    hardware is an ARM-based or AMD64-based controller.
+
+    :return: A tuple containing the resolved model name and the expected architecture.
     :rtype: tuple[str, str]
     """
     ip = CTRLX_CONFIG["ip"]
@@ -108,8 +109,15 @@ def get_controller_info() -> tuple[str, str]:
 
 def get_installed_app_info(app_name: str) -> dict | None:
     """
-    Checks if the app is already installed on the ctrlX CORE.
-    Returns the package info dict if installed, None otherwise.
+    Check if the specified application is already installed on the controller.
+
+    Queries the package manager API to retrieve all currently installed packages,
+    filtering the list by the given application name (with typical 'snap_' prefix normalization).
+
+    :param app_name: The name of the application to check.
+    :type app_name: str
+    :return: The package metadata dictionary if installed, None otherwise.
+    :rtype: dict or None
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/package-manager/api/v1/packages"
@@ -133,8 +141,13 @@ def get_installed_app_info(app_name: str) -> dict | None:
 
 def check_active_tasks() -> bool:
     """
-    Queries the active package manager tasks.
-    Returns True if an active/running task is found, False otherwise.
+    Query the Package Manager API for any currently active background tasks.
+
+    Checks if any installation, update, or maintenance task is running or pending,
+    which might block Scheduler state transitions or other concurrent actions.
+
+    :return: True if an active or pending task exists, False otherwise.
+    :rtype: bool
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/package-manager/api/v1/tasks"
@@ -155,9 +168,19 @@ def check_active_tasks() -> bool:
     except Exception:
         return False
 
-def check_architecture_compatibility(snap_path, expected_arch) -> bool:
+def check_architecture_compatibility(snap_path: str, expected_arch: str) -> bool:
     """
-    Check if the Snap filename is compatible with the controller's architecture.
+    Verify if the Snap filename is compatible with the controller's architecture.
+
+    Extracts architectural markers from the file name and compares them with the target architecture
+    to prevent operational risks or system faults.
+
+    :param snap_path: The local file path to the .snap package.
+    :type snap_path: str
+    :param expected_arch: The target CPU architecture resolved from the controller ('arm' or 'amd64').
+    :type expected_arch: str
+    :return: True if the architecture matches or the user explicitly overrides the mismatch, False otherwise.
+    :rtype: bool
     """
     if expected_arch == "unknown":
         print("[Warning] Target architecture is unknown. Skipping check.")
@@ -188,7 +211,12 @@ def check_architecture_compatibility(snap_path, expected_arch) -> bool:
 
 def get_scheduler_state() -> str | None:
     """
-    Retrieve the current Scheduler state from the Data Layer.
+    Retrieve the current Scheduler operating state from the Data Layer.
+
+    Queries the Data Layer node 'scheduler/admin/state' and extracts the active state value.
+
+    :return: The active scheduler state string (e.g., 'OPERATING', 'SETUP', 'SERVICE') or None if the query fails.
+    :rtype: str or None
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
@@ -205,14 +233,20 @@ def get_scheduler_state() -> str | None:
 
 def change_scheduler_state(target_state: str) -> bool:
     """
-    Change the scheduler operating state (OPERATING, SETUP, SERVICE).
-    Tries multiple payload formats to ensure compatibility with all ctrlX OS versions.
+    Request a change of the scheduler operating state.
+
+    Iterates through multiple known API payload formats to ensure compatibility across
+    various ctrlX OS firmware versions. Caches the successful format for subsequent calls.
+
+    :param target_state: The requested scheduler state ('OPERATING', 'SETUP', 'SERVICE').
+    :type target_state: str
+    :return: True if the API accepted the state transition command, False otherwise.
+    :rtype: bool
     """
     global WORKING_PAYLOAD_FORMAT
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
     
-    # 1. Use cached format if available
     if WORKING_PAYLOAD_FORMAT is not None:
         try:
             payload = copy.deepcopy(WORKING_PAYLOAD_FORMAT)
@@ -226,9 +260,8 @@ def change_scheduler_state(target_state: str) -> bool:
             if response.status_code in [200, 204]:
                 return True
         except requests.exceptions.RequestException:
-            pass  # Fallback to scanning on failure
+            pass
             
-    # 2. Scanning Mode (Runs on first call or on cache-invalidation)
     payloads = [
         {"type": "string", "value": target_state},       # Standard on ctrlX OS 1.20+
         {"value": target_state},                         # Flat Value Format
@@ -247,9 +280,16 @@ def change_scheduler_state(target_state: str) -> bool:
             
     return False
 
-def wait_for_scheduler_state(target_state, timeout_seconds=60) -> bool:
+def wait_for_scheduler_state(target_state: str, timeout_seconds: int = 60) -> bool:
     """
-    Poll the Scheduler state until it reaches the target state or times out.
+    Poll the Scheduler operating state until it reaches the target state.
+
+    :param target_state: The expected target state.
+    :type target_state: str
+    :param timeout_seconds: The maximum duration in seconds to wait before timing out, defaults to 60.
+    :type timeout_seconds: int
+    :return: True if the target state was successfully reached within the timeout, False otherwise.
+    :rtype: bool
     """
     start_time = time.time()
     print(f"[Info] Waiting for Scheduler to enter '{target_state}' mode...")
@@ -264,7 +304,12 @@ def wait_for_scheduler_state(target_state, timeout_seconds=60) -> bool:
 
 def get_task_status(task_id: str) -> dict | None:
     """
-    Retrieves the status of a specific background task from the Package Manager API.
+    Retrieve the status of a background package manager task.
+
+    :param task_id: The unique identifier of the task.
+    :type task_id: str
+    :return: The raw task metadata dictionary if found, None otherwise.
+    :rtype: dict or None
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/package-manager/api/v1/tasks/{task_id}"
@@ -278,8 +323,17 @@ def get_task_status(task_id: str) -> dict | None:
 
 def wait_for_task_completion(task_id: str, timeout_seconds: int = 300) -> bool:
     """
-    Polls the task endpoint until the installation task is complete.
-    Handles auto-cleanup/disappearance of completed tasks in ctrlX OS.
+    Poll the task status endpoint until the installation task is complete.
+
+    Monitors progress percentage and status strings. Implements protections for hangups
+    at 100% and automated cleanup behaviors of completed tasks.
+
+    :param task_id: The unique identifier of the task to poll.
+    :type task_id: str
+    :param timeout_seconds: The maximum duration in seconds to wait, defaults to 300.
+    :type timeout_seconds: int
+    :return: True if the installation task finished successfully, False otherwise.
+    :rtype: bool
     """
     start_time = time.time()
     print(f"[Info] Waiting for installation task '{task_id}' to complete...")
@@ -290,7 +344,6 @@ def wait_for_task_completion(task_id: str, timeout_seconds: int = 300) -> bool:
     while time.time() - start_time < timeout_seconds:
         task_info = get_task_status(task_id)
         
-        # If the task does not exist anymore, ctrlX OS probably cleaned it up post-success
         if not task_info:
             print("\n[Info] Task tracking ID disappeared. Double checking app status...")
             time.sleep(3)
@@ -310,7 +363,6 @@ def wait_for_task_completion(task_id: str, timeout_seconds: int = 300) -> bool:
             print(f"\n[Error] Installation task failed with status '{status}'. Details: {error_details}")
             return False
             
-        # Absicherung: Progress stuck protection
         if progress == last_progress:
             progress_stuck_count += 1
         else:
@@ -326,9 +378,18 @@ def wait_for_task_completion(task_id: str, timeout_seconds: int = 300) -> bool:
     print("\n[Error] Timeout expired while waiting for installation to complete.")
     return False
 
-def install_snap(snap_path) -> bool:
+def install_snap(snap_path: str) -> bool:
     """
-    Uploads the Snap to the Package Manager API and monitors the installation task.
+    Upload the Snap file to the Package Manager API and monitor the installation task.
+
+    Performs a multipart/form-data upload of the local Snap binary. If accepted (HTTP 202),
+    it extracts the task ID from either the JSON response body or the Location header,
+    and initiates the task polling loop.
+
+    :param snap_path: The local path to the .snap file.
+    :type snap_path: str
+    :return: True if the package was successfully uploaded and installed, False otherwise.
+    :rtype: bool
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/package-manager/api/v1/packages?force=true"
@@ -366,7 +427,11 @@ def install_snap(snap_path) -> bool:
 
 def main() -> None:
     """
-    Main entry point for the script.
+    Execute the automated app installation workflow.
+
+    Runs pre-flight validation checks, manages Scheduler state transitions safely
+    (including retries during lockouts), uploads and polls the installation task,
+    and restores the controller's state back to OPERATING mode.
     """
     print("=== ctrlX CORE App (Snap) Deployment Script ===")
     configure_connection()
