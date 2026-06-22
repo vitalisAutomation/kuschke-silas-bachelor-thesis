@@ -14,6 +14,7 @@ import sys
 # Hardcoded absolute paths to guarantee Sphinx autodoc finds the modules on Windows
 sys.path.insert(0, r"C:\development\bachelor-thesis-silas-kuschke\ctrlx-test-app-for-deployment\backend")
 sys.path.insert(0, r"C:\development\bachelor-thesis-silas-kuschke\ctrlx-app-installation-automation")
+sys.path.insert(0, r"C:\development\bachelor-thesis-silas-kuschke\ctrlx-flask-app-test")
 
 
 # -- Project information -----------------------------------------------------

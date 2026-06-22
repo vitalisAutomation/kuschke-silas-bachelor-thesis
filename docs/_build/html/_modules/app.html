@@ -70,314 +70,243 @@
              
   <h1>Source code for app</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Flask Backend for the ctrlX Dashboard App.</span>
+<span class="sd">ctrlX CORE Data Layer Console Client.</span>
 
-<span class="sd">This single backend supports two run modes based on the APP_ENVIRONMENT</span>
-<span class="sd">environment variable:</span>
-
-<span class="sd">- &#39;production&#39;: (Default) Runs inside the ctrlX CORE snap. Serves the</span>
-<span class="sd">  compiled Angular frontend and communicates with the local Data Layer.</span>
-<span class="sd">- &#39;development&#39;: Runs on a local PC. Provides a CORS-enabled API for an</span>
-<span class="sd">  external Angular development server (ng serve) and connects to a remote</span>
-<span class="sd">  ctrlX CORE over the network.</span>
-
-<span class="sd">Now powered by WebSockets (Flask-SocketIO) for real-time metric pushes and</span>
-<span class="sd">encrypted HTTPS / WSS communication.</span>
+<span class="sd">This module provides a command-line interface to interact with the Bosch Rexroth</span>
+<span class="sd">ctrlX CORE Data Layer REST API. It allows querying system metrics and changing</span>
+<span class="sd">the controller&#39;s operating state.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">getpass</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">threading</span><span class="w"> </span><span class="kn">import</span> <span class="n">Lock</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">urllib3</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">dotenv</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dotenv</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">flask</span><span class="w"> </span><span class="kn">import</span> <span class="n">Flask</span><span class="p">,</span> <span class="n">jsonify</span><span class="p">,</span> <span class="n">send_from_directory</span><span class="p">,</span> <span class="n">request</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">flask_cors</span><span class="w"> </span><span class="kn">import</span> <span class="n">CORS</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">flask_socketio</span><span class="w"> </span><span class="kn">import</span> <span class="n">SocketIO</span><span class="p">,</span> <span class="n">emit</span>
-
-<span class="c1"># --- INITIAL SETUP ---</span>
-<span class="n">load_dotenv</span><span class="p">()</span>
 
 <span class="c1"># Disable warnings for self-signed SSL certificates used by ctrlX CORE</span>
 <span class="n">urllib3</span><span class="o">.</span><span class="n">disable_warnings</span><span class="p">(</span><span class="n">urllib3</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">InsecureRequestWarning</span><span class="p">)</span>
 
-<span class="c1"># Determine the run environment</span>
-<span class="n">IS_DEVELOPMENT</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;APP_ENVIRONMENT&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;development&quot;</span>
-
-<span class="c1"># Global store for connection details and session object</span>
+<span class="c1"># Global configuration and HTTP session initialization</span>
 <span class="n">CTRLX_CONFIG</span> <span class="o">=</span> <span class="p">{}</span>
 <span class="n">HTTP_SESSION</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
 <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">verify</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">trust_env</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Always bypass system-level proxies</span>
 
-<span class="n">CONFIG_LOCK</span> <span class="o">=</span> <span class="n">Lock</span><span class="p">()</span>
+<span class="c1"># Bypass system proxies (e.g., corporate proxies) for local communication</span>
+<span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">trust_env</span> <span class="o">=</span> <span class="kc">False</span>
 
-<span class="c1"># Initialize Flask App</span>
-<span class="n">app</span> <span class="o">=</span> <span class="n">Flask</span><span class="p">(</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">static_folder</span><span class="o">=</span><span class="s2">&quot;static&quot;</span><span class="p">,</span> <span class="n">static_url_path</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+<div class="viewcode-block" id="configure_connection">
+<a class="viewcode-back" href="../modules.html#app.configure_connection">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">configure_connection</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Prompt the user for ctrlX CORE connection details.</span>
 
-<span class="c1"># Configure SocketIO and CORS based on the environment</span>
-<span class="k">if</span> <span class="n">IS_DEVELOPMENT</span><span class="p">:</span>
-    <span class="c1"># Allow secure connections from the local Angular dev server</span>
-    <span class="n">CORS</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">resources</span><span class="o">=</span><span class="p">{</span><span class="sa">r</span><span class="s2">&quot;/api/*&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;origins&quot;</span><span class="p">:</span> <span class="s2">&quot;https://localhost:4200&quot;</span><span class="p">}})</span>
-    <span class="n">socketio</span> <span class="o">=</span> <span class="n">SocketIO</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">cors_allowed_origins</span><span class="o">=</span><span class="s2">&quot;https://localhost:4200&quot;</span><span class="p">,</span> <span class="n">async_mode</span><span class="o">=</span><span class="s2">&quot;eventlet&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;--- RUNNING IN DEVELOPMENT MODE (HTTPS &amp; WSS ACTIVE) ---&quot;</span><span class="p">)</span>
-<span class="k">else</span><span class="p">:</span>
-    <span class="c1"># Production uses general CORS; encryption is offloaded to ctrlX Nginx proxy</span>
-    <span class="n">socketio</span> <span class="o">=</span> <span class="n">SocketIO</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">cors_allowed_origins</span><span class="o">=</span><span class="s2">&quot;*&quot;</span><span class="p">,</span> <span class="n">async_mode</span><span class="o">=</span><span class="s2">&quot;eventlet&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;--- RUNNING IN PRODUCTION MODE (Nginx Reverse Proxy handles SSL) ---&quot;</span><span class="p">)</span>
+<span class="sd">    If the user presses Enter without typing, fallback standard values</span>
+<span class="sd">    (IP: &#39;192.168.1.1&#39;, User/Password: &#39;boschrexroth&#39;) are applied.</span>
+<span class="sd">    The password input is masked for security.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Configure ctrlX CORE Connection (Press Enter for Default) ---&quot;</span><span class="p">)</span>
+    <span class="c1"># Prompt for IP address</span>
+    <span class="n">ip_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter IP Address [192.168.1.1]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ip_in</span> <span class="ow">or</span> <span class="s2">&quot;192.168.1.1&quot;</span>
+    <span class="c1"># Prompt for username</span>
+    <span class="n">user_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter Username [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;username&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">user_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
+    <span class="c1"># Masked prompt for password</span>
+    <span class="n">pass_in</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">&quot;Enter Password [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;password&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pass_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">65</span><span class="p">)</span></div>
 
-<span class="c1"># Thread lock for SocketIO background tasks</span>
-<span class="n">THREAD_LOCK</span> <span class="o">=</span> <span class="n">Lock</span><span class="p">()</span>
-<span class="n">background_thread</span> <span class="o">=</span> <span class="kc">None</span>
 
-<span class="c1"># --- DATA LAYER CONFIGURATION ---</span>
-<span class="n">METRIC_PATHS</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="s2">&quot;scheduler/admin/state&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;cpu&quot;</span><span class="p">:</span> <span class="s2">&quot;framework/metrics/system/cpu-utilisation-percent&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;ram_used_percent&quot;</span><span class="p">:</span> <span class="s2">&quot;framework/metrics/system/memused-percent&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;storage_used_percent&quot;</span><span class="p">:</span> <span class="s2">&quot;framework/metrics/system/storage-used-percent&quot;</span><span class="p">,</span>
-<span class="p">}</span>
-
-<div class="viewcode-block" id="authenticate_to_core">
-<a class="viewcode-back" href="../modules.html#app.authenticate_to_core">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">authenticate_to_core</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<div class="viewcode-block" id="fetch_bearer_token">
+<a class="viewcode-back" href="../modules.html#app.fetch_bearer_token">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fetch_bearer_token</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Authenticate against the Identity Manager of the ctrlX CORE.</span>
 
-<span class="sd">    The authentication method depends on the current environment:</span>
-<span class="sd">    - Production: Authentication is handled by the system context (assumes token is local).</span>
-<span class="sd">    - Development: Performs a remote HTTPS login using configured credentials.</span>
+<span class="sd">    Retrieves a valid Bearer token and updates the global HTTP session headers</span>
+<span class="sd">    for all subsequent API calls.</span>
 
 <span class="sd">    :return: True if authentication succeeded, False otherwise.</span>
 <span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">IS_DEVELOPMENT</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Info] Production mode: Assuming local token is available.&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="kc">True</span>
-        
-    <span class="k">with</span> <span class="n">CONFIG_LOCK</span><span class="p">:</span>
-        <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ip&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">ip</span><span class="p">:</span> <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/identity-manager/api/v2/auth/token&quot;</span>
-        <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span>
-            <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;password&quot;</span><span class="p">]</span>
-        <span class="p">}</span>
-        
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/identity-manager/api/v2/auth/token&quot;</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;password&quot;</span><span class="p">]</span>
+    <span class="p">}</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
         <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
-        <span class="n">token</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">token</span><span class="p">:</span>
-            <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Bearer </span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Success] Authenticated with remote ctrlX at </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] &#39;access_token&#39; not found in response.&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">token_data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">token_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] &#39;access_token&#39; not found in response.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="c1"># Apply Bearer token to all future requests in this session</span>
+        <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Bearer </span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Success] Connected and authenticated successfully.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
     <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Remote authentication failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Connection or authentication failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 
 
-<div class="viewcode-block" id="fetch_metrics_from_core">
-<a class="viewcode-back" href="../modules.html#app.fetch_metrics_from_core">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">fetch_metrics_from_core</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<div class="viewcode-block" id="read_datalayer_value">
+<a class="viewcode-back" href="../modules.html#app.read_datalayer_value">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_datalayer_value</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Query all configured system metrics from the ctrlX CORE Data Layer.</span>
+<span class="sd">    Read a value from a specific ctrlX Data Layer node.</span>
 
-<span class="sd">    Reads values such as scheduler state, CPU utilization, RAM usage, </span>
-<span class="sd">    and disk storage. Re-authenticates automatically if a 401 Unauthorized status is returned.</span>
-
-<span class="sd">    :return: A dictionary containing the retrieved metrics.</span>
-<span class="sd">    :rtype: dict</span>
+<span class="sd">    :param path: The Data Layer node path (e.g., &#39;scheduler/admin/state&#39;).</span>
+<span class="sd">    :type path: str</span>
+<span class="sd">    :return: The JSON response dictionary from the node if successful, None otherwise.</span>
+<span class="sd">    :rtype: dict or None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">with</span> <span class="n">CONFIG_LOCK</span><span class="p">:</span>
-        <span class="n">ip</span> <span class="o">=</span> <span class="s2">&quot;127.0.0.1&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">IS_DEVELOPMENT</span> <span class="k">else</span> <span class="n">CTRLX_CONFIG</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ip&quot;</span><span class="p">,</span> <span class="s2">&quot;localhost&quot;</span><span class="p">)</span>
-        
-    <span class="n">base_url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes&quot;</span>
-    <span class="n">metrics_data</span> <span class="o">=</span> <span class="p">{}</span>
-    
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">METRIC_PATHS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_url</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">401</span><span class="p">:</span>  <span class="c1"># Token expired</span>
-                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Info] Token expired during polling. Re-authenticating...&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">authenticate_to_core</span><span class="p">():</span>
-                    <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_url</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="c1"># Retry</span>
-            
-            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">ok</span><span class="p">:</span>
-                <span class="n">raw_val</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;state&quot;</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">raw_val</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-                    <span class="n">metrics_data</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_val</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;UNKNOWN&quot;</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">metrics_data</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_val</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">metrics_data</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;N/A&quot;</span>
-        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-            <span class="n">metrics_data</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Error&quot;</span>
-            
-    <span class="k">return</span> <span class="n">metrics_data</span></div>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Data Layer read failed for &#39;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
 
 
-<span class="c1"># --- WEBSOCKET BACKGROUND LOOP ---</span>
-<div class="viewcode-block" id="metrics_polling_task">
-<a class="viewcode-back" href="../modules.html#app.metrics_polling_task">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">metrics_polling_task</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="change_scheduler_state">
+<a class="viewcode-back" href="../modules.html#app.change_scheduler_state">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">change_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Cyclic background task to poll metrics from the ctrlX CORE.</span>
+<span class="sd">    Change the scheduler operating state (OPERATING, SETUP, SERVICE).</span>
 
-<span class="sd">    Executes infinitely, fetching metrics every 2 seconds and pushing </span>
-<span class="sd">    them to all connected WebSocket clients via the &#39;metrics_update&#39; event.</span>
+<span class="sd">    Sends a PUT request to the &#39;scheduler/admin/state&#39; node using the exact</span>
+<span class="sd">    payload structure analyzed from the ctrlX Web-UI network request.</span>
+
+<span class="sd">    :param target_state: The target state (&#39;OPERATING&#39;, &#39;SETUP&#39;, &#39;SERVICE&#39;).</span>
+<span class="sd">    :type target_state: str</span>
+<span class="sd">    :return: True if state transition was successful and verified, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[WebSocket] Background polling task started.&quot;</span><span class="p">)</span>
-    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-        <span class="n">metrics</span> <span class="o">=</span> <span class="n">fetch_metrics_from_core</span><span class="p">()</span>
-        <span class="n">socketio</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;metrics_update&quot;</span><span class="p">,</span> <span class="n">metrics</span><span class="p">)</span>
-        <span class="n">socketio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># Eventlet-compatible sleep</span></div>
-
-
-<span class="c1"># --- WEBSOCKET EVENTS ---</span>
-<span class="nd">@socketio</span><span class="o">.</span><span class="n">on</span><span class="p">(</span><span class="s2">&quot;connect&quot;</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">handle_connect</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Handle incoming WebSocket client connections.</span>
-
-<span class="sd">    Triggers an immediate metrics push upon connection and starts the </span>
-<span class="sd">    background polling task thread if it is not already running.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[WebSocket] Client connected: </span><span class="si">{</span><span class="n">request</span><span class="o">.</span><span class="n">sid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    
-    <span class="c1"># Send immediate update on connection to prevent empty UI</span>
-    <span class="n">initial_metrics</span> <span class="o">=</span> <span class="n">fetch_metrics_from_core</span><span class="p">()</span>
-    <span class="n">emit</span><span class="p">(</span><span class="s2">&quot;metrics_update&quot;</span><span class="p">,</span> <span class="n">initial_metrics</span><span class="p">)</span>
-    
-    <span class="k">global</span> <span class="n">background_thread</span>
-    <span class="k">with</span> <span class="n">THREAD_LOCK</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">background_thread</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">background_thread</span> <span class="o">=</span> <span class="n">socketio</span><span class="o">.</span><span class="n">start_background_task</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">metrics_polling_task</span><span class="p">)</span>
-
-<span class="nd">@socketio</span><span class="o">.</span><span class="n">on</span><span class="p">(</span><span class="s2">&quot;disconnect&quot;</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">handle_disconnect</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Handle WebSocket client disconnections.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[WebSocket] Client disconnected: </span><span class="si">{</span><span class="n">request</span><span class="o">.</span><span class="n">sid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
-<span class="c1"># --- REST-API FOR STATE CHANGES ---</span>
-<span class="nd">@app</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;/api/state&quot;</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;POST&quot;</span><span class="p">])</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">set_scheduler_state</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Change the controller&#39;s scheduler state (OPERATING, SETUP, SERVICE).</span>
-
-<span class="sd">    Expects a JSON body containing the target state. Sends a PUT request to the </span>
-<span class="sd">    ctrlX CORE scheduler node. Pushes updated metrics immediately to all clients.</span>
-
-<span class="sd">    :return: A tuple containing a JSON response and the HTTP status code.</span>
-<span class="sd">    :rtype: tuple</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">get_json</span><span class="p">()</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span> <span class="ow">or</span> <span class="s2">&quot;state&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">jsonify</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Missing &#39;state&#39; in request body&quot;</span><span class="p">}),</span> <span class="mi">400</span>
-        
-    <span class="n">target_state</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;state&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">target_state</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;OPERATING&quot;</span><span class="p">,</span> <span class="s2">&quot;SETUP&quot;</span><span class="p">,</span> <span class="s2">&quot;SERVICE&quot;</span><span class="p">]:</span>
-        <span class="k">return</span> <span class="n">jsonify</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;Invalid state. Choose OPERATING, SETUP or SERVICE.&quot;</span><span class="p">}),</span> <span class="mi">400</span>
-
-    <span class="k">with</span> <span class="n">CONFIG_LOCK</span><span class="p">:</span>
-        <span class="n">ip</span> <span class="o">=</span> <span class="s2">&quot;127.0.0.1&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">IS_DEVELOPMENT</span> <span class="k">else</span> <span class="n">CTRLX_CONFIG</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ip&quot;</span><span class="p">,</span> <span class="s2">&quot;localhost&quot;</span><span class="p">)</span>
-
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/scheduler/admin/state&quot;</span>
+    <span class="c1"># Exact payload structure expected by the ctrlX Datalayer enum types</span>
     <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
         <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">target_state</span>
         <span class="p">}</span>
     <span class="p">}</span>
-
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Sending command &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39; to &#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&#39; via PUT...&quot;</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Sending transition to &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39;...&quot;</span><span class="p">)</span>
-        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] API accepted command with status </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Verifying actual controller status...&quot;</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">1.5</span><span class="p">)</span>  <span class="c1"># Short delay to let the controller switch states</span>
         
-        <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">401</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Info] Token expired during transition. Re-authenticating...&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">authenticate_to_core</span><span class="p">():</span>
-                <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">ok</span><span class="p">:</span>
-            <span class="c1"># Emit updated metrics immediately via WebSockets to keep all UIs in sync</span>
-            <span class="n">updated_metrics</span> <span class="o">=</span> <span class="n">fetch_metrics_from_core</span><span class="p">()</span>
-            <span class="n">socketio</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;metrics_update&quot;</span><span class="p">,</span> <span class="n">updated_metrics</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">jsonify</span><span class="p">({</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;success&quot;</span><span class="p">,</span> <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">target_state</span><span class="p">}),</span> <span class="mi">200</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">jsonify</span><span class="p">({</span>
-                <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;State transition failed&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;status_code&quot;</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span>
-                <span class="s2">&quot;details&quot;</span><span class="p">:</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span> <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">text</span> <span class="k">else</span> <span class="s2">&quot;No details&quot;</span>
-            <span class="p">}),</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span>
-            
+        <span class="c1"># Verify the actual state of the controller</span>
+        <span class="n">current_data</span> <span class="o">=</span> <span class="n">read_datalayer_value</span><span class="p">(</span><span class="s2">&quot;scheduler/admin/state&quot;</span><span class="p">)</span>
+        <span class="n">actual_state</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">current_data</span><span class="p">:</span>
+            <span class="n">val_data</span> <span class="o">=</span> <span class="n">current_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val_data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="c1"># Correctly extract state from the nested object: {&#39;state&#39;: &#39;SETUP&#39;}</span>
+                <span class="n">actual_state</span> <span class="o">=</span> <span class="n">val_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Fallback for simple string values</span>
+                <span class="n">actual_state</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">val_data</span><span class="p">)</span>
+                
+        <span class="k">if</span> <span class="n">current_data</span> <span class="ow">and</span> <span class="n">actual_state</span> <span class="o">==</span> <span class="n">target_state</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[SUCCESS] Controller state verified as &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[WARNING] Silent Fail! API OK, but state is &#39;</span><span class="si">{</span><span class="n">actual_state</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span>
     <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">jsonify</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Connection error: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">}),</span> <span class="mi">500</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] State transition request failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
 
-<span class="nd">@app</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">})</span>
-<span class="nd">@app</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;/&lt;path:path&gt;&quot;</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">serve_frontend</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+
+<div class="viewcode-block" id="show_menu">
+<a class="viewcode-back" href="../modules.html#app.show_menu">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">show_menu</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Serve the compiled Angular frontend.</span>
+<span class="sd">    Display the interactive main console menu.</span>
 
-<span class="sd">    This route is only active in production mode. Serves &#39;index.html&#39; </span>
-<span class="sd">    for routing fallbacks or specific files if they exist in the static directory.</span>
-
-<span class="sd">    :param path: The requested static file path.</span>
-<span class="sd">    :type path: str</span>
-<span class="sd">    :return: The requested file or the index.html page.</span>
+<span class="sd">    :return: The user&#39;s menu choice as a string.</span>
+<span class="sd">    :rtype: str</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">IS_DEVELOPMENT</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">jsonify</span><span class="p">({</span>
-            <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;Backend is running in development mode.&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;The Angular frontend must be served separately via &#39;ng serve&#39;.&quot;</span>
-        <span class="p">})</span>
-    <span class="k">if</span> <span class="n">path</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">static_folder</span><span class="p">,</span> <span class="n">path</span><span class="p">)):</span>
-        <span class="k">return</span> <span class="n">send_from_directory</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">static_folder</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">send_from_directory</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">static_folder</span><span class="p">,</span> <span class="s2">&quot;index.html&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Main Menu ---&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1. Query current CPU utilization&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2. Query current operating state (Operating/Setup/Service)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;3. Set operating state&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4. Reconfigure connection details&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0. Exit application&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Please select an option: &quot;</span><span class="p">)</span></div>
 
-<span class="c1"># --- MAIN EXECUTION ---</span>
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-    <span class="k">if</span> <span class="n">IS_DEVELOPMENT</span><span class="p">:</span>
-        <span class="c1"># Prompt for remote ctrlX details when running locally</span>
-        <span class="k">with</span> <span class="n">CONFIG_LOCK</span><span class="p">:</span>
-            <span class="n">ip_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter ctrlX IP Address [192.168.1.1]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ip_in</span> <span class="ow">or</span> <span class="s2">&quot;192.168.1.1&quot;</span>
-            <span class="n">user_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter Username [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;username&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">user_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
-            <span class="n">pass_in</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">&quot;Enter Password [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;password&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pass_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
-        
-        <span class="c1"># Try to connect, but do not crash the server if the Core is offline</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">authenticate_to_core</span><span class="p">()</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Warning] Initial connection to ctrlX CORE failed (Core might be offline): </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        
-        <span class="c1"># Secure Eventlet configuration</span>
-        <span class="n">cert_file</span> <span class="o">=</span> <span class="s2">&quot;cert.pem&quot;</span>
-        <span class="n">key_file</span> <span class="o">=</span> <span class="s2">&quot;key.pem&quot;</span>
-        
-        <span class="c1"># Check if local SSL certificates exist</span>
-        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">cert_file</span><span class="p">)</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">key_file</span><span class="p">):</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SSL] Starting secure server on https://localhost:5001&quot;</span><span class="p">)</span>
-            <span class="c1"># For Eventlet, pass certfile and keyfile directly</span>
-            <span class="n">socketio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">5001</span><span class="p">,</span> <span class="n">certfile</span><span class="o">=</span><span class="n">cert_file</span><span class="p">,</span> <span class="n">keyfile</span><span class="o">=</span><span class="n">key_file</span><span class="p">)</span>
+
+<div class="viewcode-block" id="main">
+<a class="viewcode-back" href="../modules.html#app.main">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Execute the main application loop.</span>
+
+<span class="sd">    Handles the CLI menu routing and manages the connection states.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">configure_connection</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">fetch_bearer_token</span><span class="p">():</span>
+        <span class="k">return</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">choice</span> <span class="o">=</span> <span class="n">show_menu</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;1&#39;</span><span class="p">:</span>
+            <span class="c1"># Query CPU utilization</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">read_datalayer_value</span><span class="p">(</span>
+                <span class="s2">&quot;framework/metrics/system/cpu-utilisation-percent&quot;</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&gt;&gt;&gt; Current CPU Usage: </span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> %&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;2&#39;</span><span class="p">:</span>
+            <span class="c1"># Query current state</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">read_datalayer_value</span><span class="p">(</span><span class="s2">&quot;scheduler/admin/state&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+                <span class="c1"># Correctly extract the state from the nested object if needed</span>
+                <span class="n">state_value</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">state_value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="n">actual_state</span> <span class="o">=</span> <span class="n">state_value</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="s1">&#39;UNKNOWN&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">actual_state</span> <span class="o">=</span> <span class="n">state_value</span> <span class="ow">or</span> <span class="s1">&#39;UNKNOWN&#39;</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&gt;&gt;&gt; Current Operating State: </span><span class="si">{</span><span class="n">actual_state</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;3&#39;</span><span class="p">:</span>
+            <span class="c1"># Set target operating state</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  --- Select Target Operating State ---&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  o) OPERATING&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  t) SETUP&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  s) SERVICE&quot;</span><span class="p">)</span>
+            <span class="n">sub_choice</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;  Your choice: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">sub_choice</span> <span class="o">==</span> <span class="s1">&#39;o&#39;</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s2">&quot;OPERATING&quot;</span>
+            <span class="k">elif</span> <span class="n">sub_choice</span> <span class="o">==</span> <span class="s1">&#39;t&#39;</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s2">&quot;SETUP&quot;</span>
+            <span class="k">elif</span> <span class="n">sub_choice</span> <span class="o">==</span> <span class="s1">&#39;s&#39;</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s2">&quot;SERVICE&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Warning] Invalid selection.&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">change_scheduler_state</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;4&#39;</span><span class="p">:</span>
+            <span class="c1"># Reconfigure connection</span>
+            <span class="n">configure_connection</span><span class="p">()</span>
+            <span class="n">fetch_bearer_token</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;0&#39;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Exiting application. Goodbye.&quot;</span><span class="p">)</span>
+            <span class="k">break</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[SSL Warning] &#39;cert.pem&#39; or &#39;key.pem&#39; not found in workspace!&quot;</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[SSL Warning] Falling back to unencrypted http://localhost:5001 for development.&quot;</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[SSL Warning] To enable HTTPS, generate certificates or run: pip install trustme&quot;</span><span class="p">)</span>
-            <span class="n">socketio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">5001</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="c1"># PRODUCTION MODE (on ctrlX CORE): </span>
-        <span class="c1"># The built-in Nginx reverse proxy of the CORE handles SSL offloading.</span>
-        <span class="c1"># Inside the snap container, we communicate via unencrypted HTTP/WS on port 5001.</span>
-        <span class="n">socketio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">5001</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Warning] Invalid option, please try again.&quot;</span><span class="p">)</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
 </pre></div>
 
            </div>

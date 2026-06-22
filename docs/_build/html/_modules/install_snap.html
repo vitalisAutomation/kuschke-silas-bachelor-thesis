@@ -69,22 +69,12 @@
            <div itemprop="articleBody">
              
   <h1>Source code for install_snap</h1><div class="highlight"><pre>
-<span></span><span class="ch">#!/usr/bin/env python3</span>
-<span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Python script to install a Snap App on a Bosch Rexroth ctrlX CORE via REST API.</span>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">ctrlX CORE App (Snap) Deployment Automation Script.</span>
 
-<span class="sd">This script runs fully interactively. It prompts the user for connection</span>
-<span class="sd">details, automatically applying defaults upon pressing Enter, while requiring</span>
-<span class="sd">a valid path to a local .snap package.</span>
-
-<span class="sd">Optimizations:</span>
-<span class="sd">1. Pre-flight check: Verifies if the App is already installed (avoids Bad Requests).</span>
-<span class="sd">2. Safety check: Verifies if other service tasks are active.</span>
-<span class="sd">3. Universal API Support: Auto-detects the Scheduler API payload format of ctrlX OS.</span>
-<span class="sd">4. State Caching: Remembers the working API format to avoid unnecessary requests.</span>
-<span class="sd">5. Smart Polling: Resolves terminal 100% hung states and auto-cleanup tasks.</span>
-<span class="sd">6. Retry State Restoring: Tries up to 6 times to switch back to OPERATING, giving the </span>
-<span class="sd">   Package Manager time to finish registering the Snap in the background.</span>
+<span class="sd">This module provides a robust command-line interface to automate the installation</span>
+<span class="sd">and management of Snap applications on Bosch Rexroth ctrlX CORE devices via the</span>
+<span class="sd">Package Manager REST API.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
@@ -111,6 +101,9 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">configure_connection</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Prompt the user for ctrlX CORE connection details.</span>
+
+<span class="sd">    Applies default connection parameters (IP: &#39;192.168.1.1&#39;, User/Password: &#39;boschrexroth&#39;)</span>
+<span class="sd">    upon pressing Enter. Masking is applied to the password input for security.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Configure ctrlX CORE Connection (Press Enter for Default) ---&quot;</span><span class="p">)</span>
     <span class="n">ip_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter IP Address [192.168.1.1]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
@@ -126,6 +119,10 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">fetch_bearer_token</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Authenticate against the Identity Manager of the ctrlX CORE.</span>
+
+<span class="sd">    Retrieves a valid OAuth2 Bearer token and updates the global HTTP session headers</span>
+<span class="sd">    for all subsequent API requests.</span>
+
 <span class="sd">    :return: True if authentication succeeded, False otherwise.</span>
 <span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -156,7 +153,11 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">get_controller_info</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Read the electronic typeplate to determine the hardware model and architecture.</span>
-<span class="sd">    :return: A tuple containing the model name and the expected architecture.</span>
+
+<span class="sd">    Queries the system typeplate API and parses the response to identify whether the target</span>
+<span class="sd">    hardware is an ARM-based or AMD64-based controller.</span>
+
+<span class="sd">    :return: A tuple containing the resolved model name and the expected architecture.</span>
 <span class="sd">    :rtype: tuple[str, str]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
@@ -190,8 +191,15 @@
 <a class="viewcode-back" href="../modules.html#install_snap.get_installed_app_info">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_installed_app_info</span><span class="p">(</span><span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Checks if the app is already installed on the ctrlX CORE.</span>
-<span class="sd">    Returns the package info dict if installed, None otherwise.</span>
+<span class="sd">    Check if the specified application is already installed on the controller.</span>
+
+<span class="sd">    Queries the package manager API to retrieve all currently installed packages,</span>
+<span class="sd">    filtering the list by the given application name (with typical &#39;snap_&#39; prefix normalization).</span>
+
+<span class="sd">    :param app_name: The name of the application to check.</span>
+<span class="sd">    :type app_name: str</span>
+<span class="sd">    :return: The package metadata dictionary if installed, None otherwise.</span>
+<span class="sd">    :rtype: dict or None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/packages&quot;</span>
@@ -218,8 +226,13 @@
 <a class="viewcode-back" href="../modules.html#install_snap.check_active_tasks">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">check_active_tasks</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Queries the active package manager tasks.</span>
-<span class="sd">    Returns True if an active/running task is found, False otherwise.</span>
+<span class="sd">    Query the Package Manager API for any currently active background tasks.</span>
+
+<span class="sd">    Checks if any installation, update, or maintenance task is running or pending,</span>
+<span class="sd">    which might block Scheduler state transitions or other concurrent actions.</span>
+
+<span class="sd">    :return: True if an active or pending task exists, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/tasks&quot;</span>
@@ -243,9 +256,19 @@
 
 <div class="viewcode-block" id="check_architecture_compatibility">
 <a class="viewcode-back" href="../modules.html#install_snap.check_architecture_compatibility">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">check_architecture_compatibility</span><span class="p">(</span><span class="n">snap_path</span><span class="p">,</span> <span class="n">expected_arch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_architecture_compatibility</span><span class="p">(</span><span class="n">snap_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">expected_arch</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Check if the Snap filename is compatible with the controller&#39;s architecture.</span>
+<span class="sd">    Verify if the Snap filename is compatible with the controller&#39;s architecture.</span>
+
+<span class="sd">    Extracts architectural markers from the file name and compares them with the target architecture</span>
+<span class="sd">    to prevent operational risks or system faults.</span>
+
+<span class="sd">    :param snap_path: The local file path to the .snap package.</span>
+<span class="sd">    :type snap_path: str</span>
+<span class="sd">    :param expected_arch: The target CPU architecture resolved from the controller (&#39;arm&#39; or &#39;amd64&#39;).</span>
+<span class="sd">    :type expected_arch: str</span>
+<span class="sd">    :return: True if the architecture matches or the user explicitly overrides the mismatch, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">expected_arch</span> <span class="o">==</span> <span class="s2">&quot;unknown&quot;</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Warning] Target architecture is unknown. Skipping check.&quot;</span><span class="p">)</span>
@@ -279,7 +302,12 @@
 <a class="viewcode-back" href="../modules.html#install_snap.get_scheduler_state">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_scheduler_state</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Retrieve the current Scheduler state from the Data Layer.</span>
+<span class="sd">    Retrieve the current Scheduler operating state from the Data Layer.</span>
+
+<span class="sd">    Queries the Data Layer node &#39;scheduler/admin/state&#39; and extracts the active state value.</span>
+
+<span class="sd">    :return: The active scheduler state string (e.g., &#39;OPERATING&#39;, &#39;SETUP&#39;, &#39;SERVICE&#39;) or None if the query fails.</span>
+<span class="sd">    :rtype: str or None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/scheduler/admin/state&quot;</span>
@@ -299,14 +327,20 @@
 <a class="viewcode-back" href="../modules.html#install_snap.change_scheduler_state">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">change_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Change the scheduler operating state (OPERATING, SETUP, SERVICE).</span>
-<span class="sd">    Tries multiple payload formats to ensure compatibility with all ctrlX OS versions.</span>
+<span class="sd">    Request a change of the scheduler operating state.</span>
+
+<span class="sd">    Iterates through multiple known API payload formats to ensure compatibility across</span>
+<span class="sd">    various ctrlX OS firmware versions. Caches the successful format for subsequent calls.</span>
+
+<span class="sd">    :param target_state: The requested scheduler state (&#39;OPERATING&#39;, &#39;SETUP&#39;, &#39;SERVICE&#39;).</span>
+<span class="sd">    :type target_state: str</span>
+<span class="sd">    :return: True if the API accepted the state transition command, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">global</span> <span class="n">WORKING_PAYLOAD_FORMAT</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/scheduler/admin/state&quot;</span>
     
-    <span class="c1"># 1. Use cached format if available</span>
     <span class="k">if</span> <span class="n">WORKING_PAYLOAD_FORMAT</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">payload</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">WORKING_PAYLOAD_FORMAT</span><span class="p">)</span>
@@ -320,9 +354,8 @@
             <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="mi">204</span><span class="p">]:</span>
                 <span class="k">return</span> <span class="kc">True</span>
         <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span><span class="p">:</span>
-            <span class="k">pass</span>  <span class="c1"># Fallback to scanning on failure</span>
+            <span class="k">pass</span>
             
-    <span class="c1"># 2. Scanning Mode (Runs on first call or on cache-invalidation)</span>
     <span class="n">payloads</span> <span class="o">=</span> <span class="p">[</span>
         <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">target_state</span><span class="p">},</span>       <span class="c1"># Standard on ctrlX OS 1.20+</span>
         <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">target_state</span><span class="p">},</span>                         <span class="c1"># Flat Value Format</span>
@@ -344,9 +377,16 @@
 
 <div class="viewcode-block" id="wait_for_scheduler_state">
 <a class="viewcode-back" href="../modules.html#install_snap.wait_for_scheduler_state">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">wait_for_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">,</span> <span class="n">timeout_seconds</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">wait_for_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timeout_seconds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">60</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Poll the Scheduler state until it reaches the target state or times out.</span>
+<span class="sd">    Poll the Scheduler operating state until it reaches the target state.</span>
+
+<span class="sd">    :param target_state: The expected target state.</span>
+<span class="sd">    :type target_state: str</span>
+<span class="sd">    :param timeout_seconds: The maximum duration in seconds to wait before timing out, defaults to 60.</span>
+<span class="sd">    :type timeout_seconds: int</span>
+<span class="sd">    :return: True if the target state was successfully reached within the timeout, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Waiting for Scheduler to enter &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39; mode...&quot;</span><span class="p">)</span>
@@ -364,7 +404,12 @@
 <a class="viewcode-back" href="../modules.html#install_snap.get_task_status">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_task_status</span><span class="p">(</span><span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Retrieves the status of a specific background task from the Package Manager API.</span>
+<span class="sd">    Retrieve the status of a background package manager task.</span>
+
+<span class="sd">    :param task_id: The unique identifier of the task.</span>
+<span class="sd">    :type task_id: str</span>
+<span class="sd">    :return: The raw task metadata dictionary if found, None otherwise.</span>
+<span class="sd">    :rtype: dict or None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/tasks/</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -381,8 +426,17 @@
 <a class="viewcode-back" href="../modules.html#install_snap.wait_for_task_completion">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">wait_for_task_completion</span><span class="p">(</span><span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timeout_seconds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">300</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Polls the task endpoint until the installation task is complete.</span>
-<span class="sd">    Handles auto-cleanup/disappearance of completed tasks in ctrlX OS.</span>
+<span class="sd">    Poll the task status endpoint until the installation task is complete.</span>
+
+<span class="sd">    Monitors progress percentage and status strings. Implements protections for hangups</span>
+<span class="sd">    at 100% and automated cleanup behaviors of completed tasks.</span>
+
+<span class="sd">    :param task_id: The unique identifier of the task to poll.</span>
+<span class="sd">    :type task_id: str</span>
+<span class="sd">    :param timeout_seconds: The maximum duration in seconds to wait, defaults to 300.</span>
+<span class="sd">    :type timeout_seconds: int</span>
+<span class="sd">    :return: True if the installation task finished successfully, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Waiting for installation task &#39;</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&#39; to complete...&quot;</span><span class="p">)</span>
@@ -393,7 +447,6 @@
     <span class="k">while</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span> <span class="o">&lt;</span> <span class="n">timeout_seconds</span><span class="p">:</span>
         <span class="n">task_info</span> <span class="o">=</span> <span class="n">get_task_status</span><span class="p">(</span><span class="n">task_id</span><span class="p">)</span>
         
-        <span class="c1"># If the task does not exist anymore, ctrlX OS probably cleaned it up post-success</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">task_info</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Info] Task tracking ID disappeared. Double checking app status...&quot;</span><span class="p">)</span>
             <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
@@ -413,7 +466,6 @@
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Installation task failed with status &#39;</span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&#39;. Details: </span><span class="si">{</span><span class="n">error_details</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
             
-        <span class="c1"># Absicherung: Progress stuck protection</span>
         <span class="k">if</span> <span class="n">progress</span> <span class="o">==</span> <span class="n">last_progress</span><span class="p">:</span>
             <span class="n">progress_stuck_count</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="k">else</span><span class="p">:</span>
@@ -432,9 +484,18 @@
 
 <div class="viewcode-block" id="install_snap">
 <a class="viewcode-back" href="../modules.html#install_snap.install_snap">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">install_snap</span><span class="p">(</span><span class="n">snap_path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">install_snap</span><span class="p">(</span><span class="n">snap_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Uploads the Snap to the Package Manager API and monitors the installation task.</span>
+<span class="sd">    Upload the Snap file to the Package Manager API and monitor the installation task.</span>
+
+<span class="sd">    Performs a multipart/form-data upload of the local Snap binary. If accepted (HTTP 202),</span>
+<span class="sd">    it extracts the task ID from either the JSON response body or the Location header,</span>
+<span class="sd">    and initiates the task polling loop.</span>
+
+<span class="sd">    :param snap_path: The local path to the .snap file.</span>
+<span class="sd">    :type snap_path: str</span>
+<span class="sd">    :return: True if the package was successfully uploaded and installed, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/packages?force=true&quot;</span>
@@ -475,7 +536,11 @@
 <a class="viewcode-back" href="../modules.html#install_snap.main">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Main entry point for the script.</span>
+<span class="sd">    Execute the automated app installation workflow.</span>
+
+<span class="sd">    Runs pre-flight validation checks, manages Scheduler state transitions safely</span>
+<span class="sd">    (including retries during lockouts), uploads and polls the installation task,</span>
+<span class="sd">    and restores the controller&#39;s state back to OPERATING mode.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=== ctrlX CORE App (Snap) Deployment Script ===&quot;</span><span class="p">)</span>
     <span class="n">configure_connection</span><span class="p">()</span>

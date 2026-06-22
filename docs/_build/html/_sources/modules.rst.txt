@@ -16,3 +16,11 @@ Deployment Automation (install_snap.py)
    :members:
    :undoc-members:
    :show-inheritance:
+
+Flask App Test (app.py)
+----------------------------------
+
+.. automodule:: app
+   :members:
+   :undoc-members:
+   :show-inheritance:
