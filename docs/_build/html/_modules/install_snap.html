@@ -1,0 +1,621 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>install_snap &mdash; bachelor-thesis-silas-kuschke 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            bachelor-thesis-silas-kuschke
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">Project API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">bachelor-thesis-silas-kuschke</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Module code</a></li>
+      <li class="breadcrumb-item active">install_snap</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for install_snap</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Python script to install a Snap App on a Bosch Rexroth ctrlX CORE via REST API.</span>
+
+<span class="sd">This script runs fully interactively. It prompts the user for connection</span>
+<span class="sd">details, automatically applying defaults upon pressing Enter, while requiring</span>
+<span class="sd">a valid path to a local .snap package.</span>
+
+<span class="sd">Optimizations:</span>
+<span class="sd">1. Pre-flight check: Verifies if the App is already installed (avoids Bad Requests).</span>
+<span class="sd">2. Safety check: Verifies if other service tasks are active.</span>
+<span class="sd">3. Universal API Support: Auto-detects the Scheduler API payload format of ctrlX OS.</span>
+<span class="sd">4. State Caching: Remembers the working API format to avoid unnecessary requests.</span>
+<span class="sd">5. Smart Polling: Resolves terminal 100% hung states and auto-cleanup tasks.</span>
+<span class="sd">6. Retry State Restoring: Tries up to 6 times to switch back to OPERATING, giving the </span>
+<span class="sd">   Package Manager time to finish registering the Snap in the background.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">getpass</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">urllib3</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+
+<span class="c1"># Disable warnings for self-signed SSL certificates used by ctrlX CORE</span>
+<span class="n">urllib3</span><span class="o">.</span><span class="n">disable_warnings</span><span class="p">(</span><span class="n">urllib3</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">InsecureRequestWarning</span><span class="p">)</span>
+
+<span class="c1"># Global configuration and HTTP session initialization</span>
+<span class="n">CTRLX_CONFIG</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">HTTP_SESSION</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+<span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">verify</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">trust_env</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Bypass system proxies for local communication</span>
+
+<span class="c1"># Cache for the successfully detected Scheduler REST payload format</span>
+<span class="n">WORKING_PAYLOAD_FORMAT</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="configure_connection">
+<a class="viewcode-back" href="../modules.html#install_snap.configure_connection">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">configure_connection</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Prompt the user for ctrlX CORE connection details.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Configure ctrlX CORE Connection (Press Enter for Default) ---&quot;</span><span class="p">)</span>
+    <span class="n">ip_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter IP Address [192.168.1.1]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ip_in</span> <span class="ow">or</span> <span class="s2">&quot;192.168.1.1&quot;</span>
+    <span class="n">user_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter Username [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;username&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">user_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
+    <span class="n">pass_in</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">&quot;Enter Password [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;password&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pass_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span></div>
+
+
+<div class="viewcode-block" id="fetch_bearer_token">
+<a class="viewcode-back" href="../modules.html#install_snap.fetch_bearer_token">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fetch_bearer_token</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Authenticate against the Identity Manager of the ctrlX CORE.</span>
+<span class="sd">    :return: True if authentication succeeded, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/identity-manager/api/v2/auth/token&quot;</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;password&quot;</span><span class="p">]</span>
+    <span class="p">}</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Auth] Connecting to ctrlX CORE at </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] &#39;access_token&#39; not found in response.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Bearer </span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Success] Connected and authenticated successfully.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Connection or authentication failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="get_controller_info">
+<a class="viewcode-back" href="../modules.html#install_snap.get_controller_info">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_controller_info</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read the electronic typeplate to determine the hardware model and architecture.</span>
+<span class="sd">    :return: A tuple containing the model name and the expected architecture.</span>
+<span class="sd">    :rtype: tuple[str, str]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/system/api/v1/typeplate&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        <span class="n">json_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="n">model</span><span class="p">,</span> <span class="n">arch</span> <span class="o">=</span> <span class="s2">&quot;Unknown&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;X2&quot;</span> <span class="ow">in</span> <span class="n">json_str</span><span class="p">:</span>
+            <span class="n">model</span><span class="p">,</span> <span class="n">arch</span> <span class="o">=</span> <span class="s2">&quot;ctrlX CORE X2&quot;</span><span class="p">,</span> <span class="s2">&quot;arm&quot;</span>
+        <span class="k">elif</span> <span class="s2">&quot;X3&quot;</span> <span class="ow">in</span> <span class="n">json_str</span><span class="p">:</span>
+            <span class="n">model</span><span class="p">,</span> <span class="n">arch</span> <span class="o">=</span> <span class="s2">&quot;ctrlX CORE X3&quot;</span><span class="p">,</span> <span class="s2">&quot;arm&quot;</span>
+        <span class="k">elif</span> <span class="s2">&quot;X5&quot;</span> <span class="ow">in</span> <span class="n">json_str</span><span class="p">:</span>
+            <span class="n">model</span><span class="p">,</span> <span class="n">arch</span> <span class="o">=</span> <span class="s2">&quot;ctrlX CORE X5&quot;</span><span class="p">,</span> <span class="s2">&quot;amd64&quot;</span>
+        <span class="k">elif</span> <span class="s2">&quot;X7&quot;</span> <span class="ow">in</span> <span class="n">json_str</span><span class="p">:</span>
+            <span class="n">model</span><span class="p">,</span> <span class="n">arch</span> <span class="o">=</span> <span class="s2">&quot;ctrlX CORE X7&quot;</span><span class="p">,</span> <span class="s2">&quot;amd64&quot;</span>
+        <span class="k">elif</span> <span class="s2">&quot;VIRTUAL&quot;</span> <span class="ow">in</span> <span class="n">json_str</span> <span class="ow">or</span> <span class="s2">&quot;VCORE&quot;</span> <span class="ow">in</span> <span class="n">json_str</span><span class="p">:</span>
+            <span class="n">model</span><span class="p">,</span> <span class="n">arch</span> <span class="o">=</span> <span class="s2">&quot;ctrlX COREvirtual&quot;</span><span class="p">,</span> <span class="s2">&quot;amd64&quot;</span>
+        <span class="n">specific_name</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;typeName&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;component&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">specific_name</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">specific_name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">model</span><span class="p">,</span> <span class="n">arch</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Warning] Could not read typeplate: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;Unknown (Read Error)&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span></div>
+
+
+<div class="viewcode-block" id="get_installed_app_info">
+<a class="viewcode-back" href="../modules.html#install_snap.get_installed_app_info">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_installed_app_info</span><span class="p">(</span><span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Checks if the app is already installed on the ctrlX CORE.</span>
+<span class="sd">    Returns the package info dict if installed, None otherwise.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/packages&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+            <span class="n">packages</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">packages</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">packages</span> <span class="o">=</span> <span class="n">packages</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;packages&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="n">packages</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;installedPackages&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            
+            <span class="k">for</span> <span class="n">pkg</span> <span class="ow">in</span> <span class="n">packages</span><span class="p">:</span>
+                <span class="n">pkg_name</span> <span class="o">=</span> <span class="n">pkg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">pkg_id</span> <span class="o">=</span> <span class="n">pkg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">norm_id</span> <span class="o">=</span> <span class="n">pkg_id</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;snap_&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">pkg_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">app_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">or</span> <span class="n">norm_id</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">app_name</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+                    <span class="k">return</span> <span class="n">pkg</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Warning] Failed to fetch installed packages list: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="check_active_tasks">
+<a class="viewcode-back" href="../modules.html#install_snap.check_active_tasks">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_active_tasks</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Queries the active package manager tasks.</span>
+<span class="sd">    Returns True if an active/running task is found, False otherwise.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/tasks&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+            <span class="n">tasks</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tasks</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">tasks</span> <span class="o">=</span> <span class="n">tasks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tasks&quot;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tasks</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">:</span>
+                    <span class="n">status</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;running&quot;</span><span class="p">,</span> <span class="s2">&quot;pending&quot;</span><span class="p">,</span> <span class="s2">&quot;started&quot;</span><span class="p">]:</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Active background task found: Task ID &#39;</span><span class="si">{</span><span class="n">task</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                              <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">task</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;No description&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">) - Status: </span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="check_architecture_compatibility">
+<a class="viewcode-back" href="../modules.html#install_snap.check_architecture_compatibility">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_architecture_compatibility</span><span class="p">(</span><span class="n">snap_path</span><span class="p">,</span> <span class="n">expected_arch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Check if the Snap filename is compatible with the controller&#39;s architecture.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">expected_arch</span> <span class="o">==</span> <span class="s2">&quot;unknown&quot;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Warning] Target architecture is unknown. Skipping check.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">snap_path</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">is_snap_arm</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">x</span> <span class="ow">in</span> <span class="n">filename</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;arm64&quot;</span><span class="p">,</span> <span class="s2">&quot;armhf&quot;</span><span class="p">])</span>
+    <span class="n">is_snap_amd64</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">x</span> <span class="ow">in</span> <span class="n">filename</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;amd64&quot;</span><span class="p">,</span> <span class="s2">&quot;x86_64&quot;</span><span class="p">])</span>
+    <span class="n">is_snap_all</span> <span class="o">=</span> <span class="s2">&quot;_all.snap&quot;</span> <span class="ow">in</span> <span class="n">filename</span>
+    <span class="k">if</span> <span class="n">is_snap_all</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Check] Snap is architecture-independent (&#39;all&#39;). OK.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="n">mismatch</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">if</span> <span class="n">expected_arch</span> <span class="o">==</span> <span class="s2">&quot;arm&quot;</span> <span class="ow">and</span> <span class="n">is_snap_amd64</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_snap_arm</span><span class="p">:</span>
+        <span class="n">mismatch</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">elif</span> <span class="n">expected_arch</span> <span class="o">==</span> <span class="s2">&quot;amd64&quot;</span> <span class="ow">and</span> <span class="n">is_snap_arm</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_snap_amd64</span><span class="p">:</span>
+        <span class="n">mismatch</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">if</span> <span class="n">mismatch</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[ARCH_MISMATCH] Error: Security and operational risk!&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot; -&gt; Controller is </span><span class="si">{</span><span class="n">expected_arch</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">-based.&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot; -&gt; Snap filename &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; implies a different architecture.&quot;</span><span class="p">)</span>
+        <span class="n">override</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;[Prompt] Override architecture mismatch? (y/N): &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">override</span> <span class="o">==</span> <span class="s2">&quot;y&quot;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Info] Proceeding with forced installation.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Check] Architecture compatibility check passed.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="get_scheduler_state">
+<a class="viewcode-back" href="../modules.html#install_snap.get_scheduler_state">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_scheduler_state</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Retrieve the current Scheduler state from the Data Layer.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/scheduler/admin/state&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="n">raw_val</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">raw_val</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">raw_val</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;UNKNOWN&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">raw_val</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="k">if</span> <span class="n">raw_val</span> <span class="k">else</span> <span class="s2">&quot;UNKNOWN&quot;</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Failed to retrieve system state: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="change_scheduler_state">
+<a class="viewcode-back" href="../modules.html#install_snap.change_scheduler_state">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">change_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Change the scheduler operating state (OPERATING, SETUP, SERVICE).</span>
+<span class="sd">    Tries multiple payload formats to ensure compatibility with all ctrlX OS versions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">WORKING_PAYLOAD_FORMAT</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/scheduler/admin/state&quot;</span>
+    
+    <span class="c1"># 1. Use cached format if available</span>
+    <span class="k">if</span> <span class="n">WORKING_PAYLOAD_FORMAT</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">payload</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">WORKING_PAYLOAD_FORMAT</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s2">&quot;value&quot;</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">payload</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">],</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="s2">&quot;state&quot;</span> <span class="ow">in</span> <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]:</span>
+                    <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">][</span><span class="s2">&quot;state&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_state</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_state</span>
+            
+            <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="mi">204</span><span class="p">]:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span><span class="p">:</span>
+            <span class="k">pass</span>  <span class="c1"># Fallback to scanning on failure</span>
+            
+    <span class="c1"># 2. Scanning Mode (Runs on first call or on cache-invalidation)</span>
+    <span class="n">payloads</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">target_state</span><span class="p">},</span>       <span class="c1"># Standard on ctrlX OS 1.20+</span>
+        <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">target_state</span><span class="p">},</span>                         <span class="c1"># Flat Value Format</span>
+        <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">target_state</span><span class="p">}},</span>              <span class="c1"># Flat Object Format</span>
+        <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">target_state</span><span class="p">}}</span> <span class="c1"># Deep Object Format</span>
+    <span class="p">]</span>
+    
+    <span class="k">for</span> <span class="n">payload</span> <span class="ow">in</span> <span class="n">payloads</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="mi">204</span><span class="p">]:</span>
+                <span class="n">WORKING_PAYLOAD_FORMAT</span> <span class="o">=</span> <span class="n">payload</span>  <span class="c1"># Cache the working format</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span><span class="p">:</span>
+            <span class="k">continue</span>
+            
+    <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="wait_for_scheduler_state">
+<a class="viewcode-back" href="../modules.html#install_snap.wait_for_scheduler_state">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">wait_for_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">,</span> <span class="n">timeout_seconds</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Poll the Scheduler state until it reaches the target state or times out.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Waiting for Scheduler to enter &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39; mode...&quot;</span><span class="p">)</span>
+    <span class="k">while</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span> <span class="o">&lt;</span> <span class="n">timeout_seconds</span><span class="p">:</span>
+        <span class="n">current_state</span> <span class="o">=</span> <span class="n">get_scheduler_state</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">current_state</span> <span class="o">==</span> <span class="n">target_state</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Success] Scheduler is now in &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39; state.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] Timeout expired while waiting for state transition.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="get_task_status">
+<a class="viewcode-back" href="../modules.html#install_snap.get_task_status">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_task_status</span><span class="p">(</span><span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Retrieves the status of a specific background task from the Package Manager API.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/tasks/</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Could not get status for task &#39;</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="wait_for_task_completion">
+<a class="viewcode-back" href="../modules.html#install_snap.wait_for_task_completion">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">wait_for_task_completion</span><span class="p">(</span><span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timeout_seconds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">300</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Polls the task endpoint until the installation task is complete.</span>
+<span class="sd">    Handles auto-cleanup/disappearance of completed tasks in ctrlX OS.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Waiting for installation task &#39;</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&#39; to complete...&quot;</span><span class="p">)</span>
+    
+    <span class="n">last_progress</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+    <span class="n">progress_stuck_count</span> <span class="o">=</span> <span class="mi">0</span>
+    
+    <span class="k">while</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span> <span class="o">&lt;</span> <span class="n">timeout_seconds</span><span class="p">:</span>
+        <span class="n">task_info</span> <span class="o">=</span> <span class="n">get_task_status</span><span class="p">(</span><span class="n">task_id</span><span class="p">)</span>
+        
+        <span class="c1"># If the task does not exist anymore, ctrlX OS probably cleaned it up post-success</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">task_info</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Info] Task tracking ID disappeared. Double checking app status...&quot;</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+            
+        <span class="n">status</span> <span class="o">=</span> <span class="n">task_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">progress</span> <span class="o">=</span> <span class="n">task_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;progress&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2"> -&gt; Installation status: </span><span class="si">{</span><span class="n">status</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">progress</span><span class="si">}</span><span class="s2">%)&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;succeeded&quot;</span> <span class="ow">or</span> <span class="n">progress</span> <span class="o">==</span> <span class="mi">100</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Success] Installation task finished successfully.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+            
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;failed&quot;</span><span class="p">,</span> <span class="s2">&quot;canceled&quot;</span><span class="p">]:</span>
+            <span class="n">error_details</span> <span class="o">=</span> <span class="n">task_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;No details provided.&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Installation task failed with status &#39;</span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&#39;. Details: </span><span class="si">{</span><span class="n">error_details</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+            
+        <span class="c1"># Absicherung: Progress stuck protection</span>
+        <span class="k">if</span> <span class="n">progress</span> <span class="o">==</span> <span class="n">last_progress</span><span class="p">:</span>
+            <span class="n">progress_stuck_count</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">progress_stuck_count</span> <span class="o">=</span> <span class="mi">0</span>
+            
+        <span class="k">if</span> <span class="n">progress</span> <span class="o">&gt;=</span> <span class="mi">99</span> <span class="ow">and</span> <span class="n">progress_stuck_count</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Success] Task reached terminal phase (99%+). Proceeding...&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+            
+        <span class="n">last_progress</span> <span class="o">=</span> <span class="n">progress</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Timeout expired while waiting for installation to complete.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="install_snap">
+<a class="viewcode-back" href="../modules.html#install_snap.install_snap">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">install_snap</span><span class="p">(</span><span class="n">snap_path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Uploads the Snap to the Package Manager API and monitors the installation task.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/api/v1/packages?force=true&quot;</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">snap_path</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Info] Uploading &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; to start installation via &#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&#39;...&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">snap_path</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">files</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;file&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="s2">&quot;application/octet-stream&quot;</span><span class="p">)}</span>
+            <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Accept&quot;</span><span class="p">:</span> <span class="s2">&quot;application/json&quot;</span><span class="p">}</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">files</span><span class="o">=</span><span class="n">files</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">45</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">202</span><span class="p">:</span>
+                <span class="n">task_id</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">response_data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+                    <span class="n">task_id</span> <span class="o">=</span> <span class="n">response_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">response_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;taskId&quot;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                    <span class="k">pass</span>
+                
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">task_id</span><span class="p">:</span>
+                    <span class="n">location</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Location&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">location</span><span class="p">:</span>
+                        <span class="n">task_id</span> <span class="o">=</span> <span class="n">location</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Extracted task ID from Location header: </span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">task_id</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] API accepted request (202) but returned no task ID.&quot;</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Installation task started with ID: </span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">wait_for_task_completion</span><span class="p">(</span><span class="n">task_id</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Upload failed with unexpected status code </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Network error during snap upload: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="main">
+<a class="viewcode-back" href="../modules.html#install_snap.main">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Main entry point for the script.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=== ctrlX CORE App (Snap) Deployment Script ===&quot;</span><span class="p">)</span>
+    <span class="n">configure_connection</span><span class="p">()</span>
+    
+    <span class="n">snap_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">snap_path</span><span class="p">:</span>
+        <span class="n">path_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter path to .snap file: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">path_in</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] Snap file path is required.&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path_in</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] File does not exist at: &#39;</span><span class="si">{</span><span class="n">path_in</span><span class="si">}</span><span class="s2">&#39;. Please try again.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">snap_path</span> <span class="o">=</span> <span class="n">path_in</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">fetch_bearer_token</span><span class="p">():</span>
+        <span class="k">return</span>
+
+    <span class="c1"># Extract app name from the filename</span>
+    <span class="n">snap_filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">snap_path</span><span class="p">)</span>
+    <span class="n">filename_clean</span> <span class="o">=</span> <span class="n">snap_filename</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.snap&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="n">filename_clean</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)</span>
+    <span class="n">app_name</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">app_version</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="c1"># --- 1. Pre-flight Check: Is the App already installed? ---</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Sanity Check] Verifying if App &#39;</span><span class="si">{</span><span class="n">app_name</span><span class="si">}</span><span class="s2">&#39; is already installed...&quot;</span><span class="p">)</span>
+    <span class="n">installed_pkg</span> <span class="o">=</span> <span class="n">get_installed_app_info</span><span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">installed_pkg</span><span class="p">:</span>
+        <span class="n">installed_version</span> <span class="o">=</span> <span class="n">installed_pkg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;release&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">installed_pkg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">,</span> <span class="s2">&quot;Unknown&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] App &#39;</span><span class="si">{</span><span class="n">app_name</span><span class="si">}</span><span class="s2">&#39; is already installed (Version on Core: </span><span class="si">{</span><span class="n">installed_version</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">app_version</span> <span class="ow">and</span> <span class="n">installed_version</span> <span class="o">==</span> <span class="n">app_version</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Warning] The file &#39;</span><span class="si">{</span><span class="n">snap_filename</span><span class="si">}</span><span class="s2">&#39; has the exact same version (</span><span class="si">{</span><span class="n">app_version</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+            <span class="n">override</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;[Prompt] Reinstalling identical versions often fails on ctrlX OS. Continue? (y/N): &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">override</span> <span class="o">!=</span> <span class="s1">&#39;y&#39;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Info] Aborting deployment to prevent redundant API errors.&quot;</span><span class="p">)</span>
+                <span class="k">return</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Will attempt upgrade/downgrade to version: </span><span class="si">{</span><span class="n">app_version</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;unknown&#39;</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># --- 2. Pre-flight Check: Are there active locks/tasks on the Core? ---</span>
+    <span class="k">if</span> <span class="n">check_active_tasks</span><span class="p">():</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Warning] Another installation or service task is currently active on the Core.&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; -&gt; Changing the Scheduler state to SERVICE will likely fail now!&quot;</span><span class="p">)</span>
+        <span class="n">proceed</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;[Prompt] Attempt state switch anyway? (y/N): &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">proceed</span> <span class="o">!=</span> <span class="s1">&#39;y&#39;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Info] Deployment aborted by user.&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+
+    <span class="c1"># --- 3. Hardware- &amp; Architecture Check ---</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Sanity Check] Running typeplate validation...&quot;</span><span class="p">)</span>
+    <span class="n">model</span><span class="p">,</span> <span class="n">arch</span> <span class="o">=</span> <span class="n">get_controller_info</span><span class="p">()</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Sanity Check] Detected hardware: </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2"> (Expected architecture: </span><span class="si">{</span><span class="n">arch</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">check_architecture_compatibility</span><span class="p">(</span><span class="n">snap_path</span><span class="p">,</span> <span class="n">arch</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Aborting installation due to architecture mismatch.&quot;</span><span class="p">)</span>
+        <span class="k">return</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Sanity Check] OK. Proceeding with installation.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># --- 4. Scheduler Transition Management ---</span>
+    <span class="n">initial_state</span> <span class="o">=</span> <span class="n">get_scheduler_state</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">initial_state</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Info] Current Scheduler state: &#39;</span><span class="si">{</span><span class="n">initial_state</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+
+    <span class="n">switched_to_service</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">if</span> <span class="n">initial_state</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;OPERATING&quot;</span><span class="p">,</span> <span class="s2">&quot;SETUP&quot;</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">change_scheduler_state</span><span class="p">(</span><span class="s2">&quot;SERVICE&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">wait_for_scheduler_state</span><span class="p">(</span><span class="s2">&quot;SERVICE&quot;</span><span class="p">)):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Diagnostic] Switch failed. Please ensure:&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; 1. No other users are installing apps via the Web UI.&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; 2. All real-time processes (Motion / PLC) are STOPPED.&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; 3. All motor axes are DE-ENERGIZED (no regulator release/power).&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="n">switched_to_service</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">elif</span> <span class="n">initial_state</span> <span class="o">!=</span> <span class="s2">&quot;SERVICE&quot;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Scheduler is in an unsupported state: &#39;</span><span class="si">{</span><span class="n">initial_state</span><span class="si">}</span><span class="s2">&#39;. Aborting.&quot;</span><span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="c1"># --- 5. Upload &amp; Install ---</span>
+    <span class="n">install_ok</span> <span class="o">=</span> <span class="n">install_snap</span><span class="p">(</span><span class="n">snap_path</span><span class="p">)</span>
+
+    <span class="c1"># --- 6. Restore Scheduler state with Retry-Mechanism ---</span>
+    <span class="k">if</span> <span class="n">switched_to_service</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Info] Restoring system back to OPERATING mode.&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Info] Giving the Package Manager 3 seconds to release system locks...&quot;</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+        
+        <span class="n">restored</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">max_attempts</span> <span class="o">=</span> <span class="mi">6</span>
+        <span class="k">for</span> <span class="n">attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_attempts</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">change_scheduler_state</span><span class="p">(</span><span class="s2">&quot;OPERATING&quot;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">wait_for_scheduler_state</span><span class="p">(</span><span class="s2">&quot;OPERATING&quot;</span><span class="p">):</span>
+                    <span class="n">restored</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">break</span>
+            
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Warning] Switch back to OPERATING rejected by Core (Attempt </span><span class="si">{</span><span class="n">attempt</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">max_attempts</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;          The Package Manager is likely still finalizing the installation in the background.&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">attempt</span> <span class="o">&lt;</span> <span class="n">max_attempts</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;          Retrying in 5 seconds...&quot;</span><span class="p">)</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+                
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">restored</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] Failed to switch Scheduler back to OPERATING after multiple attempts.&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;        Please check the ctrlX CORE web interface and change the mode manually.&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">install_ok</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Deployment completed successfully.&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Deployment failed.&quot;</span><span class="p">)</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Silas Kuschke.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
