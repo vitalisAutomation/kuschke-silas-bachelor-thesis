@@ -9,26 +9,29 @@ environment variable:
 - 'development': Runs on a local PC. Provides a CORS-enabled API for an
   external Angular development server (ng serve) and connects to a remote
   ctrlX CORE over the network.
+
+Now powered by WebSockets (Flask-SocketIO) for real-time metric pushes and
+encrypted HTTPS / WSS communication.
 """
 
 import os
 import getpass
+import time
 from threading import Lock
-
 import requests
 import urllib3
 from dotenv import load_dotenv
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 
 # --- INITIAL SETUP ---
-# Load environment variables from .env file (especially for development)
 load_dotenv()
 
-# Disable warnings for self-signed SSL certificates
+# Disable warnings for self-signed SSL certificates used by ctrlX CORE
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Determine run environment
+# Determine the run environment
 IS_DEVELOPMENT = os.getenv("APP_ENVIRONMENT") == "development"
 
 # Global store for connection details and session object
@@ -37,24 +40,29 @@ HTTP_SESSION = requests.Session()
 HTTP_SESSION.verify = False
 HTTP_SESSION.trust_env = False  # Always bypass system-level proxies
 
-# Thread lock for safe credential updates
 CONFIG_LOCK = Lock()
 
 # Initialize Flask App
-# In production, Angular files are in 'static'. In dev, this is not used.
 app = Flask(__name__, static_folder="static", static_url_path="")
 
-# --- ENVIRONMENT-SPECIFIC CONFIGURATION ---
-
+# Configure SocketIO and CORS based on the environment
 if IS_DEVELOPMENT:
-    # Allow requests from the local Angular dev server (typically on port 4200)
-    CORS(app, resources={r"/api/*": {"origins": "http://localhost:4200"}})
-    print("--- RUNNING IN DEVELOPMENT MODE ---")
+    # Allow both secure and unsecure local Angular development servers to connect
+    allowed_origins = ["http://localhost:4200", "https://localhost:4200"]
+    
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode="eventlet")
+    print("--- RUNNING IN DEVELOPMENT MODE (HTTPS & WSS ACTIVE) ---")
 else:
-    print("--- RUNNING IN PRODUCTION MODE ---")
+    # Production uses general CORS; encryption is offloaded to ctrlX Nginx proxy
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+    print("--- RUNNING IN PRODUCTION MODE (Nginx Reverse Proxy handles SSL) ---")
 
-# --- DATA LAYER & AUTHENTICATION ---
+# Thread lock for SocketIO background tasks
+THREAD_LOCK = Lock()
+background_thread = None
 
+# --- DATA LAYER CONFIGURATION ---
 METRIC_PATHS = {
     "state": "scheduler/admin/state",
     "cpu": "framework/metrics/system/cpu-utilisation-percent",
@@ -64,15 +72,19 @@ METRIC_PATHS = {
 
 def authenticate_to_core() -> bool:
     """
-    Authenticates against the ctrlX CORE. The method depends on the environment.
-    - Production: Uses local token from snap environment (not implemented here).
-    - Development: Performs a remote login with user credentials.
+    Authenticate against the Identity Manager of the ctrlX CORE.
+
+    The authentication method depends on the current environment:
+    - Production: Authentication is handled by the system context (assumes token is local).
+    - Development: Performs a remote HTTPS login using configured credentials.
+
+    :return: True if authentication succeeded, False otherwise.
+    :rtype: bool
     """
     if not IS_DEVELOPMENT:
-        # In production on ctrlX, auth is handled by the system context
         print("[Info] Production mode: Assuming local token is available.")
         return True
-
+        
     with CONFIG_LOCK:
         ip = CTRLX_CONFIG.get("ip")
         if not ip: return False
@@ -81,7 +93,7 @@ def authenticate_to_core() -> bool:
             "name": CTRLX_CONFIG["username"],
             "password": CTRLX_CONFIG["password"]
         }
-
+        
     try:
         response = HTTP_SESSION.post(url, json=payload, timeout=5)
         response.raise_for_status()
@@ -96,29 +108,30 @@ def authenticate_to_core() -> bool:
         print(f"[Error] Remote authentication failed: {e}")
         return False
 
-# --- API & SERVING ROUTES ---
+def fetch_metrics_from_core() -> dict:
+    """
+    Query all configured system metrics from the ctrlX CORE Data Layer.
 
-@app.route("/api/metrics", methods=["GET"])
-def get_metrics() -> tuple:
-    """API endpoint to fetch all system metrics."""
+    Reads values such as scheduler state, CPU utilization, RAM usage, 
+    and disk storage. Re-authenticates automatically if a 401 Unauthorized status is returned.
+
+    :return: A dictionary containing the retrieved metrics.
+    :rtype: dict
+    """
     with CONFIG_LOCK:
-        # In production, the IP is always localhost. In dev, it's the configured IP.
         ip = "127.0.0.1" if not IS_DEVELOPMENT else CTRLX_CONFIG.get("ip", "localhost")
-
+        
     base_url = f"https://{ip}/automation/api/v2/nodes"
     metrics_data = {}
-
+    
     for key, path in METRIC_PATHS.items():
         try:
             response = HTTP_SESSION.get(f"{base_url}/{path}", timeout=2)
-
             if response.status_code == 401:  # Token expired
-                print("[Info] Token expired or invalid. Re-authenticating...")
-                if not authenticate_to_core(): # Re-login
-                    metrics_data[key] = "Auth Error"
-                    continue
-                response = HTTP_SESSION.get(f"{base_url}/{path}", timeout=2) # Retry
-
+                print("[Info] Token expired during polling. Re-authenticating...")
+                if authenticate_to_core():
+                    response = HTTP_SESSION.get(f"{base_url}/{path}", timeout=2) # Retry
+            
             if response.ok:
                 raw_val = response.json().get("value")
                 if key == "state" and isinstance(raw_val, dict):
@@ -126,31 +139,131 @@ def get_metrics() -> tuple:
                 else:
                     metrics_data[key] = raw_val
             else:
-                metrics_data[key] = f"HTTP {response.status_code}"
-        except requests.exceptions.RequestException:
-            metrics_data[key] = "Request Error"
+                metrics_data[key] = "N/A"
+        except Exception:
+            metrics_data[key] = "Error"
+            
+    return metrics_data
 
-    return jsonify(metrics_data), 200
+# --- WEBSOCKET BACKGROUND LOOP ---
+def metrics_polling_task() -> None:
+    """
+    Cyclic background task to poll metrics from the ctrlX CORE.
+
+    Executes infinitely, fetching metrics every 2 seconds and pushing 
+    them to all connected WebSocket clients via the 'metrics_update' event.
+    """
+    print("[WebSocket] Background polling task started.")
+    while True:
+        metrics = fetch_metrics_from_core()
+        socketio.emit("metrics_update", metrics)
+        socketio.sleep(2)  # Eventlet-compatible sleep
+
+# --- WEBSOCKET EVENTS ---
+@socketio.on("connect")
+def handle_connect() -> None:
+    """
+    Handle incoming WebSocket client connections.
+
+    Triggers an immediate metrics push upon connection and starts the 
+    background polling task thread if it is not already running.
+    """
+    print(f"[WebSocket] Client connected: {request.sid}")
+    
+    # Send immediate update on connection to prevent empty UI
+    initial_metrics = fetch_metrics_from_core()
+    emit("metrics_update", initial_metrics)
+    
+    global background_thread
+    with THREAD_LOCK:
+        if background_thread is None:
+            background_thread = socketio.start_background_task(target=metrics_polling_task)
+
+@socketio.on("disconnect")
+def handle_disconnect() -> None:
+    """
+    Handle WebSocket client disconnections.
+    """
+    print(f"[WebSocket] Client disconnected: {request.sid}")
+
+# --- REST-API FOR STATE CHANGES ---
+@app.route("/api/state", methods=["POST"])
+def set_scheduler_state() -> tuple:
+    """
+    Change the controller's scheduler state (OPERATING, SETUP, SERVICE).
+
+    Expects a JSON body containing the target state. Sends a PUT request to the 
+    ctrlX CORE scheduler node. Pushes updated metrics immediately to all clients.
+
+    :return: A tuple containing a JSON response and the HTTP status code.
+    :rtype: tuple
+    """
+    data = request.get_json()
+    if not data or "state" not in data:
+        return jsonify({"error": "Missing 'state' in request body"}), 400
+        
+    target_state = data["state"].upper()
+    if target_state not in ["OPERATING", "SETUP", "SERVICE"]:
+        return jsonify({"error": "Invalid state. Choose OPERATING, SETUP or SERVICE."}), 400
+
+    with CONFIG_LOCK:
+        ip = "127.0.0.1" if not IS_DEVELOPMENT else CTRLX_CONFIG.get("ip", "localhost")
+
+    url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
+    payload = {
+        "type": "object",
+        "value": {
+            "state": target_state
+        }
+    }
+
+    try:
+        print(f"[Info] Sending transition to '{target_state}'...")
+        response = HTTP_SESSION.put(url, json=payload, timeout=5)
+        
+        if response.status_code == 401:
+            print("[Info] Token expired during transition. Re-authenticating...")
+            if authenticate_to_core():
+                response = HTTP_SESSION.put(url, json=payload, timeout=5)
+
+        if response.ok:
+            # Emit updated metrics immediately via WebSockets to keep all UIs in sync
+            updated_metrics = fetch_metrics_from_core()
+            socketio.emit("metrics_update", updated_metrics)
+            return jsonify({"status": "success", "state": target_state}), 200
+        else:
+            return jsonify({
+                "error": "State transition failed",
+                "status_code": response.status_code,
+                "details": response.json() if response.text else "No details"
+            }), response.status_code
+            
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Connection error: {str(e)}"}), 500
 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path: str):
     """
-    Serves the compiled Angular frontend.
-    This route is only active in 'production' mode.
+    Serve the compiled Angular frontend.
+
+    This route is only active in production mode. Serves 'index.html' 
+    for routing fallbacks or specific files if they exist in the static directory.
+
+    :param path: The requested static file path.
+    :type path: str
+    :return: The requested file or the index.html page.
     """
     if IS_DEVELOPMENT:
         return jsonify({
             "status": "Backend is running in development mode.",
             "message": "The Angular frontend must be served separately via 'ng serve'."
         })
-
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
 
 # --- MAIN EXECUTION ---
-
 if __name__ == "__main__":
     if IS_DEVELOPMENT:
         # Prompt for remote ctrlX details when running locally
@@ -162,9 +275,28 @@ if __name__ == "__main__":
             pass_in = getpass.getpass("Enter Password [boschrexroth]: ").strip()
             CTRLX_CONFIG['password'] = pass_in or "boschrexroth"
         
-        # Perform initial remote authentication
-        authenticate_to_core()
-
-    # Start the Flask web server
-    # Port 5001 is used to avoid conflicts with other common services
-    app.run(host="0.0.0.0", port=5001)
+        # Try to connect, but do not crash the server if the Core is offline
+        try:
+            authenticate_to_core()
+        except Exception as e:
+            print(f"[Warning] Initial connection to ctrlX CORE failed (Core might be offline): {e}")
+        
+        # Secure Eventlet configuration
+        cert_file = "cert.pem"
+        key_file = "key.pem"
+        
+        # Check if local SSL certificates exist
+        if os.path.exists(cert_file) and os.path.exists(key_file):
+            print(f"[SSL] Starting secure server on https://localhost:5001")
+            # For Eventlet, pass certfile and keyfile directly
+            socketio.run(app, host="0.0.0.0", port=5001, certfile=cert_file, keyfile=key_file)
+        else:
+            print("[SSL Warning] 'cert.pem' or 'key.pem' not found in workspace!")
+            print("[SSL Warning] Falling back to unencrypted http://localhost:5001 for development.")
+            print("[SSL Warning] To enable HTTPS, generate certificates or run: pip install trustme")
+            socketio.run(app, host="0.0.0.0", port=5001)
+    else:
+        # PRODUCTION MODE (on ctrlX CORE): 
+        # The built-in Nginx reverse proxy of the CORE handles SSL offloading.
+        # Inside the snap container, we communicate via unencrypted HTTP/WS on port 5001.
+        socketio.run(app, host="0.0.0.0", port=5001)

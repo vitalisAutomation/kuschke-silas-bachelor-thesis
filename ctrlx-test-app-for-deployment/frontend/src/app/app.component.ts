@@ -1,24 +1,6 @@
-/**
- * Angular controller component for the ctrlX Dashboard.
- *
- * Periodically polls the backend REST API for system metrics. The API URL
- * is determined by the environment configuration.
- */
-
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Subscription, interval } from 'rxjs';
-import { startWith, switchMap } from 'rxjs/operators';
-
-// Import the environment configuration to get the correct API URL
-import { environment } from '../environments/environment';
-
-interface SystemMetrics {
-  state: string;
-  cpu: number | string;
-  ram_used_percent: number | string;
-  storage_used_percent: number | string;
-}
+import { Component, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
+import { DashboardService } from './dashboard.service';
+import { Subscription } from 'rxjs'; // 'interval' wird nicht mehr benötigt
 
 @Component({
   selector: 'app-root',
@@ -26,41 +8,99 @@ interface SystemMetrics {
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit, OnDestroy {
-  metrics: SystemMetrics = { state: 'LOADING', cpu: 0, ram_used_percent: 0, storage_used_percent: 0 };
-  private pollSub!: Subscription;
-  
-  // Construct the full API URL based on the current environment
-  private readonly apiUrl = `${environment.apiUrl}/metrics`;
+  // Originalstruktur des Metrik-Objekts bleibt absolut identisch
+  metrics: any = {
+    state: 'UNKNOWN',
+    cpu: 0,
+    ram_used_percent: 0,
+    storage_used_percent: 0
+  };
 
-  constructor(private http: HttpClient) {}
+  // UI-Zustand bleibt identisch
+  isDropdownOpen: boolean = false;
+  loading: boolean = false;
+  errorMessage: string | null = null;
+  
+  // Umbenannt von pollingSub zu wsSubscription, da wir nun auf WebSockets lauschen
+  private wsSubscription!: Subscription;
+
+  constructor(
+    private dashboardService: DashboardService,
+    private eRef: ElementRef // Benötigt, um Klicks außerhalb des Menüs zu erkennen
+  ) {}
 
   ngOnInit(): void {
-    // Poll the backend API endpoint every 3000ms
-    this.pollSub = interval(3000).pipe(
-      startWith(0),
-      // Use the dynamically constructed API URL for the request
-      switchMap(() => this.http.get<SystemMetrics>(this.apiUrl))
-    ).subscribe({
-      next: (data) => {
-        this.metrics = data;
+    // REAKTIVE WEBSOCKET-INTEGRATION:
+    // Wir lauschen passiv auf den Echtzeit-Datenstrom von Flask.
+    // Das entlastet die ctrlX CORE massiv von unnötigen HTTP-Pollings.
+    this.wsSubscription = this.dashboardService.getLiveMetrics().subscribe({
+      next: (data: any) => {
+        this.metrics.state = data.state || 'UNKNOWN';
+        this.metrics.cpu = data.cpu !== undefined ? data.cpu : 0;
+        this.metrics.ram_used_percent = data.ram_used_percent !== undefined ? data.ram_used_percent : 0;
+        this.metrics.storage_used_percent = data.storage_used_percent !== undefined ? data.storage_used_percent : 0;
+        
+        // Lösche eine eventuell bestehende Fehlermeldung, sobald wieder Live-Daten reinkommen
+        this.errorMessage = null;
       },
-      error: (err) => {
-        console.error('Error retrieving system metrics:', err);
-        this.metrics.state = 'ERROR';
+      error: (err: any) => {
+        this.errorMessage = 'Verbindung zum ctrlX Dashboard-Backend verloren.';
+        console.error(err);
       }
     });
   }
 
-  ngOnDestroy(): void {
-    if (this.pollSub) {
-      this.pollSub.unsubscribe();
+  // Schließt das Dropdown, wenn man außerhalb des Indikators klickt (Originalmethode)
+  @HostListener('document:click', ['$event'])
+  clickout(event: any) {
+    if (!this.eRef.nativeElement.contains(event.target)) {
+      this.isDropdownOpen = false;
     }
   }
 
-  /**
-   * Helper to format raw API numeric values cleanly for the UI.
-   */
-  formatValue(value: number | string): number {
-    return typeof value === 'number' ? Math.round(value) : 0;
+  // Öffnet/Schließt das Dropdown (Originalmethode)
+  toggleDropdown(): void {
+    if (!this.loading) {
+      this.isDropdownOpen = !this.isDropdownOpen;
+    }
+  }
+
+  // State-Switch Handler für die Dropdown-Elemente
+  onStateChange(targetState: string): void {
+    if (this.metrics.state === targetState) return;
+
+    this.loading = true;
+    this.isDropdownOpen = false;
+    this.errorMessage = null;
+
+    this.dashboardService.setSchedulerState(targetState).subscribe({
+      next: (res: any) => {
+        // HINWEIS: Wir müssen 'this.metrics.state' hier nicht manuell setzen!
+        // Sobald die Umschaltung auf der Steuerung erfolgreich war, pusht Flask 
+        // augenblicklich das neue Datenpaket über die WebSockets an uns zurück.
+        // Das UI aktualisiert sich dadurch vollkommen automatisch und ohne Verzögerung.
+        this.loading = false;
+      },
+      error: (err: any) => {
+        this.errorMessage = `Umschalten in den Modus '${targetState}' wurde von der CORE abgelehnt.`;
+        this.loading = false;
+        console.error(err);
+      }
+    });
+  }
+
+  // Original-Formatierungshilfe für die Gauge-Füllung (Originalmethode)
+  formatValue(val: any): string {
+    if (val === undefined || val === null || val === 'N/A') return '0';
+    const clean = String(val).replace('%', '');
+    const num = parseFloat(clean);
+    return isNaN(num) ? '0' : num.toFixed(0);
+  }
+
+  ngOnDestroy(): void {
+    // Sauber deabonnieren beim Verlassen der Komponente, um Speicherlecks zu verhindern
+    if (this.wsSubscription) {
+      this.wsSubscription.unsubscribe();
+    }
   }
 }

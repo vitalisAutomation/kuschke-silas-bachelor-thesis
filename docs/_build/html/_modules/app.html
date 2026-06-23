@@ -1,0 +1,339 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>app &mdash; bachelor-thesis-silas-kuschke 1.0.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            bachelor-thesis-silas-kuschke
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">Project API Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">bachelor-thesis-silas-kuschke</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Module code</a></li>
+      <li class="breadcrumb-item active">app</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for app</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">ctrlX CORE Data Layer Console Client.</span>
+
+<span class="sd">This module provides a command-line interface to interact with the Bosch Rexroth</span>
+<span class="sd">ctrlX CORE Data Layer REST API. It allows querying system metrics and changing</span>
+<span class="sd">the controller&#39;s operating state.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">getpass</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">urllib3</span>
+
+<span class="c1"># Disable warnings for self-signed SSL certificates used by ctrlX CORE</span>
+<span class="n">urllib3</span><span class="o">.</span><span class="n">disable_warnings</span><span class="p">(</span><span class="n">urllib3</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">InsecureRequestWarning</span><span class="p">)</span>
+
+<span class="c1"># Global configuration and HTTP session initialization</span>
+<span class="n">CTRLX_CONFIG</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">HTTP_SESSION</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+<span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">verify</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="c1"># Bypass system proxies (e.g., corporate proxies) for local communication</span>
+<span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">trust_env</span> <span class="o">=</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="configure_connection">
+<a class="viewcode-back" href="../modules.html#app.configure_connection">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">configure_connection</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Prompt the user for ctrlX CORE connection details.</span>
+
+<span class="sd">    If the user presses Enter without typing, fallback standard values</span>
+<span class="sd">    (IP: &#39;192.168.1.1&#39;, User/Password: &#39;boschrexroth&#39;) are applied.</span>
+<span class="sd">    The password input is masked for security.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Configure ctrlX CORE Connection (Press Enter for Default) ---&quot;</span><span class="p">)</span>
+    <span class="c1"># Prompt for IP address</span>
+    <span class="n">ip_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter IP Address [192.168.1.1]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ip_in</span> <span class="ow">or</span> <span class="s2">&quot;192.168.1.1&quot;</span>
+    <span class="c1"># Prompt for username</span>
+    <span class="n">user_in</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter Username [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;username&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">user_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
+    <span class="c1"># Masked prompt for password</span>
+    <span class="n">pass_in</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">&quot;Enter Password [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s1">&#39;password&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pass_in</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">65</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="fetch_bearer_token">
+<a class="viewcode-back" href="../modules.html#app.fetch_bearer_token">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fetch_bearer_token</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Authenticate against the Identity Manager of the ctrlX CORE.</span>
+
+<span class="sd">    Retrieves a valid Bearer token and updates the global HTTP session headers</span>
+<span class="sd">    for all subsequent API calls.</span>
+
+<span class="sd">    :return: True if authentication succeeded, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/identity-manager/api/v2/auth/token&quot;</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;password&quot;</span><span class="p">]</span>
+    <span class="p">}</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="n">token_data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">token_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] &#39;access_token&#39; not found in response.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="c1"># Apply Bearer token to all future requests in this session</span>
+        <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Bearer </span><span class="si">{</span><span class="n">token</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">})</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Success] Connected and authenticated successfully.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Connection or authentication failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="read_datalayer_value">
+<a class="viewcode-back" href="../modules.html#app.read_datalayer_value">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_datalayer_value</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read a value from a specific ctrlX Data Layer node.</span>
+
+<span class="sd">    :param path: The Data Layer node path (e.g., &#39;scheduler/admin/state&#39;).</span>
+<span class="sd">    :type path: str</span>
+<span class="sd">    :return: The JSON response dictionary from the node if successful, None otherwise.</span>
+<span class="sd">    :rtype: dict or None</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] Data Layer read failed for &#39;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="change_scheduler_state">
+<a class="viewcode-back" href="../modules.html#app.change_scheduler_state">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">change_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Change the scheduler operating state (OPERATING, SETUP, SERVICE).</span>
+
+<span class="sd">    Sends a PUT request to the &#39;scheduler/admin/state&#39; node using the exact</span>
+<span class="sd">    payload structure analyzed from the ctrlX Web-UI network request.</span>
+
+<span class="sd">    :param target_state: The target state (&#39;OPERATING&#39;, &#39;SETUP&#39;, &#39;SERVICE&#39;).</span>
+<span class="sd">    :type target_state: str</span>
+<span class="sd">    :return: True if state transition was successful and verified, False otherwise.</span>
+<span class="sd">    :rtype: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/scheduler/admin/state&quot;</span>
+    <span class="c1"># Exact payload structure expected by the ctrlX Datalayer enum types</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">target_state</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Sending command &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39; to &#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&#39; via PUT...&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="n">response</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] API accepted command with status </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Verifying actual controller status...&quot;</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">1.5</span><span class="p">)</span>  <span class="c1"># Short delay to let the controller switch states</span>
+        
+        <span class="c1"># Verify the actual state of the controller</span>
+        <span class="n">current_data</span> <span class="o">=</span> <span class="n">read_datalayer_value</span><span class="p">(</span><span class="s2">&quot;scheduler/admin/state&quot;</span><span class="p">)</span>
+        <span class="n">actual_state</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">current_data</span><span class="p">:</span>
+            <span class="n">val_data</span> <span class="o">=</span> <span class="n">current_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val_data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="c1"># Correctly extract state from the nested object: {&#39;state&#39;: &#39;SETUP&#39;}</span>
+                <span class="n">actual_state</span> <span class="o">=</span> <span class="n">val_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Fallback for simple string values</span>
+                <span class="n">actual_state</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">val_data</span><span class="p">)</span>
+                
+        <span class="k">if</span> <span class="n">current_data</span> <span class="ow">and</span> <span class="n">actual_state</span> <span class="o">==</span> <span class="n">target_state</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[SUCCESS] Controller state verified as &#39;</span><span class="si">{</span><span class="n">target_state</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[WARNING] Silent Fail! API OK, but state is &#39;</span><span class="si">{</span><span class="n">actual_state</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Error] State transition request failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="show_menu">
+<a class="viewcode-back" href="../modules.html#app.show_menu">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">show_menu</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Display the interactive main console menu.</span>
+
+<span class="sd">    :return: The user&#39;s menu choice as a string.</span>
+<span class="sd">    :rtype: str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Main Menu ---&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1. Query current CPU utilization&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2. Query current operating state (Operating/Setup/Service)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;3. Set operating state&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;4. Reconfigure connection details&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;0. Exit application&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Please select an option: &quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="main">
+<a class="viewcode-back" href="../modules.html#app.main">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Execute the main application loop.</span>
+
+<span class="sd">    Handles the CLI menu routing and manages the connection states.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">configure_connection</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">fetch_bearer_token</span><span class="p">():</span>
+        <span class="k">return</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">choice</span> <span class="o">=</span> <span class="n">show_menu</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;1&#39;</span><span class="p">:</span>
+            <span class="c1"># Query CPU utilization</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">read_datalayer_value</span><span class="p">(</span>
+                <span class="s2">&quot;framework/metrics/system/cpu-utilisation-percent&quot;</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&gt;&gt;&gt; Current CPU Usage: </span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> %&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;2&#39;</span><span class="p">:</span>
+            <span class="c1"># Query current state</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">read_datalayer_value</span><span class="p">(</span><span class="s2">&quot;scheduler/admin/state&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+                <span class="c1"># Correctly extract the state from the nested object if needed</span>
+                <span class="n">state_value</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">state_value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="n">actual_state</span> <span class="o">=</span> <span class="n">state_value</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="s1">&#39;UNKNOWN&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">actual_state</span> <span class="o">=</span> <span class="n">state_value</span> <span class="ow">or</span> <span class="s1">&#39;UNKNOWN&#39;</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&gt;&gt;&gt; Current Operating State: </span><span class="si">{</span><span class="n">actual_state</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;3&#39;</span><span class="p">:</span>
+            <span class="c1"># Set target operating state</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  --- Select Target Operating State ---&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  o) OPERATING&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  t) SETUP&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  s) SERVICE&quot;</span><span class="p">)</span>
+            <span class="n">sub_choice</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;  Your choice: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">sub_choice</span> <span class="o">==</span> <span class="s1">&#39;o&#39;</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s2">&quot;OPERATING&quot;</span>
+            <span class="k">elif</span> <span class="n">sub_choice</span> <span class="o">==</span> <span class="s1">&#39;t&#39;</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s2">&quot;SETUP&quot;</span>
+            <span class="k">elif</span> <span class="n">sub_choice</span> <span class="o">==</span> <span class="s1">&#39;s&#39;</span><span class="p">:</span>
+                <span class="n">command</span> <span class="o">=</span> <span class="s2">&quot;SERVICE&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Warning] Invalid selection.&quot;</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">change_scheduler_state</span><span class="p">(</span><span class="n">command</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;4&#39;</span><span class="p">:</span>
+            <span class="c1"># Reconfigure connection</span>
+            <span class="n">configure_connection</span><span class="p">()</span>
+            <span class="n">fetch_bearer_token</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s1">&#39;0&#39;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Exiting application. Goodbye.&quot;</span><span class="p">)</span>
+            <span class="k">break</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Warning] Invalid option, please try again.&quot;</span><span class="p">)</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Silas Kuschke.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

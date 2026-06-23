@@ -1,13 +1,35 @@
 <div class="dashboard-wrapper">
-  <!-- The header now dynamically applies a class based on the machine state -->
+  <!-- Der Header wendet dynamisch die Statusklasse an (für die farbige untere Linie) -->
   <header class="dashboard-header" [ngClass]="metrics.state.toLowerCase()">
     <h1 class="brand-title">ctrlX CORE - Live Dashboard</h1>
     
-    <div class="status-indicator">
-      <div class="status-light" [ngClass]="metrics.state.toLowerCase()"></div>
-      <span class="status-label">{{ metrics.state }}</span>
+    <!-- Status-Indikator als interaktives Dropdown-Menü -->
+    <div class="status-indicator-container">
+      <div class="status-indicator" (click)="toggleDropdown()">
+        <div class="status-light" [ngClass]="metrics.state.toLowerCase()"></div>
+        <span class="status-label">{{ metrics.state }}</span>
+        <span class="dropdown-arrow">▼</span>
+      </div>
+
+      <!-- Dropdown-Optionen im neuen Rexroth Corporate-Look -->
+      <div class="dropdown-menu" *ngIf="isDropdownOpen">
+        <div class="dropdown-item" (click)="onStateChange('OPERATING')" [class.disabled]="metrics.state === 'OPERATING' || loading">
+          <span class="status-light operating"></span> OPERATING
+        </div>
+        <div class="dropdown-item" (click)="onStateChange('SETUP')" [class.disabled]="metrics.state === 'SETUP' || loading">
+          <span class="status-light setup"></span> SETUP
+        </div>
+        <div class="dropdown-item" (click)="onStateChange('SERVICE')" [class.disabled]="metrics.state === 'SERVICE' || loading">
+          <span class="status-light service"></span> SERVICE
+        </div>
+      </div>
     </div>
   </header>
+
+  <!-- Fehlermeldung bei blockiertem Wechsel -->
+  <div *ngIf="errorMessage" class="error-banner">
+    ⚠️ {{ errorMessage }}
+  </div>
 
   <main class="dashboard-grid">
     <!-- CPU CARD -->
