@@ -47,9 +47,11 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 
 # Configure SocketIO and CORS based on the environment
 if IS_DEVELOPMENT:
-    # Allow secure connections from the local Angular dev server
-    CORS(app, resources={r"/api/*": {"origins": "https://localhost:4200"}})
-    socketio = SocketIO(app, cors_allowed_origins="https://localhost:4200", async_mode="eventlet")
+    # Allow both secure and unsecure local Angular development servers to connect
+    allowed_origins = ["http://localhost:4200", "https://localhost:4200"]
+    
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode="eventlet")
     print("--- RUNNING IN DEVELOPMENT MODE (HTTPS & WSS ACTIVE) ---")
 else:
     # Production uses general CORS; encryption is offloaded to ctrlX Nginx proxy
