@@ -1,47 +1,60 @@
-name: ctrlx-dashboard-app
-version: "1.0.0"
-summary: Bosch Rexroth style System Dashboard App for ctrlX CORE
-description: |
-  A read-only system monitoring dashboard app using Flask and Angular
-  running natively on ctrlX OS.
+# Getting started
+# See https://snapcraft.io/docs/getting-started
+# Snapcraft references
+# See https://snapcraft.io/docs/snapcraft-yaml-reference
+
+name: ctrlx-cockpit
+title: Webserver Cockpit
+version: 1.0.0
 grade: stable
+contact: Silas Kuschke <uki1lo@bosch.com>
+license: MIT
+summary: Webserver providing real-time metrics and state control for ctrlX CORE.
+description: |
+  This App is a secure webserver which provides real-time information about 
+  the CPU, RAM, and disk usage of a ctrlX CORE. In addition, it allows 
+  interactive state transitions (OPERATING, SETUP, SERVICE) via WebSockets.
+
+base: core24
 confinement: strict
 
-# Interface definitions to communicate with ctrlX OS Services
-plugs:
-  network:
-  network-bind:
-  datalayer: # Enables direct access to the local ctrlX Data Layer
+# Multi-Architecture Support for ctrlX CORE virtual (amd64) and ctrlX CORE X3/X5 (arm64)
+platforms:
+  amd64:
+  arm64:
+    build-on: [amd64, arm64]
+    build-for: [arm64]
 
+# Define how apps & services are exposed to the ctrlX OS
 apps:
-  dashboard:
-    command: usr/bin/python3 $SNAP/backend/app.py
-    daemon: simple
-    restart-delay: 10s
-    restart-condition: always
+  daemon:
+    command: bin/python3 $SNAP/app.py
+    # Interfaces to connect to the host system
     plugs:
-      - network
-      - network-bind
-      - datalayer
+      - network        # Required for WebSockets and API communication
+      - network-bind   # Required to host the Flask webserver on port 5001
+      - datacontrol    # Required to access the local ctrlX Data Layer
+    daemon: simple
+    restart-condition: always
+    passthrough:
+      restart-delay: 10s
 
+# Describes how to import, compile and package each part of the snap
 parts:
-  frontend:
-    plugin: nil
-    source: frontend/
-    build-snaps:
-      - node/18/stable
-    override-build: |
-      npm install
-      npm run build -- --configuration=production
-      # Copy built static files to Flask's web assets directory
-      mkdir -p $SNAPCRAFT_PART_SRC/../backend/static
-      cp -r dist/frontend/* $SNAPCRAFT_PART_SRC/../backend/static/
-
+  # Part 1: Compile and prepare the Flask Backend with all Python dependencies
   backend:
     plugin: python
-    source: backend/
-    stage-packages:
-      - python3-requests
-      - python3-urllib3
-    after:
-      - frontend
+    source: ./backend
+    python-requirements:
+      - requirements.txt
+    prime:
+      - -usr/lib/python3/dist-packages  # Exclude host packages to prevent conflicts
+
+  # Part 2: Copy the pre-compiled Angular Frontend files into the Flask static folder
+  frontend:
+    plugin: dump
+    source: ./frontend/dist/frontend
+    organize:
+      '*': static/
+    prime:
+      - static/
