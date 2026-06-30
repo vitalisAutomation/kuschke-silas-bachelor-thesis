@@ -15,25 +15,29 @@ description: |
   the CPU, RAM, and disk usage of a ctrlX CORE. In addition, it allows 
   interactive state transitions (OPERATING, SETUP, SERVICE) via WebSockets.
 
-base: core24
+# Set correct base to Ubuntu 22.04 LTS for ctrlX OS 1.20 (Firmware 4.6)
+base: core22
 confinement: strict
 
-# Multi-Architecture Support for ctrlX CORE virtual (amd64) and ctrlX CORE X3/X5 (arm64)
-platforms:
-  amd64:
-  arm64:
-    build-on: [amd64, arm64]
-    build-for: [arm64]
+# Multi-Architecture Support for cross-compiling
+architectures:
+  - build-on: amd64
+    build-for: arm64
 
 # Define how apps & services are exposed to the ctrlX OS
 apps:
   daemon:
+    # Starts the python interpreter and runs your app.py directly from the Snap root
     command: bin/python3 $SNAP/app.py
-    # Interfaces to connect to the host system
+    # Map PYTHONPATH to the Python 3.10 directory of Ubuntu core22
+    environment:
+      PYTHONPATH: $SNAP/lib/python3.10/site-packages:$PYTHONPATH
+    # Interfaces required to interact with the system and Data Layer
     plugs:
       - network        # Required for WebSockets and API communication
-      - network-bind   # Required to host the Flask webserver on port 5001
+      - network-bind   # Required to host the Flask webserver internally on port 5001
       - datacontrol    # Required to access the local ctrlX Data Layer
+      - package-assets # Required for system integration of the package-manifest.json
     daemon: simple
     restart-condition: always
     passthrough:
@@ -41,20 +45,53 @@ apps:
 
 # Describes how to import, compile and package each part of the snap
 parts:
-  # Part 1: Compile and prepare the Flask Backend with all Python dependencies
+  # Combined Python Part: Installs pip dependencies and copies backend source files
   backend:
-    plugin: python
+    plugin: nil
     source: ./backend
-    python-requirements:
-      - requirements.txt
+    override-build: |
+      # 1. Create directory structure in target snap
+      mkdir -p $CRAFT_PART_INSTALL/bin
+      mkdir -p $CRAFT_PART_INSTALL/lib/python3.10/site-packages
+      
+      # 2. Copy python binary and setup local pip installation
+      cp -a /usr/bin/python3* $CRAFT_PART_INSTALL/bin/
+      
+      # 3. Install requirements into the package-directory of the snap
+      python3 -m pip install --target=$CRAFT_PART_INSTALL/lib/python3.10/site-packages -r requirements.txt
+      
+      # 4. Copy app.py directly to the Snap root
+      cp app.py $CRAFT_PART_INSTALL/
     prime:
+      - app.py
+      - bin/
+      - lib/
       - -usr/lib/python3/dist-packages  # Exclude host packages to prevent conflicts
 
-  # Part 2: Copy the pre-compiled Angular Frontend files into the Flask static folder
+  # Part 2: Copy compiled Angular Frontend files into the Flask static subdirectory
   frontend:
     plugin: dump
     source: ./frontend/dist/frontend
+    source-type: local  # Forces Snapcraft to accept the local folder directly
     organize:
       '*': static/
     prime:
       - static/
+
+  # Part 3: Embed the renamed Bosch Rexroth Package Manifest for proxy routing and sidebar integration
+  package-assets:
+    plugin: dump
+    source: ./package-assets
+    organize:
+      'ctrlx-cockpit/ctrlx-cockpit.package-manifest.json': package-assets/ctrlx-cockpit/ctrlx-cockpit.package-manifest.json
+    prime:
+      - package-assets/ctrlx-cockpit/ctrlx-cockpit.package-manifest.json
+
+# Slots configuration to securely share the manifest folder with the ctrlX OS Web Server
+slots:
+  package-assets:
+    interface: content
+    content: package-assets
+    source:
+      read:
+        - $SNAP/package-assets/ctrlx-cockpit
