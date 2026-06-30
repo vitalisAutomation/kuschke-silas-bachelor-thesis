@@ -3,20 +3,25 @@
 <head>
   <meta charset="utf-8">
   <title>ctrlX CORE Dashboard</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- DYNAMIC BASE HREF FOR CTRLX CORE AND DEV MODE -->
+  <script>
+    document.write('<base href="' + window.location.pathname + (window.location.pathname.endsWith('/') ? '' : '/') + '" />');
+  </script>
 
-  <!-- 1. Standard-Favicons für Desktop-Browser -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- 1. Standard-Favicons for Desktop Browsers -->
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicons/favicon-16x16.png">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="48x48" href="assets/favicons/favicon-48x48.png">
-
-  <!-- 2. Apple Touch Icon (für iOS-Geräte / Homescreen-Verknüpfung) -->
+  
+  <!-- 2. Apple Touch Icon (for iOS Devices / Sidebar Custom Icon) -->
   <link rel="apple-touch-icon" sizes="180x180" href="assets/favicons/apple-touch-icon-180x180.png">
-
-  <!-- 3. Web App Manifest (für Android, Chrome und PWA-Umgebungen) -->
+  
+  <!-- 3. Web App Manifest (for Android, Chrome and PWA environments) -->
   <link rel="manifest" href="assets/favicons/site.webmanifest">
-  <meta name="theme-color" content="#005691"> <!-- Bosch Rexroth blau / Branding-Farbe -->
+  <meta name="theme-color" content="#005691"> <!-- Bosch Rexroth Blue / Branding Color -->
 </head>
 <body>
   <app-root></app-root>
