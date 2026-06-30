@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.boschrexroth.com/ctrlx-automation/ctrlx-core/apps/package-manifest/package-manifest.v1.3.schema.json",
+  "version": "1.0.0",
+  "id": "ctrlx-cockpit",
+  "menus": {
+    "sidebar": [
+      {
+        "id": "ctrlx-cockpit-ui",
+        "title": "Webserver Cockpit",
+        "icon": "bosch-ic-cloud-connection",
+        "target": "_blank",
+        "link": "/ctrlx-cockpit/"
+      }
+    ]
+  },
+  "services": {
+    "proxyMapping": [
+      {
+        "name": "ctrlx-cockpit.web",
+        "url": "/ctrlx-cockpit",
+        "binding": ":5001"
+      }
+    ]
+  }
+}
