@@ -7,32 +7,41 @@ import { io, Socket } from 'socket.io-client';
   providedIn: 'root'
 })
 export class DashboardService {
-  // REST-API: Im Dev-Modus HTTPS aktiv, in Produktion relative Pfade
-  private apiUrl = isDevMode() ? 'https://localhost:5001/api' : '/api';
+  // REST-API: Use secure local port in Dev Mode, or the mapped ctrlX proxy path in Production
+  private apiUrl = isDevMode() 
+    ? 'https://localhost:5001/api' 
+    : '/ctrlx-cockpit/api';
   
-  // WebSockets: Im Dev-Modus WSS aktiv, in Produktion relative Pfade
+  // WebSockets: Point to the proxy route with the correct socket path in Production
   private wsUrl = isDevMode() ? 'https://localhost:5001' : ''; 
-  
   private socket!: Socket;
   private metrics$ = new Subject<any>();
 
   constructor(private http: HttpClient) {
-    // Initialisiere die verschlüsselte Socket.io-Verbindung
-    this.socket = io(this.wsUrl, {
-      transports: ['websocket', 'polling'],
-      rejectUnauthorized: false // WICHTIG: Erlaubt selbstsignierte Zertifikate im Dev-Modus
-    });
+    // Connect configuration suited for ctrlX OS Reverse Proxy routing
+    const socketOptions = isDevMode() 
+      ? {
+          transports: ['websocket', 'polling'],
+          rejectUnauthorized: false // Allow self-signed certs in Dev Mode
+        }
+      : {
+          transports: ['websocket', 'polling'],
+          path: '/ctrlx-cockpit/socket.io' // Force Socket.io to route through Nginx Proxy!
+        };
+
+    // Initialize Socket.io connection
+    this.socket = io(this.wsUrl, socketOptions);
 
     this.socket.on('metrics_update', (data: any) => {
       this.metrics$.next(data);
     });
 
     this.socket.on('connect', () => {
-      console.log('[WebSocket] Successfully connected via Secure WSS');
+      console.log('[WebSocket] Successfully connected via ctrlX Proxy (WSS)');
     });
 
     this.socket.on('disconnect', () => {
-      console.warn('[WebSocket] Secure connection lost');
+      console.warn('[WebSocket] Proxy connection lost');
     });
   }
 
