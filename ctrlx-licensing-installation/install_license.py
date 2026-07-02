@@ -144,65 +144,65 @@ def fetch_serial_number(ip: str) -> str | None:
 
 def upload_license(ip: str, file_path: str) -> bool:
     """
-    Uploads the license file to the ctrlX CORE.
-    
-    This function implements a robust two-way strategy:
-    1. It tries to upload the license as Raw Binary payload first.
-    2. If that fails or is rejected, it falls back to a Multipart upload
-       using the verified 'file' field.
-    """
-    url = f"https://{ip}/licensing/api/v1/licenses?withChangeReport=true"
-    filename = os.path.basename(file_path)
-    
-    # -------------------------------------------------------------------------
-    # METHOD 1: Raw Binary Upload (No MIME Boundary Corruption)
-    # -------------------------------------------------------------------------
-    print(f"[Info] Uploading license '{filename}' as Raw Binary...")
-    try:
-        with open(file_path, "rb") as f:
-            content = f.read()
-            
-        headers = {
-            "Content-Type": "application/octet-stream",
-            "Content-Length": str(len(content)),
-            "Accept": "application/json"
-        }
-        
-        response = HTTP_SESSION.post(url, data=content, headers=headers, timeout=60)
-        print(f"[Diag] Raw POST -> HTTP {response.status_code}")
-        
-        if response.status_code in [200, 201, 204]:
-            print(f"[Success] License file '{filename}' uploaded successfully via Raw Binary.")
-            return True
-            
-    except requests.exceptions.RequestException as e:
-        print(f"[Warning] Raw Binary upload failed: {e}. Trying Multipart fallback...")
+    Uploads the license file using the confirmed PUT method and correct endpoint.
 
-    # -------------------------------------------------------------------------
-    # METHOD 2: Multipart Fallback (Verified standard browser method)
-    # -------------------------------------------------------------------------
-    print(f"[Info] Trying Multipart upload fallback...")
+    This function is based on a precise cURL analysis of a successful
+    browser upload, ensuring it works reliably.
+
+    Args:
+        ip (str): The IP address of the target ctrlX CORE.
+        file_path (str): The local path to the .bin license file.
+
+    Returns:
+        bool: True if the upload was successful, False otherwise.
+    """
+    # CORRECTED endpoint and method based on cURL analysis.
+    url = f"https://{ip}/license-manager/api/v1/capabilities?withChangeReport=true"
+    filename = os.path.basename(file_path)
+
+    print(f"\n[Upload] Uploading '{filename}' via PUT to the correct endpoint...")
+
     try:
         with open(file_path, "rb") as f:
+            # The field name 'file' was confirmed by cURL analysis.
             files = {"file": (filename, f, "application/octet-stream")}
             
-            # Remove any pre-configured Content-Type in session headers
-            # to let 'requests' auto-generate the correct multi-part boundary.
-            headers = HTTP_SESSION.headers.copy()
-            if "Content-Type" in headers:
-                del headers["Content-Type"]
-                
-            response = HTTP_SESSION.post(url, files=files, headers=headers, timeout=60)
-            print(f"[Diag] Multipart POST -> HTTP {response.status_code}")
+            # Additional headers to perfectly mimic the browser request.
+            headers = {
+                "Accept": "application/json",
+                "Origin": f"https://{ip}",
+                "Referer": f"https://{ip}/package-manager/licenses",
+            }
+
+            # Use HTTP_SESSION.put() to send the request with cookies.
+            response = HTTP_SESSION.put(
+                url,
+                headers=headers,
+                files=files,
+                timeout=60
+            )
+
+            print(f"[Diag] Server responded with HTTP {response.status_code}")
+
+            if "text/html" in response.headers.get("Content-Type", ""):
+                print("[Error] Failed: Server returned an HTML page. This should not happen with the correct endpoint.")
+                return False
             
             if response.status_code in [200, 201, 204]:
-                print(f"[Success] License file '{filename}' uploaded via Multipart.")
+                print(f"[SUCCESS] License file '{filename}' was successfully processed.")
+                try:
+                    print(f"[Diag] Server change report: {response.json()}")
+                except ValueError:
+                    print(f"[Diag] Server response (not JSON): {response.text}")
                 return True
-                
+            else:
+                print(f"[Error] Server rejected the upload with status {response.status_code}.")
+                print(f"[Diag] Server response: {response.text}")
+                return False
+
     except requests.exceptions.RequestException as e:
-        print(f"[Error] Multipart upload failed: {e}")
-        
-    return False
+        print(f"[FATAL] A network error occurred: {e}")
+        return False
 
 
 def verify_license_installation(ip: str, license_name_part: str) -> bool:
