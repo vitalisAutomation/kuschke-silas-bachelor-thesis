@@ -29,7 +29,9 @@ HTTP_SESSION.trust_env = False
 
 
 def update_session_headers(ip: str):
-    """Update session headers to mimic a web context request."""
+    """
+    Update session headers to mimic a web context request.
+    """
     HTTP_SESSION.headers.update({
         "Accept": "application/json",
         "Referer": f"https://{ip}/"
@@ -37,7 +39,12 @@ def update_session_headers(ip: str):
 
 
 def load_cores() -> dict:
-    """Loads CORE configurations from the .env file."""
+    """
+    Loads CORE configurations from the secure .env file.
+    
+    Returns:
+        dict: A dictionary containing saved IP configurations and credentials.
+    """
     cores = {}
     if not os.path.exists(ENV_FILE):
         return cores
@@ -59,7 +66,9 @@ def load_cores() -> dict:
 
 
 def save_core(ip: str, user: str, password: str) -> None:
-    """Saves a CORE configuration to the .env file."""
+    """
+    Saves a CORE configuration securely to the .env file.
+    """
     key = f"CORE_{ip.replace('.', '_')}"
     plain_creds = f"{user}:{password}"
     encoded_creds = base64.b64encode(plain_creds.encode("utf-8")).decode("utf-8")
@@ -81,7 +90,9 @@ def save_core(ip: str, user: str, password: str) -> None:
 
 
 def fetch_bearer_token(ip: str, user: str, password: str) -> bool:
-    """Authenticates and stores the bearer token."""
+    """
+    Authenticates and stores the Bearer token in the global session.
+    """
     update_session_headers(ip)
     url = f"https://{ip}/identity-manager/api/v2/auth/token"
     payload = {"name": user, "password": password}
@@ -102,7 +113,9 @@ def fetch_bearer_token(ip: str, user: str, password: str) -> bool:
 
 
 def fetch_serial_number(ip: str) -> str | None:
-    """Retrieves the 13-digit serial number from the ctrlX CORE."""
+    """
+    Retrieves the 13-digit serial number from the ctrlX CORE.
+    """
     url = f"https://{ip}/automation/api/v2/nodes/system/typeplate/ctrlXDeviceId"
     try:
         print(f"[Info] Querying Typeplate at {url}...")
@@ -111,8 +124,6 @@ def fetch_serial_number(ip: str) -> str | None:
         data = response.json()
         
         raw_val = data.get("value")
-        
-        # Handle both dict and direct string values robustly
         if isinstance(raw_val, dict):
             serial = raw_val.get("value")
         else:
@@ -133,15 +144,19 @@ def fetch_serial_number(ip: str) -> str | None:
 
 def upload_license(ip: str, file_path: str) -> bool:
     """
-    Uploads the license file.
-    Tries Raw Binary POST first, then falls back to Multipart.
+    Uploads the license file to the ctrlX CORE.
+    
+    This function implements a robust two-way strategy:
+    1. It tries to upload the license as Raw Binary payload first.
+    2. If that fails or is rejected, it falls back to a Multipart upload
+       using the verified 'file' field.
     """
     url = f"https://{ip}/licensing/api/v1/licenses?withChangeReport=true"
     filename = os.path.basename(file_path)
     
-    # ----------------------------------------------------
-    # METHOD 1: Raw Binary Upload (No Boundary Corruption)
-    # ----------------------------------------------------
+    # -------------------------------------------------------------------------
+    # METHOD 1: Raw Binary Upload (No MIME Boundary Corruption)
+    # -------------------------------------------------------------------------
     print(f"[Info] Uploading license '{filename}' as Raw Binary...")
     try:
         with open(file_path, "rb") as f:
@@ -163,18 +178,21 @@ def upload_license(ip: str, file_path: str) -> bool:
     except requests.exceptions.RequestException as e:
         print(f"[Warning] Raw Binary upload failed: {e}. Trying Multipart fallback...")
 
-    # ----------------------------------------------------
-    # METHOD 2: Multipart Fallback
-    # ----------------------------------------------------
+    # -------------------------------------------------------------------------
+    # METHOD 2: Multipart Fallback (Verified standard browser method)
+    # -------------------------------------------------------------------------
     print(f"[Info] Trying Multipart upload fallback...")
     try:
         with open(file_path, "rb") as f:
             files = {"file": (filename, f, "application/octet-stream")}
-            # We must clear the Content-Type header so requests can auto-generate the boundary
-            if "Content-Type" in HTTP_SESSION.headers:
-                del HTTP_SESSION.headers["Content-Type"]
+            
+            # Remove any pre-configured Content-Type in session headers
+            # to let 'requests' auto-generate the correct multi-part boundary.
+            headers = HTTP_SESSION.headers.copy()
+            if "Content-Type" in headers:
+                del headers["Content-Type"]
                 
-            response = HTTP_SESSION.post(url, files=files, timeout=60)
+            response = HTTP_SESSION.post(url, files=files, headers=headers, timeout=60)
             print(f"[Diag] Multipart POST -> HTTP {response.status_code}")
             
             if response.status_code in [200, 201, 204]:
@@ -190,7 +208,6 @@ def upload_license(ip: str, file_path: str) -> bool:
 def verify_license_installation(ip: str, license_name_part: str) -> bool:
     """
     Verifies installation by checking the activated capabilities on the CORE.
-    Tries multiple endpoints robustly and handles empty responses safely.
     """
     endpoints = [
         f"https://{ip}/licensing/api/v1/capabilities",
@@ -232,7 +249,9 @@ def verify_license_installation(ip: str, license_name_part: str) -> bool:
 
 
 def get_single_core_input() -> dict:
-    """Prompts the user for connection details."""
+    """
+    Prompts the user for single-device connection details.
+    """
     print("\n--- Configure ctrlX CORE Connection (Press Enter for Default) ---")
     ip = input("Enter IP Address [192.168.1.1]: ").strip() or "192.168.1.1"
     user = input("Enter Username [boschrexroth]: ").strip() or "boschrexroth"
@@ -241,7 +260,9 @@ def get_single_core_input() -> dict:
 
 
 def process_device(ip: str, creds: dict) -> None:
-    """Runs the full license installation and verification for a device."""
+    """
+    Runs the full license installation and verification pipeline for a device.
+    """
     if not fetch_bearer_token(ip, creds["username"], creds["password"]):
         return
 
@@ -256,6 +277,7 @@ def process_device(ip: str, creds: dict) -> None:
         return
 
     if upload_license(ip, license_file):
+        # Give the core backend short time to process the licensing response asynchronously
         time.sleep(2)
         verify_license_installation(ip, "Motion")
     else:
@@ -263,7 +285,9 @@ def process_device(ip: str, creds: dict) -> None:
 
 
 def main():
-    """Main execution flow."""
+    """
+    Main execution flow.
+    """
     print("=" * 50)
     print(" ctrlX CORE License Deployment Automation Script")
     print("=" * 50)
