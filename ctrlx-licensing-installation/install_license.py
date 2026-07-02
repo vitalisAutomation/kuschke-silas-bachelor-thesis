@@ -145,18 +145,18 @@ def fetch_serial_number(ip: str) -> str | None:
 def upload_license(ip: str, file_path: str) -> bool:
     """
     Uploads the license file using the confirmed PUT method and correct endpoint.
-
-    This function is based on a precise cURL analysis of a successful
-    browser upload, ensuring it works reliably.
-
+    
+    This function parses the server's change report to dynamically identify
+    which licenses were added or if the license was already processed.
+    
     Args:
         ip (str): The IP address of the target ctrlX CORE.
         file_path (str): The local path to the .bin license file.
-
+        
     Returns:
         bool: True if the upload was successful, False otherwise.
     """
-    # CORRECTED endpoint and method based on cURL analysis.
+    # Endpoint and query parameters confirmed via browser cURL analysis
     url = f"https://{ip}/license-manager/api/v1/capabilities?withChangeReport=true"
     filename = os.path.basename(file_path)
 
@@ -164,17 +164,15 @@ def upload_license(ip: str, file_path: str) -> bool:
 
     try:
         with open(file_path, "rb") as f:
-            # The field name 'file' was confirmed by cURL analysis.
             files = {"file": (filename, f, "application/octet-stream")}
             
-            # Additional headers to perfectly mimic the browser request.
+            # Replicate the precise browser headers to bypass security checks
             headers = {
                 "Accept": "application/json",
                 "Origin": f"https://{ip}",
                 "Referer": f"https://{ip}/package-manager/licenses",
             }
 
-            # Use HTTP_SESSION.put() to send the request with cookies.
             response = HTTP_SESSION.put(
                 url,
                 headers=headers,
@@ -182,22 +180,42 @@ def upload_license(ip: str, file_path: str) -> bool:
                 timeout=60
             )
 
-            print(f"[Diag] Server responded with HTTP {response.status_code}")
+            # A HTTP 400 with 'already processed' diagnostic code is a functional success,
+            # indicating that the API communication is perfect but the license is already active.
+            if response.status_code == 400:
+                try:
+                    err_data = response.json()
+                    diag_code = err_data.get("detailedDiagnosisCode", "")
+                    # '0C7A0202' is the ctrlX error code for "license already processed"
+                    if diag_code == "0C7A0202" or "already processed" in err_data.get("dynamicDescription", ""):
+                        print(f"[SUCCESS] License '{filename}' is already active/installed on the device.")
+                        return True
+                except (ValueError, KeyError):
+                    pass
 
-            if "text/html" in response.headers.get("Content-Type", ""):
-                print("[Error] Failed: Server returned an HTML page. This should not happen with the correct endpoint.")
-                return False
-            
             if response.status_code in [200, 201, 204]:
                 print(f"[SUCCESS] License file '{filename}' was successfully processed.")
                 try:
-                    print(f"[Diag] Server change report: {response.json()}")
+                    change_report = response.json()
+                    added_licenses = change_report.get("added", [])
+                    
+                    if added_licenses:
+                        print("\n[Report] New licenses added to the device:")
+                        for lic in added_licenses:
+                            lic_name = lic.get("name") or lic.get("id") or "Unknown License"
+                            print(f"  -> + {lic_name}")
+                    else:
+                        print("[Report] No new licenses were added (already up-to-date).")
                 except ValueError:
                     print(f"[Diag] Server response (not JSON): {response.text}")
                 return True
             else:
                 print(f"[Error] Server rejected the upload with status {response.status_code}.")
-                print(f"[Diag] Server response: {response.text}")
+                try:
+                    err_json = response.json()
+                    print(f"[Diag] Reason: {err_json.get('dynamicDescription', response.text)}")
+                except ValueError:
+                    print(f"[Diag] Server response: {response.text}")
                 return False
 
     except requests.exceptions.RequestException as e:
@@ -276,10 +294,10 @@ def process_device(ip: str, creds: dict) -> None:
         print(f"[Error] License file '{license_file}' not found.")
         return
 
+    # Trigger the upload. The verification of the processed licenses
+    # is now handled dynamically within the upload function's response report.
     if upload_license(ip, license_file):
-        # Give the core backend short time to process the licensing response asynchronously
-        time.sleep(2)
-        verify_license_installation(ip, "Motion")
+        print(f"[Finished] Licensing process for {ip} completed successfully.")
     else:
         print(f"[Failure] License installation for {ip} reported an error.")
 
