@@ -21,3 +21,7 @@ Thumbs.db
 prime
 parts
 stage
+
+# Licenses
+*/licenses
+*ctrlx_cores.env
