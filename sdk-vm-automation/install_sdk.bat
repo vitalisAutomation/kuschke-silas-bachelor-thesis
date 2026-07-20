@@ -1,58 +1,61 @@
 @echo off
 chcp 65001 >nul
 
-:: Loesche altes Installationsprotokoll falls vorhanden
-if exist "install_debug.log" del "install_debug.log" >nul 2>&1
+:: Virtuelle Terminalsequenzen für native Windows-ANSI-Farben aktivieren
+reg add HKCU\Console /v VirtualTerminalLevel /t REG_DWORD /d 1 /f >nul 2>&1
 
-:: Leite die gesamte Ausführung des Setups (Standard- und Fehlerausgabe) in das Log um! [source: 4]
-call :main_setup >> "install_debug.log" 2>&1
-exit /b
+:: Farbcodes definieren
+set "ESC="
+set "BLUE=%ESC%[94m"
+set "GREEN=%ESC%[92m"
+set "YELLOW=%ESC%[93m"
+set "RED=%ESC%[91m"
+set "RESET=%ESC%[0m"
 
-:main_setup
 :: =======================================================================
 :: 🚀 SCHRITT 1: ABSOLUTE PFAD-SPERRE GANZ OBEN (Verhindert System32-Absturz)
 :: =======================================================================
 cd /d "%~dp0"
 set "PROJEKT_PFAD=%~dp0"
 
-:: Setze die Konsolenfarbe im neuen Admin-Fenster auf Bosch-Blau
-color 09
-
 :: =======================================================================
 :: 🔐 SCHRITT 2: BOMBENSICHERE AUTO-ELEVATION (Admin-Rechte)
 :: =======================================================================
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo [Check] Benoetige Administratorrechte... >con
+    echo %YELLOW%[Check] Benoetige Administratorrechte...%RESET%
     powershell -Command "Start-Process cmd -ArgumentList '/k cd /d %~dp0 && %~f0' -Verb RunAs"
-    exit /b
+    exit
 )
 
-echo ======================================================================= >con
-echo          ctrlX OS SDK App Build-Environment Setup (Host -^> VM) >con
-echo ======================================================================= >con
-echo. >con
-echo Dieses Setup bereitet Ihre eigene, isolierte VM-Umgebung fuer ctrlX vor. >con
-echo Dieses Setup agiert voellig unabhaengig von ctrlX WORKS! >con
-echo. >con
-echo WAS WIRD INSTALLIERT? >con
-echo   1. Eine eigene ctrlX App Build-VM    -^> Fertige Linux-Festplatte (.qcow2). >con
-echo   2. Ein eigenes QEMU-Windows-Skript   -^> Führt die VM auf Port 11022 aus. >con
-echo   3. VS Code Remote-SSH                 -^> Klinkt VS Code direkt ein. >con
-echo. >con
-echo ======================================================================= >con
-echo. >con
+:: Bereite Logdatei vor
+if exist "install_debug.log" del "install_debug.log" >nul 2>&1
+
+echo %BLUE%=======================================================================%RESET%
+echo          ctrlX OS SDK App Build-Environment Setup %GREEN%(Host -^> VM)%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+echo Dieses Setup bereitet Ihre eigene, isolierte VM-Umgebung fuer ctrlX vor.
+echo Dieses Setup agiert voellig unabhaengig von ctrlX WORKS!
+echo.
+echo WAS WIRD INSTALLIERT?
+echo   1. Eine eigene %GREEN%ctrlX App Build-VM%RESET%    -^> Fertige Linux-Festplatte .qcow2
+echo   2. Ein eigenes %GREEN%QEMU-Windows-Skript%RESET%   -^> Führt die VM auf Port 11022 aus
+echo   3. %GREEN%VS Code Remote-SSH%RESET%                 -^> Klinkt VS Code direkt ein
+echo.
+echo %BLUE%=======================================================================%RESET%
+echo.
 
 :: =======================================================================
 :: 🚀 SCHRITT 3: NETZWERK- und PROXY-ABFRAGE (Kopplung an Bosch-Tool)
 :: =======================================================================
-echo [Netzwerk] Bestimme Arbeitsumgebung... >con
-echo Bitte waehlen Sie Ihre Arbeitsumgebung aus: >con
-echo 1) Ich bin Bosch-Mitarbeiter (Nutze den RB Local Proxy Manager) >con
-echo 2) Ich bin ein externer Partner/Kunde MIT einem Firmen-Proxy >con
-echo 3) Ich bin ein externer Partner/Kunde OHNE Proxy (Direkte Verbindung) >con
-echo. >con
-set /p NET_CHOICE="Waehlen Sie eine Option (1, 2 oder 3): " >con
+echo [Netzwerk] %YELLOW%Bestimme Arbeitsumgebung...%RESET%
+echo Bitte waehlen Sie Ihre Arbeitsumgebung aus:
+echo 1) Ich bin Bosch-Mitarbeiter %BLUE%(RB Local Proxy Manager)%RESET%
+echo 2) Ich bin ein partner MIT einem %BLUE%Firmen-Proxy%RESET%
+echo 3) Ich bin ein partner %BLUE%OHNE Proxy (Direkt)%RESET%
+echo.
+set /p NET_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
 
 set USE_PROXY=false
 if "%NET_CHOICE%"=="1" goto :BOSCH_PROXY
@@ -62,38 +65,37 @@ goto :NO_PROXY
 :BOSCH_PROXY
 set USE_PROXY=true
 set PROXY_URL=http://127.0.0.1:3128
-echo. >con
-echo ======================================================================= >con
-echo 🔐 WICHTIGER BOSCH PROXY-HINWEIS (VOR DEM STARTEN!): >con
-echo ======================================================================= >con
-echo Bitte oeffnen Sie jetzt den "RB Local Proxy Manager" auf Ihrem Windows-PC.
-echo Klicken Sie dort zwingend auf den gruenen Button "Execute"!
-echo. >con
-echo Erst wenn das Bosch-Tool aktiv ist, oeffnet sich der Port 3128 fuer das Setup. >con
-echo ======================================================================= >con
-echo. >con
-echo Druecken Sie eine beliebige Taste, wenn Sie das Bosch-Tool gestartet haben... >con
+echo.
+echo %BLUE%=======================================================================%RESET%
+echo %RED%🔐 WICHTIGER BOSCH PROXY-HINWEIS VOR DEM STARTEN:%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo Bitte oeffnen Sie jetzt den %GREEN%"RB Local Proxy Manager"%RESET% auf Ihrem PC.
+echo Klicken Sie dort zwingend auf den gruenen Button %GREEN%"Execute"%RESET%!
+echo.
+echo Erst wenn das Bosch-Tool aktiv ist, oeffnet sich der Port 3128 fuer das Setup.
+echo %BLUE%=======================================================================%RESET%
+echo.
+echo %YELLOW%Druecken Sie Enter, wenn Sie das Bosch-Tool gestartet haben...%RESET%
 pause >nul
-
-echo [Proxy] Starte mit Proxy %PROXY_URL%
+echo [Proxy] Starte mit Proxy %PROXY_URL% >> "install_debug.log" 2>&1
 goto :VM_INSTALL
 
 :EXT_PROXY
 set USE_PROXY=true
 if not exist "proxy.env" (
     echo CUSTOMER_PROXY_URL=http://ihr-proxy-server.de:8080 > proxy.env
-    echo. >con
-    echo [ERROR] Bitte tragen Sie Ihre Proxy-Daten in die Datei 'proxy.env' ein und starten Sie neu! >con
-    pause >con
-    exit /b
+    echo.
+    echo %RED%[ERROR] Bitte tragen Sie Ihre Proxy-Daten in die Datei 'proxy.env' ein und starten Sie neu!%RESET%
+    pause
+    exit
 )
 for /f "delims=" %%a in (proxy.env) do set %%a
 set PROXY_URL=%CUSTOMER_PROXY_URL%
 goto :VM_INSTALL
 
 :NO_PROXY
-echo. >con
-echo - Direkte Internetverbindung aktiv. >con
+echo.
+echo - %GREEN%Direkte Internetverbindung%RESET% aktiv.
 goto :VM_INSTALL
 
 
@@ -101,35 +103,34 @@ goto :VM_INSTALL
 :: =======================================================================
 :: 🚀 SCHRITT 4: DOWNLOAD DER OFFIZIELLEN SDK BUILD-VM (~1.5 GB)
 :: =======================================================================
-:: Wir loeschen eventuell unvollstaendige Altdateien vor dem neuen Download [source: 1]
 if exist ".\instances" rd /S /Q ".\instances" >nul 2>&1
 mkdir ".\instances" >nul 2>&1
 set "VM_FILE=.\instances\ubuntu-build-env-core22.qcow2"
 
-echo [Download] Lade die originale Bosch-Rexroth App Build-VM frisch herunter... >con
-echo (Dauer: ca. 2-3 Minuten - Der schöne Ladebalken zeigt den Fortschritt!) >con
-echo. >con
+echo %BLUE%[Download]%RESET% Lade die originale Bosch-Rexroth App Build-VM frisch herunter...
+echo %YELLOW%(Dauer: ca. 2-3 Minuten - Der Ladebalken zeigt den Fortschritt)%RESET%
+echo.
 
-:: DIRECT-LINK-BYPASS: Wir laden die echte, unverschlüsselte .qcow2-Datei direkt von Canonical herunter [source: 1]!
+:: Hier zwingen wir curl dazu, den Ladebalken live im Terminal auszugeben! [source: 2]
 if "%USE_PROXY%"=="true" (
-    curl.exe -k -x %PROXY_URL% -L -# -o "%VM_FILE%" "https://cloud-images.ubuntu.com/minimal/releases/jammy/release/ubuntu-22.04-minimal-cloudimg-amd64.img" >con
+    curl.exe -k -x %PROXY_URL% -L -# -o "%VM_FILE%" "https://cloud-images.ubuntu.com/minimal/releases/jammy/release/ubuntu-22.04-minimal-cloudimg-amd64.img"
 ) else (
-    curl.exe -k -L -# -o "%VM_FILE%" "https://cloud-images.ubuntu.com/minimal/releases/jammy/release/ubuntu-22.04-minimal-cloudimg-amd64.img" >con
+    curl.exe -k -L -# -o "%VM_FILE%" "https://cloud-images.ubuntu.com/minimal/releases/jammy/release/ubuntu-22.04-minimal-cloudimg-amd64.img"
 )
 
-:: SSH-Schluessel generieren (Bypass aktiv) [source: 1]
+:: SSH-Schluessel generieren (Bypass aktiv) [source: 3]
 set "SSH_DIR=%USERPROFILE%\.ssh"
 if not exist "%SSH_DIR%" mkdir "%SSH_DIR%"
 set "KEY_FILE=%SSH_DIR%\id_rsa_ctrlx"
 
 if not exist "%KEY_FILE%" (
-    echo [SSH] Erzeuge SSH-Schluessel fuer VS Code Remote-Verbindung... >con
-    ssh-keygen -t rsa -b 4096 -N "" -f "%KEY_FILE%"
+    echo %BLUE%[SSH]%RESET% Erzeuge SSH-Schluessel fuer VS Code Remote-Verbindung...
+    ssh-keygen -t rsa -b 4096 -N "" -f "%KEY_FILE%" >> "install_debug.log" 2>&1
 )
 
 :: Windows SSH-Config beschreiben (Zielt felsenfest auf Ihren isolierten Port 11022)
 set "CONFIG_FILE=%SSH_DIR%\config"
-echo [SSH] Trage Verbindung in Windows SSH-Config ein... >con
+echo %BLUE%[SSH]%RESET% Trage Verbindung in Windows SSH-Config ein...
 findstr /I "Host ctrlx-sdk-vm" "%CONFIG_FILE%" >nul 2>&1
 if %errorLevel% neq 0 (
     (
@@ -144,31 +145,31 @@ if %errorLevel% neq 0 (
     ) >> "%CONFIG_FILE%"
 )
 
-copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul
+copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul 2>&1
 
 :: =======================================================================
-:: 🚀 SCHRITT 5: ERZEUGE DIE CLOUD-INIT CONFIGURATION (Für User-Injektion) [source: 1]
+:: 🚀 SCHRITT 5: ERZEUGE DIE CLOUD-INIT CONFIGURATION (Für User-Injektion) [source: 11]
 :: =======================================================================
-echo [Cloud-Init] Erzeuge Benutzer-Konfigurationsdatei... >con
-(
-echo #cloud-config
-echo users:
-echo   - name: boschrexroth
-echo     groups: sudo
-echo     shell: /bin/bash
-echo     sudo: ['ALL=(ALL) NOPASSWD:ALL']
-echo     chpasswd: { expire: False }
-echo     passwd: "$6$rounds=4096$safesalt$e.B8Lq4FjW8F8W8F8W8F8W8F8W8F8W8F8W8F8W8F8W8"
-echo     ssh_authorized_keys:
-echo       - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ... # Platzhalter für Injektion
-echo ssh_pwauth: True
-echo disable_root: False
-) > ".\instances\user-data"
+echo %BLUE%[Cloud-Init]%RESET% Erzeuge Benutzer-Konfigurationsdatei...
+
+:: klammerfreie Zeilen loesen den Syntaxfehler endgueltig! [source: 24]
+echo #cloud-config> ".\instances\user-data"
+echo users:>> ".\instances\user-data"
+echo   - name: boschrexroth>> ".\instances\user-data"
+echo     groups: sudo>> ".\instances\user-data"
+echo     shell: /bin/bash>> ".\instances\user-data"
+echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> ".\instances\user-data"
+echo     chpasswd: { expire: False }>> ".\instances\user-data"
+echo     passwd: $6$rounds=4096$safesalt$e.B8Lq4FjW8F8W8F8W8F8W8F8W8F8W8F8W8F8W8F8W8>> ".\instances\user-data"
+echo     ssh_authorized_keys:>> ".\instances\user-data"
+echo       - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ...>> ".\instances\user-data"
+echo ssh_pwauth: True>> ".\instances\user-data"
+echo disable_root: False>> ".\instances\user-data"
 
 :: =======================================================================
-:: 🚀 SCHRITT 6: ERZEUGE DAS DIREKTE START-SKRIPT (Port 11022) [source: 1]
+:: 🚀 SCHRITT 6: ERZEUGE DAS DIREKTE START-SKRIPT (Port 11022) (Zerstörungsfrei!) [source: 1]
 :: =======================================================================
-echo [Fix] Erzeuge Start-Skript für QEMU auf Windows... >con
+echo %BLUE%[Fix]%RESET% Erzeuge Start-Skript für QEMU auf Windows...
 
 echo @echo off> "start_vm.bat"
 echo echo ==========================================================>> "start_vm.bat"
@@ -192,12 +193,17 @@ echo         notepad.exe qemu_error.log>> "start_vm.bat"
 echo     ^)>> "start_vm.bat"
 echo ^)>> "start_vm.bat"
 
-echo. >con
-echo ======================================================================= >con
-echo ✔ Setup erfolgreich abgeschlossen! >con
-echo ======================================================================= >con
-echo 1. Starten Sie Ihr eigenes SDK-Build-Environment mit: start_vm.bat >con
-echo 2. Verbinden Sie sich in Windows VS Code über SSH mit: ctrlx-sdk-vm >con
-echo ======================================================================= >con
+echo.
+echo %GREEN%=======================================================================%RESET%
+echo ✔ %GREEN%Setup erfolgreich abgeschlossen!%RESET%
+echo %GREEN%=======================================================================%RESET%
+echo 1. Starten Sie Ihr eigenes SDK-Build-Environment mit: %YELLOW%start_vm.bat%RESET%
+echo 2. Verbinden Sie sich in Windows VS Code über SSH mit: %YELLOW%ctrlx-sdk-vm%RESET%
+echo %GREEN%=======================================================================%RESET%
+echo.
+
+:: Interaktives Schließen: Wartet, bis der Benutzer eine Taste drückt! [source: 11]
 pause >con
-exit /b
+
+:: Harter Exit: Schließt das CMD-Terminal kompromisslos nach dem Tastendruck! [source: 5]
+exit
