@@ -25,3 +25,6 @@ stage
 # Licenses
 */licenses
 *ctrlx_cores.env
+
+# VM file
+*/instances
