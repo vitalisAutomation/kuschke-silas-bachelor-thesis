@@ -1,0 +1,22 @@
+services:
+  ctrlx-sdk-builder:
+    container_name: ctrlx-sdk-builder
+    build:
+      context: ./build_container
+      dockerfile: Dockerfile
+    privileged: true
+    ports:
+      - "10022:22"   # SSH für VS Code Remote-Verbindung
+    devices:
+      - /dev/kvm      # Ermöglicht blitzschnelle Hardware-Virtualisierung (KVM)
+      - /dev/net/tun  # Ermöglicht stabiles Netzwerk-Tunneling
+    cap_add:
+      - NET_ADMIN    # Ermöglicht dem Container, das Netzwerk der VM zu steuern
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace
+    environment:
+      - http_proxy=${http_proxy:-}
+      - https_proxy=${https_proxy:-}
+      - no_proxy=${no_proxy:-}
+    restart: unless-stopped
