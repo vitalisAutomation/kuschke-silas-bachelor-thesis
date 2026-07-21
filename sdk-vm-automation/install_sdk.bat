@@ -91,13 +91,31 @@ echo(
 echo Dieses Setup verwaltet und startet Ihre ctrlX App Build-VMs direkt.
 echo.
 echo %BLUE%[STATUS] Vorhandene VMs im Verzeichnis 'instances':%RESET%
-set "VM22_STATUS=%RED%Nicht vorhanden%RESET%"
-set "VM24_STATUS=%RED%Nicht vorhanden%RESET%"
-if exist "instances\ubuntu-build-env-core22.qcow2" set "VM22_STATUS=%GREEN%Vorhanden%RESET%"
-if exist "instances\ubuntu-build-env-core24.qcow2" set "VM24_STATUS=%GREEN%Vorhanden%RESET%"
 
-echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) -> %VM22_STATUS%
-echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       -> %VM24_STATUS%
+if not exist "instances" (
+    echo   %YELLOW%Das Verzeichnis 'instances' wurde noch nicht erstellt.%RESET%
+    set "VM22_TEXT=%RED%Nicht vorhanden%RESET%"
+    set "VM24_TEXT=%RED%Nicht vorhanden%RESET%"
+    goto :DISPLAY_VM_STATUS
+)
+
+set "VM22_STATUS=Nein"
+set "VM24_STATUS=Nein"
+if exist "instances\ubuntu-build-env-core22.qcow2" set "VM22_STATUS=Ja"
+if exist "instances\ubuntu-build-env-core24.qcow2" set "VM24_STATUS=Ja"
+
+set "VM22_TEXT=%RED%Nicht vorhanden%RESET%"
+if "%VM22_STATUS%"=="Ja" set "VM22_TEXT=%GREEN%Vorhanden%RESET%"
+
+set "VM24_TEXT=%RED%Nicht vorhanden%RESET%"
+if "%VM24_STATUS%"=="Ja" set "VM24_TEXT=%GREEN%Vorhanden%RESET%"
+
+:DISPLAY_VM_STATUS
+:: Kein "->" mehr! Das verhindert die Fehlinterpretationen des CMD-Parsers (Schutz vor Redirects)
+echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
+echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       : %VM24_TEXT%
+
+:QEMU_STATUS
 echo(
 echo %BLUE%[QEMU-Laufzeitumgebung]%RESET%
 echo   - Modus: %GREEN%%QEMU_SOURCE%%RESET%
@@ -127,8 +145,8 @@ echo %GREEN%                    VORHANDENE VM STARTEN%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 echo Welche VM möchten Sie starten?
-echo 1) Ubuntu Core 22 (für ctrlX OS 1.x / 2.x / 3.x) [%VM22_STATUS%]
-echo 2) Ubuntu Core 24 (für ctrlX OS 4.x)             [%VM24_STATUS%]
+echo 1) Ubuntu Core 22 (für ctrlX OS 1.x / 2.x / 3.x) [%VM22_TEXT%]
+echo 2) Ubuntu Core 24 (für ctrlX OS 4.x)             [%VM24_TEXT%]
 echo 3) Zurück zum Hauptmenü
 echo(
 set /p START_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
@@ -385,12 +403,10 @@ if %errorLevel% neq 0 (
 
 copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul 2>&1
 
-:: Errechne die Proxy-URL für die VM (Ersetzt Host-localhost durch QEMU-Gateway 10.0.2.2)
+:: Errechne die Proxy-URL für die VM (Ersetzt Host-localhost zuverlässig durch QEMU-Gateway 10.0.2.2)
 set "VM_PROXY_URL="
-if "%USE_PROXY%"=="true" (
-    set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
-    set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
-)
+if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
+if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
 
 :: =======================================================================
 :: 🚀 CLOUD-INIT CONFIGURATION (CIDATA)
@@ -430,7 +446,7 @@ echo   - curl>> ".\instances\cidata\user-data"
 echo   - wget>> ".\instances\cidata\user-data"
 echo   - make>> ".\instances\cidata\user-data"
 
-:: Das automatisierte SDK Provisionierungs-Skript flach und ohne klammernde Blöcke erzeugen (Unfehlbar für Batch!)
+:: Das automatisierte SDK Provisionierungs-Skript flach und ohne klammernde Blöcke erzeugen (Unfehlbar!)
 set "SDK_SH=.\instances\cidata\setup-sdk.sh"
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 
@@ -440,7 +456,7 @@ if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 >> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I \^\$TERM" ^> /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
 >> "%SDK_SH%" echo systemctl daemon-reload
 >> "%SDK_SH%" echo systemctl restart serial-getty@ttyS0.service
->> "%SDK_SH%" echo # Echtzeit-Statusanzeige in der .bashrc konfigurieren
+>> "%SDK_SH%" echo # Statusanzeige in der .bashrc konfigurieren
 >> "%SDK_SH%" echo echo -e '\nif [ -f /var/lib/cloud/instance/boot-finished ]; then' ^>^> /home/boschrexroth/.bashrc
 >> "%SDK_SH%" echo echo -e '    echo -e "\\n\\e[92m✔ ctrlX SDK-Setup ist vollstaendig abgeschlossen und einsatzbereit!\\e[0m"' ^>^> /home/boschrexroth/.bashrc
 >> "%SDK_SH%" echo echo -e 'else' ^>^> /home/boschrexroth/.bashrc
@@ -450,15 +466,13 @@ if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 >> "%SDK_SH%" echo echo -e 'fi' ^>^> /home/boschrexroth/.bashrc
 
 :: Wenn ein Proxy aktiv ist, binden wir ihn hier für alle VM-Downloads (apt, git, wget) ein!
-if "%USE_PROXY%"=="true" (
-    >> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
-    >> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%"
-    >> "%SDK_SH%" echo export https_proxy="%VM_PROXY_URL%"
-    >> "%SDK_SH%" echo export HTTP_PROXY="%VM_PROXY_URL%"
-    >> "%SDK_SH%" echo export HTTPS_PROXY="%VM_PROXY_URL%"
-    >> "%SDK_SH%" echo echo 'Acquire::http::Proxy "%VM_PROXY_URL%";' ^> /etc/apt/apt.conf.d/99proxy
-    >> "%SDK_SH%" echo echo 'Acquire::https::Proxy "%VM_PROXY_URL%";' ^>^> /etc/apt/apt.conf.d/99proxy
-)
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%"
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export https_proxy="%VM_PROXY_URL%"
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export HTTP_PROXY="%VM_PROXY_URL%"
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export HTTPS_PROXY="%VM_PROXY_URL%"
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo 'Acquire::http::Proxy "%VM_PROXY_URL%";' ^> /etc/apt/apt.conf.d/99proxy
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo 'Acquire::https::Proxy "%VM_PROXY_URL%";' ^>^> /etc/apt/apt.conf.d/99proxy
 
 >> "%SDK_SH%" echo # Klonen des SDK und Ausfuehren der Setup-Skripte im User-Kontext
 >> "%SDK_SH%" echo su - boschrexroth -c "wget https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh"
@@ -568,7 +582,7 @@ goto :START_QEMU_VM
 :START_QEMU_VM
 cls
 echo %BLUE%=======================================================================%RESET%
-echo %GREEN%                  STARTE ctrlX SDK BUILD-ENVIRONMENT (Core %CORE_VER%)%RESET%
+echo      STARTE ctrlX SDK BUILD-ENVIRONMENT (Core %CORE_VER%)
 echo %BLUE%=======================================================================%RESET%
 echo(
 echo Port 11022 auf dem Windows-Host leitet auf die VM um.
