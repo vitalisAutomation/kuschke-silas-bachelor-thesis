@@ -33,7 +33,7 @@ if %errorLevel% neq 0 (
 set "QEMU_EXE="
 set "QEMU_SOURCE="
 
-if exist ".\qemu\qemu-system-x86_64.exe" (
+if exist "qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
     set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
     goto :MAIN_MENU
@@ -93,8 +93,8 @@ echo.
 echo %BLUE%[STATUS] Vorhandene VMs im Verzeichnis 'instances':%RESET%
 set "VM22_STATUS=%RED%Nicht vorhanden%RESET%"
 set "VM24_STATUS=%RED%Nicht vorhanden%RESET%"
-if exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core22.qcow2" set "VM22_STATUS=%GREEN%Vorhanden%RESET%"
-if exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core24.qcow2" set "VM24_STATUS=%GREEN%Vorhanden%RESET%"
+if exist "instances\ubuntu-build-env-core22.qcow2" set "VM22_STATUS=%GREEN%Vorhanden%RESET%"
+if exist "instances\ubuntu-build-env-core24.qcow2" set "VM24_STATUS=%GREEN%Vorhanden%RESET%"
 
 echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) -> %VM22_STATUS%
 echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       -> %VM24_STATUS%
@@ -139,7 +139,7 @@ if "%START_CHOICE%"=="3" goto :MAIN_MENU
 goto :CHOOSE_START_VM
 
 :PREPARE_START_VM22
-if not exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core22.qcow2" (
+if not exist "instances\ubuntu-build-env-core22.qcow2" (
     echo %RED%[ERROR] Die VM fuer Ubuntu Core 22 existiert nicht!%RESET%
     echo Bitte laden Sie diese zuerst ueber Option 2 herunter.
     pause
@@ -149,7 +149,7 @@ set "CORE_VER=22"
 goto :START_QEMU_VM
 
 :PREPARE_START_VM24
-if not exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core24.qcow2" (
+if not exist "instances\ubuntu-build-env-core24.qcow2" (
     echo %RED%[ERROR] Die VM fuer Ubuntu Core 24 existiert nicht!%RESET%
     echo Bitte laden Sie diese zuerst ueber Option 2 herunter.
     pause
@@ -430,43 +430,51 @@ echo   - curl>> ".\instances\cidata\user-data"
 echo   - wget>> ".\instances\cidata\user-data"
 echo   - make>> ".\instances\cidata\user-data"
 
-:: Das automatisierte SDK Provisionierungs-Skript in die VM injecten
+:: Das automatisierte SDK Provisionierungs-Skript flach und ohne klammernde Blöcke erzeugen (Unfehlbar für Batch!)
+set "SDK_SH=.\instances\cidata\setup-sdk.sh"
+if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
+
+> "%SDK_SH%" echo #!/bin/bash
+>> "%SDK_SH%" echo # Autologin Setup fuer ttyS0 (Serielle QEMU Konsole)
+>> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
+>> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I \^\$TERM" ^> /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
+>> "%SDK_SH%" echo systemctl daemon-reload
+>> "%SDK_SH%" echo systemctl restart serial-getty@ttyS0.service
+>> "%SDK_SH%" echo # Echtzeit-Statusanzeige in der .bashrc konfigurieren
+>> "%SDK_SH%" echo echo -e '\nif [ -f /var/lib/cloud/instance/boot-finished ]; then' ^>^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo echo -e '    echo -e "\\n\\e[92m✔ ctrlX SDK-Setup ist vollstaendig abgeschlossen und einsatzbereit!\\e[0m"' ^>^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo echo -e 'else' ^>^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo echo -e '    echo -e "\\n\\e[93m⏳ Das ctrlX SDK-Setup laeuft noch im Hintergrund. Bitte warten...\\e[0m"' ^>^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo echo -e '    echo -e "Sie koennen den Fortschritt mit folgendem Befehl verfolgen:"' ^>^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo echo -e '    echo -e "   \\e[94mtail -f /var/log/cloud-init-output.log\\e[0m\\n"' ^>^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo echo -e 'fi' ^>^> /home/boschrexroth/.bashrc
+
+:: Wenn ein Proxy aktiv ist, binden wir ihn hier für alle VM-Downloads (apt, git, wget) ein!
+if "%USE_PROXY%"=="true" (
+    >> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
+    >> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%"
+    >> "%SDK_SH%" echo export https_proxy="%VM_PROXY_URL%"
+    >> "%SDK_SH%" echo export HTTP_PROXY="%VM_PROXY_URL%"
+    >> "%SDK_SH%" echo export HTTPS_PROXY="%VM_PROXY_URL%"
+    >> "%SDK_SH%" echo echo 'Acquire::http::Proxy "%VM_PROXY_URL%";' ^> /etc/apt/apt.conf.d/99proxy
+    >> "%SDK_SH%" echo echo 'Acquire::https::Proxy "%VM_PROXY_URL%";' ^>^> /etc/apt/apt.conf.d/99proxy
+)
+
+>> "%SDK_SH%" echo # Klonen des SDK und Ausfuehren der Setup-Skripte im User-Kontext
+>> "%SDK_SH%" echo su - boschrexroth -c "wget https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh"
+>> "%SDK_SH%" echo su - boschrexroth -c "chmod a+x clone-install-sdk.sh"
+>> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
+>> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
+>> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
+
+:: Binde das Provisionierungsskript nun sauber in die user-data Struktur ein
 echo write_files:>> ".\instances\cidata\user-data"
 echo   - path: /root/setup-sdk.sh>> ".\instances\cidata\user-data"
 echo     permissions: '0755'>> ".\instances\cidata\user-data"
 echo     content: ^|>> ".\instances\cidata\user-data"
-echo       #!/bin/bash>> ".\instances\cidata\user-data"
-echo       # Autologin Setup fuer ttyS0 (Serielle QEMU Konsole)>> ".\instances\cidata\user-data"
-echo       mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d>> ".\instances\cidata\user-data"
-echo       echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I \^\$TERM" ^> /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf>> ".\instances\cidata\user-data"
-echo       systemctl daemon-reload>> ".\instances\cidata\user-data"
-echo       systemctl restart serial-getty@ttyS0.service>> ".\instances\cidata\user-data"
-echo       # Echtzeit-Statusanzeige in der .bashrc konfigurieren>> ".\instances\cidata\user-data"
-echo       echo -e '\nif [ -f /var/lib/cloud/instance/boot-finished ]; then' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
-echo       echo -e '    echo -e "\\n\\e[92m✔ ctrlX SDK-Setup ist vollstaendig abgeschlossen und einsatzbereit!\\e[0m"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
-echo       echo -e 'else' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
-echo       echo -e '    echo -e "\\n\\e[93m⏳ Das ctrlX SDK-Setup laeuft noch im Hintergrund. Bitte warten...\\e[0m"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
-echo       echo -e '    echo -e "Sie koennen den Fortschritt mit folgendem Befehl verfolgen:"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
-echo       echo -e '    echo -e "   \\e[94mtail -f /var/log/cloud-init-output.log\\e[0m\\n"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
-echo       echo -e 'fi' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
 
-:: Wenn ein Proxy aktiv ist, binden wir ihn hier für alle VM-Downloads (apt, git, wget) ein!
-if "%USE_PROXY%"=="true" (
-    echo       # Proxy-Konfiguration fuer VM-Hintergrundprozesse>> ".\instances\cidata\user-data"
-    echo       export http_proxy="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
-    echo       export https_proxy="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
-    echo       export HTTP_PROXY="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
-    echo       export HTTPS_PROXY="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
-    echo       echo 'Acquire::http::Proxy "%VM_PROXY_URL%";' ^> /etc/apt/apt.conf.d/99proxy>> ".\instances\cidata\user-data"
-    echo       echo 'Acquire::https::Proxy "%VM_PROXY_URL%";' ^役 /etc/apt/apt.conf.d/99proxy>> ".\instances\cidata\user-data"
-)
-
-echo       # Klonen des SDK und Ausfuehren der Setup-Skripte im User-Kontext>> ".\instances\cidata\user-data"
-echo       su - boschrexroth -c "wget https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh">> ".\instances\cidata\user-data"
-echo       su - boschrexroth -c "chmod a+x clone-install-sdk.sh">> ".\instances\cidata\user-data"
-echo       su - boschrexroth -c "./clone-install-sdk.sh">> ".\instances\cidata\user-data"
-echo       su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh">> ".\instances\cidata\user-data"
-echo       su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh">> ".\instances\cidata\user-data"
+:: Kopiert das flach geschriebene setup-sdk.sh Zeile für Zeile mit Einrückungen in die user-data
+for /f "usebackq delims=" %%G in ("%SDK_SH%") do echo       %%G>> ".\instances\cidata\user-data"
 
 echo runcmd:>> ".\instances\cidata\user-data"
 echo   - /root/setup-sdk.sh>> ".\instances\cidata\user-data"
@@ -503,7 +511,7 @@ if exist ".\instances\seed.iso" del ".\instances\seed.iso" >nul 2>&1
 ".\instances\mkisofs.exe" -o ".\instances\seed.iso" -J -r -V "CIDATA" ".\instances\cidata" 2>nul
 
 :: Überprüfe, ob die ISO-Datei erfolgreich erstellt wurde
-for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
+for %%F in ("instances\seed.iso") do (
     if %%~zF LSS 1 (
         echo.
         echo %RED%[FEHLER] Die ISO-Erstellung mit mkisofs.exe ist fehlgeschlagen. seed.iso konnte nicht erzeugt werden!%RESET%
@@ -516,23 +524,23 @@ for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
 :: 🔍 SCHRITT 4: ERWEITERTE ISO-VALIDIERUNGS-PRÜFUNG (LIVE IM CLI)
 :: =======================================================================
 set "SEED_SIZE=0"
-if exist "%PROJEKT_PFAD%instances\seed.iso" (
-    for %%A in ("%PROJEKT_PFAD%instances\seed.iso") do set "SEED_SIZE=%%~zA"
+if exist "instances\seed.iso" (
+    for %%A in ("instances\seed.iso") do set "SEED_SIZE=%%~zA"
 )
 
 set "USER_DATA_SIZE=Fehlt!"
-if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
-    for %%B in ("%PROJEKT_PFAD%instances\cidata\user-data") do set "USER_DATA_SIZE=Vorhanden (%%~zB Bytes)"
+if exist "instances\cidata\user-data" (
+    for %%B in ("instances\cidata\user-data") do set "USER_DATA_SIZE=Vorhanden (%%~zB Bytes)"
 )
 
 set "META_DATA_SIZE=Fehlt!"
-if exist "%PROJEKT_PFAD%instances\cidata\meta-data" (
-    for %%C in ("%PROJEKT_PFAD%instances\cidata\meta-data") do set "META_DATA_SIZE=Vorhanden (%%~zC Bytes)"
+if exist "instances\cidata\meta-data" (
+    for %%C in ("instances\cidata\meta-data") do set "META_DATA_SIZE=Vorhanden (%%~zC Bytes)"
 )
 
 set "NET_CONFIG_SIZE=Fehlt!"
-if exist "%PROJEKT_PFAD%instances\cidata\network-config" (
-    for %%D in ("%PROJEKT_PFAD%instances\cidata\network-config") do set "NET_CONFIG_SIZE=Vorhanden (%%~zD Bytes)"
+if exist "instances\cidata\network-config" (
+    for %%D in ("instances\cidata\network-config") do set "NET_CONFIG_SIZE=Vorhanden (%%~zD Bytes)"
 )
 
 echo %GREEN%[Prüfung] Überprüfe den Inhalt der erstellten ISO-Schnittstelle...%RESET%
@@ -571,8 +579,8 @@ echo %BLUE%=====================================================================
 echo(
 
 :: Sicherheits-Check: Falls die seed.iso fehlt, springe zur Erstellung
-if exist "%PROJEKT_PFAD%instances\seed.iso" goto :START_QEMU_NOW
-if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
+if exist "instances\seed.iso" goto :START_QEMU_NOW
+if exist "instances\cidata\user-data" (
     echo %YELLOW%[Sicherheit] seed.iso fehlt. Generiere neu...%RESET%
     goto :GENERATE_ISO
 )
