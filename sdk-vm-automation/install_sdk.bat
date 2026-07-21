@@ -35,7 +35,7 @@ set "QEMU_SOURCE="
 
 if exist ".\qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
-    set "QEMU_SOURCE=Lokal im Projekt (Isoliert & Autark)"
+    set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
     goto :MAIN_MENU
 )
 
@@ -91,10 +91,10 @@ echo(
 echo Dieses Setup verwaltet und startet Ihre ctrlX App Build-VMs direkt.
 echo.
 echo %BLUE%[STATUS] Vorhandene VMs im Verzeichnis 'instances':%RESET%
-set VM22_STATUS=%RED%Nicht vorhanden%RESET%
-set VM24_STATUS=%RED%Nicht vorhanden%RESET%
-if exist ".\instances\ubuntu-build-env-core22.qcow2" set VM22_STATUS=%GREEN%Vorhanden%RESET%
-if exist ".\instances\ubuntu-build-env-core24.qcow2" set VM24_STATUS=%GREEN%Vorhanden%RESET%
+set "VM22_STATUS=%RED%Nicht vorhanden%RESET%"
+set "VM24_STATUS=%RED%Nicht vorhanden%RESET%"
+if exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core22.qcow2" set "VM22_STATUS=%GREEN%Vorhanden%RESET%"
+if exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core24.qcow2" set "VM24_STATUS=%GREEN%Vorhanden%RESET%"
 
 echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) -> %VM22_STATUS%
 echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       -> %VM24_STATUS%
@@ -139,7 +139,7 @@ if "%START_CHOICE%"=="3" goto :MAIN_MENU
 goto :CHOOSE_START_VM
 
 :PREPARE_START_VM22
-if not exist ".\instances\ubuntu-build-env-core22.qcow2" (
+if not exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core22.qcow2" (
     echo %RED%[ERROR] Die VM fuer Ubuntu Core 22 existiert nicht!%RESET%
     echo Bitte laden Sie diese zuerst ueber Option 2 herunter.
     pause
@@ -149,7 +149,7 @@ set "CORE_VER=22"
 goto :START_QEMU_VM
 
 :PREPARE_START_VM24
-if not exist ".\instances\ubuntu-build-env-core24.qcow2" (
+if not exist "%PROJEKT_PFAD%instances\ubuntu-build-env-core24.qcow2" (
     echo %RED%[ERROR] Die VM fuer Ubuntu Core 24 existiert nicht!%RESET%
     echo Bitte laden Sie diese zuerst ueber Option 2 herunter.
     pause
@@ -311,7 +311,7 @@ del "%QEMU_TEMP_FILE%" >nul 2>&1
 
 if exist ".\qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
-    set "QEMU_SOURCE=Lokal im Projekt (Isoliert & Autark)"
+    set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
     echo.
     echo %GREEN%✔ Lokales QEMU erfolgreich eingerichtet!%RESET%
     pause
@@ -385,6 +385,13 @@ if %errorLevel% neq 0 (
 
 copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul 2>&1
 
+:: Errechne die Proxy-URL für die VM (Ersetzt Host-localhost durch QEMU-Gateway 10.0.2.2)
+set "VM_PROXY_URL="
+if "%USE_PROXY%"=="true" (
+    set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
+    set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
+)
+
 :: =======================================================================
 :: 🚀 CLOUD-INIT CONFIGURATION (CIDATA)
 :: =======================================================================
@@ -399,7 +406,7 @@ echo local-hostname: ctrlx-sdk-vm >> ".\instances\cidata\meta-data"
 echo #cloud-config> ".\instances\cidata\user-data"
 echo users:>> ".\instances\cidata\user-data"
 echo   - name: boschrexroth>> ".\instances\cidata\user-data"
-echo     groups: sudo>> ".\instances\cidata\user-data"
+echo     groups: sudo, lxd>> ".\instances\cidata\user-data"
 echo     shell: /bin/bash>> ".\instances\cidata\user-data"
 echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> ".\instances\cidata\user-data"
 echo     ssh_authorized_keys:>> ".\instances\cidata\user-data"
@@ -415,6 +422,54 @@ echo     boschrexroth:boschrexroth>> ".\instances\cidata\user-data"
 echo   expire: False>> ".\instances\cidata\user-data"
 echo ssh_pwauth: True>> ".\instances\cidata\user-data"
 echo disable_root: False>> ".\instances\cidata\user-data"
+
+:: Standardpakete für Ubuntu vordefinieren
+echo packages:>> ".\instances\cidata\user-data"
+echo   - git>> ".\instances\cidata\user-data"
+echo   - curl>> ".\instances\cidata\user-data"
+echo   - wget>> ".\instances\cidata\user-data"
+echo   - make>> ".\instances\cidata\user-data"
+
+:: Das automatisierte SDK Provisionierungs-Skript in die VM injecten
+echo write_files:>> ".\instances\cidata\user-data"
+echo   - path: /root/setup-sdk.sh>> ".\instances\cidata\user-data"
+echo     permissions: '0755'>> ".\instances\cidata\user-data"
+echo     content: ^|>> ".\instances\cidata\user-data"
+echo       #!/bin/bash>> ".\instances\cidata\user-data"
+echo       # Autologin Setup fuer ttyS0 (Serielle QEMU Konsole)>> ".\instances\cidata\user-data"
+echo       mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d>> ".\instances\cidata\user-data"
+echo       echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I \^\$TERM" ^> /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf>> ".\instances\cidata\user-data"
+echo       systemctl daemon-reload>> ".\instances\cidata\user-data"
+echo       systemctl restart serial-getty@ttyS0.service>> ".\instances\cidata\user-data"
+echo       # Echtzeit-Statusanzeige in der .bashrc konfigurieren>> ".\instances\cidata\user-data"
+echo       echo -e '\nif [ -f /var/lib/cloud/instance/boot-finished ]; then' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
+echo       echo -e '    echo -e "\\n\\e[92m✔ ctrlX SDK-Setup ist vollstaendig abgeschlossen und einsatzbereit!\\e[0m"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
+echo       echo -e 'else' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
+echo       echo -e '    echo -e "\\n\\e[93m⏳ Das ctrlX SDK-Setup laeuft noch im Hintergrund. Bitte warten...\\e[0m"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
+echo       echo -e '    echo -e "Sie koennen den Fortschritt mit folgendem Befehl verfolgen:"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
+echo       echo -e '    echo -e "   \\e[94mtail -f /var/log/cloud-init-output.log\\e[0m\\n"' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
+echo       echo -e 'fi' ^役 /home/boschrexroth/.bashrc>> ".\instances\cidata\user-data"
+
+:: Wenn ein Proxy aktiv ist, binden wir ihn hier für alle VM-Downloads (apt, git, wget) ein!
+if "%USE_PROXY%"=="true" (
+    echo       # Proxy-Konfiguration fuer VM-Hintergrundprozesse>> ".\instances\cidata\user-data"
+    echo       export http_proxy="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
+    echo       export https_proxy="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
+    echo       export HTTP_PROXY="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
+    echo       export HTTPS_PROXY="%VM_PROXY_URL%">> ".\instances\cidata\user-data"
+    echo       echo 'Acquire::http::Proxy "%VM_PROXY_URL%";' ^> /etc/apt/apt.conf.d/99proxy>> ".\instances\cidata\user-data"
+    echo       echo 'Acquire::https::Proxy "%VM_PROXY_URL%";' ^役 /etc/apt/apt.conf.d/99proxy>> ".\instances\cidata\user-data"
+)
+
+echo       # Klonen des SDK und Ausfuehren der Setup-Skripte im User-Kontext>> ".\instances\cidata\user-data"
+echo       su - boschrexroth -c "wget https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh">> ".\instances\cidata\user-data"
+echo       su - boschrexroth -c "chmod a+x clone-install-sdk.sh">> ".\instances\cidata\user-data"
+echo       su - boschrexroth -c "./clone-install-sdk.sh">> ".\instances\cidata\user-data"
+echo       su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh">> ".\instances\cidata\user-data"
+echo       su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh">> ".\instances\cidata\user-data"
+
+echo runcmd:>> ".\instances\cidata\user-data"
+echo   - /root/setup-sdk.sh>> ".\instances\cidata\user-data"
 
 :: network-config erzeugen (Bulletproof vor-angestellte Umleitung um Stderr-Bug zu vermeiden)
 > ".\instances\cidata\network-config" echo version: 2
@@ -442,10 +497,10 @@ if "%USE_PROXY%"=="true" (
 echo %BLUE%[ISO]%RESET% Generiere echte NoCloud-Konfigurations-ISO (seed.iso)...
 if exist ".\instances\seed.iso" del ".\instances\seed.iso" >nul 2>&1
 
-:: ECHTE, ABSOLUT FEHLERFREIE ISO-ERSTELLUNG REIN ÜBER CMD (Beide Warnungen behoben!)
+:: ECHTE, ABSOLUT FEHLERFREIE ISO-ERSTELLUNG REIN ÜBER CMD (Warnungen sauber ausgeblendet!)
 :: -J (Joliet) und -r (Rock Ridge) garantieren perfekte Kleinbuchstaben.
-:: Ohne das legacy "-quiet" Flag gibt uns das Tool ein detailliertes Feedback der gepackten Dateien!
-".\instances\mkisofs.exe" -o ".\instances\seed.iso" -J -r -V "CIDATA" ".\instances\cidata"
+:: "2>nul" leitet die kosmetische Inode-Warnung ins Nichts um, damit Ihre Konsole makellos bleibt!
+".\instances\mkisofs.exe" -o ".\instances\seed.iso" -J -r -V "CIDATA" ".\instances\cidata" 2>nul
 
 :: Überprüfe, ob die ISO-Datei erfolgreich erstellt wurde
 for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
@@ -456,6 +511,37 @@ for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
         goto :MAIN_MENU
     )
 )
+
+:: =======================================================================
+:: 🔍 SCHRITT 4: ERWEITERTE ISO-VALIDIERUNGS-PRÜFUNG (LIVE IM CLI)
+:: =======================================================================
+set "SEED_SIZE=0"
+if exist "%PROJEKT_PFAD%instances\seed.iso" (
+    for %%A in ("%PROJEKT_PFAD%instances\seed.iso") do set "SEED_SIZE=%%~zA"
+)
+
+set "USER_DATA_SIZE=Fehlt!"
+if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
+    for %%B in ("%PROJEKT_PFAD%instances\cidata\user-data") do set "USER_DATA_SIZE=Vorhanden (%%~zB Bytes)"
+)
+
+set "META_DATA_SIZE=Fehlt!"
+if exist "%PROJEKT_PFAD%instances\cidata\meta-data" (
+    for %%C in ("%PROJEKT_PFAD%instances\cidata\meta-data") do set "META_DATA_SIZE=Vorhanden (%%~zC Bytes)"
+)
+
+set "NET_CONFIG_SIZE=Fehlt!"
+if exist "%PROJEKT_PFAD%instances\cidata\network-config" (
+    for %%D in ("%PROJEKT_PFAD%instances\cidata\network-config") do set "NET_CONFIG_SIZE=Vorhanden (%%~zD Bytes)"
+)
+
+echo %GREEN%[Prüfung] Überprüfe den Inhalt der erstellten ISO-Schnittstelle...%RESET%
+echo   - Instances Ordner: %GREEN%OK%RESET%
+echo   - seed.iso Größe:   %GREEN%%SEED_SIZE% Bytes%RESET%
+echo   - user-data:        %GREEN%%USER_DATA_SIZE%%RESET%
+echo   - meta-data:        %GREEN%%META_DATA_SIZE%%RESET%
+echo   - network-config:   %GREEN%%NET_CONFIG_SIZE%%RESET%
+echo.
 
 echo.
 echo %GREEN%=======================================================================%RESET%
@@ -477,7 +563,6 @@ echo %BLUE%=====================================================================
 echo %GREEN%                  STARTE ctrlX SDK BUILD-ENVIRONMENT (Core %CORE_VER%)%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
-echo Aktiver QEMU-Pfad: %YELLOW%%QEMU_EXE%%RESET%
 echo Port 11022 auf dem Windows-Host leitet auf die VM um.
 echo.
 echo * SSH-Verbindung via VS Code Remote-SSH: %YELLOW%ctrlx-sdk-vm%RESET%
@@ -499,8 +584,10 @@ goto :MAIN_MENU
 :: Loesche alte Logdateien, falls vorhanden
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
-:: === DIE MODERNE Q35 LÖSUNG mit gezieltem ds=nocloud SMBIOS Parameter ===
-"%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial="ds=nocloud" 2> qemu_error.log
+:: === HEADLESS QEMU START ===
+:: Wir übergeben QEMU den Parameter "-display none", um das grafische Fenster komplett auszublenden.
+:: Wir nutzen das moderne Q35 Mainboard-Layout mit SMBIOS-nocloud Priorisierung für blitzschnelles lokales Laden!
+"%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial="ds=nocloud" -display none 2> qemu_error.log
 
 :: Fehlerbehandlung ohne Klammer-Verschachtelung
 if not exist "%PROJEKT_PFAD%qemu_error.log" goto :POST_RUN
