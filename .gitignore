@@ -28,3 +28,9 @@ stage
 
 # VM file
 */instances
+sdk-vm-automation/qemu_error.log
+sdk-vm-automation/id_rsa_ctrlx.pub
+sdk-vm-automation/install_debug.log
+
+# QEMU
+*/qemu
