@@ -27,6 +27,46 @@ if %errorLevel% neq 0 (
     exit
 )
 
+:: =======================================================================
+:: 🔍 SCHRITT 2: AUTO-DETEKTION LOKALES QEMU
+:: =======================================================================
+set "QEMU_EXE="
+set "QEMU_SOURCE="
+
+if exist ".\qemu\qemu-system-x86_64.exe" (
+    set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
+    set "QEMU_SOURCE=Lokal im Projekt (Isoliert & Autark)"
+    goto :MAIN_MENU
+)
+
+:: Falls kein QEMU lokal existiert, bieten wir den automatischen Download an
+cls
+echo %BLUE%=======================================================================%RESET%
+echo %YELLOW%               LOKALES QEMU INITIALISIEREN (Portabilität)%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+echo Es wurde keine lokale QEMU-Installation im Projektordner gefunden.
+echo Um 100%% Unabhaengigkeit von ctrlX WORKS zu gewaehrleisten, kann dieses Setup
+echo das offizielle QEMU-Paket herunterladen und vollautomatisch im Projekt installieren.
+echo.
+echo Das Setup benoetigt hierzu ca. 180 MB Downloadvolumen.
+echo.
+echo 1) QEMU jetzt vollautomatisch im Hintergrund installieren (Empfohlen)
+echo 2) Abbrechen und beenden
+echo.
+set /p QEMU_CHOICE="%YELLOW%Waehlen Sie eine Option (1 oder 2): %RESET%"
+
+if "%QEMU_CHOICE%"=="1" (
+    set "DOWNLOAD_TARGET=QEMU"
+    goto :NET_PROXY_CHECK
+) else (
+    exit
+)
+
+
+:: =======================================================================
+:: 💻 HAUPTMENÜ (Direktstart bei bestehender Installation)
+:: =======================================================================
 :MAIN_MENU
 cls
 echo %BLUE%=======================================================================%RESET%
@@ -43,6 +83,10 @@ if exist ".\instances\ubuntu-build-env-core24.qcow2" set VM24_STATUS=%GREEN%Vorh
 
 echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) -> %VM22_STATUS%
 echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       -> %VM24_STATUS%
+echo.
+echo %BLUE%[QEMU-Laufzeitumgebung]%RESET%
+echo   - Modus: %GREEN%%QEMU_SOURCE%%RESET%
+echo   - Pfad:  %YELLOW%%QEMU_EXE%%RESET%
 echo.
 echo %BLUE%=======================================================================%RESET%
 echo Bitte waehlen Sie eine Aktion:
@@ -101,7 +145,7 @@ goto :START_QEMU_VM
 
 
 :: =======================================================================
-:: 🚀 MENÜ-OPTION 2: NEUE VM DOWNLOADEN UND EINRICHTEN
+:: 🚀 MENÜ-OPTION 2: VM VERSIONAUSWAHL
 :: =======================================================================
 :CHOOSE_DOWNLOAD_VERSION
 cls
@@ -121,20 +165,24 @@ set /p OS_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2, 3, 4 oder 5): %RESET%"
 
 if "%OS_CHOICE%"=="1" (
     set "CORE_VER=22"
+    set "DOWNLOAD_TARGET=VM"
     echo %YELLOW%[Info] ctrlX OS 1.xx nutzt standardmaeßig Core 20. Wir richten Core 22 ein.%RESET%
     pause
     goto :NET_PROXY_CHECK
 )
 if "%OS_CHOICE%"=="2" (
     set "CORE_VER=22"
+    set "DOWNLOAD_TARGET=VM"
     goto :NET_PROXY_CHECK
 )
 if "%OS_CHOICE%"=="3" (
     set "CORE_VER=22"
+    set "DOWNLOAD_TARGET=VM"
     goto :NET_PROXY_CHECK
 )
 if "%OS_CHOICE%"=="4" (
     set "CORE_VER=24"
+    set "DOWNLOAD_TARGET=VM"
     goto :NET_PROXY_CHECK
 )
 if "%OS_CHOICE%"=="5" goto :MAIN_MENU
@@ -142,7 +190,7 @@ goto :CHOOSE_DOWNLOAD_VERSION
 
 
 :: =======================================================================
-:: 🚀 PROXY-ABFRAGE (Spezifisch für Bosch und Partner)
+:: 🚀 PROXY-ABFRAGE (Dynamisch aufgerufen vor Downloads)
 :: =======================================================================
 :NET_PROXY_CHECK
 cls
@@ -179,7 +227,7 @@ echo.
 echo %YELLOW%Druecken Sie Enter, wenn Sie das Bosch-Tool gestartet haben...%RESET%
 pause >nul
 echo [Proxy] Starte mit Proxy %PROXY_URL% >> "install_debug.log" 2>&1
-goto :DOWNLOAD_VM
+goto :ROUTE_DOWNLOAD
 
 :EXT_PROXY
 set USE_PROXY=true
@@ -192,16 +240,78 @@ if not exist "proxy.env" (
 )
 for /f "delims=" %%a in (proxy.env) do set %%a
 set PROXY_URL=%CUSTOMER_PROXY_URL%
-goto :DOWNLOAD_VM
+goto :ROUTE_DOWNLOAD
 
 :NO_PROXY
 echo.
 echo - %GREEN%Direkte Internetverbindung%RESET% aktiv.
-goto :DOWNLOAD_VM
+goto :ROUTE_DOWNLOAD
+
+:ROUTE_DOWNLOAD
+if "%DOWNLOAD_TARGET%"=="QEMU" goto :DOWNLOAD_QEMU_INST
+if "%DOWNLOAD_TARGET%"=="VM" goto :DOWNLOAD_VM
+goto :MAIN_MENU
 
 
 :: =======================================================================
-:: 🚀 DOWNLOAD & SSH CONFIGURATION
+:: 📦 AUTOMATISIERTER QEMU DOWNLOAD & SILENT SETUP
+:: =======================================================================
+:DOWNLOAD_QEMU_INST
+cls
+echo %BLUE%=======================================================================%RESET%
+echo %GREEN%               DOWNLOADE UND INSTALLIERE LOKALES QEMU%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+:: Stabiles QEMU Windows 64-Bit Release von weilnetz.de
+set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
+set "QEMU_TEMP_FILE=.\qemu_temp_setup.exe"
+
+echo %BLUE%[Download]%RESET% Lade das offizielle QEMU Windows-Paket herunter...
+echo %YELLOW%(Dauer: ca. 1-2 Minuten - Der Ladebalken zeigt den Fortschritt)%RESET%
+echo URL: %QEMU_INSTALLER_URL%
+echo.
+
+if "%USE_PROXY%"=="true" (
+    curl.exe -k -x %PROXY_URL% -L -# -o "%QEMU_TEMP_FILE%" "%QEMU_INSTALLER_URL%"
+) else (
+    curl.exe -k -L -# -o "%QEMU_TEMP_FILE%" "%QEMU_INSTALLER_URL%"
+)
+
+if not exist "%QEMU_TEMP_FILE%" (
+    echo.
+    echo %RED%[ERROR] Download fehlgeschlagen! Bitte Netzwerk- und Proxy-Einstellungen prüfen.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+
+echo.
+echo %BLUE%[Installation]%RESET% Installiere QEMU vollkommen unsichtbar im Projektordner '.\qemu\'...
+echo Bitte warten, dies dauert einen kurzen Moment...
+
+:: Echte, 100% geräuschlose Hintergrundinstallation ohne GUI und ohne Prompts
+start /wait "" "%QEMU_TEMP_FILE%" /SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /DIR="%PROJEKT_PFAD%qemu" /LANG=en
+
+:: Aufräumen des heruntergeladenen Installers
+del "%QEMU_TEMP_FILE%" >nul 2>&1
+
+if exist ".\qemu\qemu-system-x86_64.exe" (
+    set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
+    set "QEMU_SOURCE=Lokal im Projekt (Isoliert & Autark)"
+    echo.
+    echo %GREEN%✔ Lokales QEMU erfolgreich eingerichtet!%RESET%
+    pause
+    goto :MAIN_MENU
+) else (
+    echo.
+    echo %RED%[ERROR] Die Installation scheint fehlgeschlagen zu sein.%RESET%
+    echo 'qemu-system-x86_64.exe' wurde nicht im Ordner '.\qemu\' gefunden.
+    pause
+    exit
+)
+
+
+:: =======================================================================
+:: 🚀 DOWNLOAD & SSH CONFIGURATION (VMs)
 :: =======================================================================
 :DOWNLOAD_VM
 cls
@@ -261,7 +371,7 @@ if %errorLevel% neq 0 (
 copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul 2>&1
 
 :: =======================================================================
-:: 🚀 SCHRITT 5: ERZEUGE DIE CLOUD-INIT CONFIGURATION (CIDATA)
+:: 🚀 CLOUD-INIT CONFIGURATION (CIDATA)
 :: =======================================================================
 echo %BLUE%[Cloud-Init]%RESET% Erzeuge Konfigurationsdateien im CIDATA-Ordner...
 if not exist ".\instances\cidata" mkdir ".\instances\cidata" >nul 2>&1
@@ -311,6 +421,7 @@ echo %BLUE%=====================================================================
 echo %GREEN%                  STARTE ctrlX SDK BUILD-ENVIRONMENT (Core %CORE_VER%)%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo.
+echo Aktiver QEMU-Pfad: %YELLOW%%QEMU_EXE%%RESET%
 echo Port 11022 auf dem Windows-Host leitet auf die VM um.
 echo.
 echo * SSH-Verbindung via VS Code Remote-SSH: %YELLOW%ctrlx-sdk-vm%RESET%
@@ -321,8 +432,8 @@ echo.
 :: Loesche alte Logdateien, falls vorhanden
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
-:: Startet die VM im interaktiven Modus mit angehängtem virtuellen CIDATA-Laufwerk
-"C:\Program Files\Rexroth\ctrlX WORKS\qemu\qemu-system-x86_64.exe" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive driver=vvfat,dir=%PROJEKT_PFAD%instances\cidata,label=CIDATA,read-only=on -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
+:: Startet die VM im interaktiven Modus mit robuster vvfat-Einbindung über das klassische fat:-Protokoll
+"%QEMU_EXE%" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive file=fat:ro:%PROJEKT_PFAD%instances\cidata,label=CIDATA -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
 
 :: Falls QEMU mit einem Fehler beendet wurde, oeffne das Log im Windows-Editor
 if exist qemu_error.log (
