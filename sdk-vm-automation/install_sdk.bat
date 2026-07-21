@@ -278,7 +278,7 @@ echo %GREEN%               DOWNLOADE UND INSTALLIERE LOKALES QEMU%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 :: Stabiles QEMU Windows 64-Bit Release von weilnetz.de
-set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
+set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20240423.exe"
 set "QEMU_TEMP_FILE=.\qemu_temp_setup.exe"
 
 echo %BLUE%[Download]%RESET% Lade das offizielle QEMU Windows-Paket herunter...
@@ -416,26 +416,40 @@ echo   expire: False>> ".\instances\cidata\user-data"
 echo ssh_pwauth: True>> ".\instances\cidata\user-data"
 echo disable_root: False>> ".\instances\cidata\user-data"
 
+:: === THE FIX: Create network-config file ===
+echo version: 2 > ".\instances\cidata\network-config"
+echo ethernets: >> ".\instances\cidata\network-config"
+echo   ens3: >> ".\instances\cidata\network-config"
+echo     dhcp4: true >> ".\instances\cidata\network-config"
+
+
 :GENERATE_ISO
 echo %BLUE%[ISO]%RESET% Generiere echte NoCloud-Konfigurations-ISO (seed.iso)...
-:: Dynamischer PowerShell-Brenner (Nutzt Windows-Schnittstelle IMAPI2)
 set "psScript=%PROJEKT_PFAD%instances\make_iso.ps1"
 if exist "%psScript%" del "%psScript%" >nul 2>&1
 
-(
-    echo Set-Location -Path "$PSScriptRoot\cidata"
-    echo $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
-    echo $fsi.FileSystemsToCreate = 1
-    echo $fsi.VolumeName = "cidata"
-    echo $fsi.Root.AddTree(".", $false)
-    echo $result = $fsi.CreateResultImage()
-    echo $stream = $result.ImageStream
-    echo Add-Type -TypeDefinition 'using System; using System.IO; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes; public static class IsoWriter { public static void Save(object comObj, string path) { IStream stream = comObj as IStream; using (FileStream fs = File.OpenWrite(path)) { byte[] buf = new byte[2048]; int read; IntPtr readPtr = Marshal.AllocHGlobal(sizeof(int)); try { do { stream.Read(buf, 2048, readPtr); read = Marshal.ReadInt32(readPtr); fs.Write(buf, 0, read); } while (read != 0); } finally { Marshal.FreeHGlobal(readPtr); } } } }'
-    echo [IsoWriter]::Save($stream, "$PSScriptRoot\seed.iso")
-) > "%psScript%"
+:: Zeilenweises Schreiben OHNE umschließende Batch-Klammern
+echo Set-Location -Path "$PSScriptRoot\cidata" > "%psScript%"
+echo $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage >> "%psScript%"
+echo $fsi.FileSystemsToCreate = 1 >> "%psScript%"
+echo $fsi.VolumeName = "cidata" >> "%psScript%"
+echo $fsi.Root.AddTree^(".", $false^) >> "%psScript%"
+echo $result = $fsi.CreateResultImage^(^) >> "%psScript%"
+echo $stream = $result.ImageStream >> "%psScript%"
+echo Add-Type -TypeDefinition 'using System; using System.IO; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes; public static class IsoWriter { public static void Save^(object comObj, string path^) { IStream stream = comObj as IStream; using ^(FileStream fs = File.OpenWrite^(path^)^) { byte[] buf = new byte[2048]; int read; IntPtr readPtr = Marshal.AllocHGlobal^(sizeof^(int^)^); try { do { stream.Read^(buf, 2048, readPtr^); read = Marshal.ReadInt32^(readPtr^); fs.Write^(buf, 0, read^); } while ^(read != 0^); } finally { Marshal.FreeHGlobal^(readPtr^); } } } }' >> "%psScript%"
+echo [IsoWriter]::Save^($stream, "$PSScriptRoot\seed.iso"^) >> "%psScript%"
 
 start /wait powershell -NoProfile -ExecutionPolicy Bypass -File "%psScript%"
 del "%psScript%" >nul 2>&1
+
+:: Überprüfe, ob die ISO-Datei erfolgreich erstellt wurde
+for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
+    if %%~zF LSS 1 (
+        echo %RED%[FEHLER] Die ISO-Erstellung ist fehlgeschlagen. 'seed.iso' ist leer oder nicht vorhanden.%RESET%
+        pause
+        goto :MAIN_MENU
+    )
+)
 
 echo.
 echo %GREEN%=======================================================================%RESET%
@@ -479,8 +493,9 @@ goto :MAIN_MENU
 :: Loesche alte Logdateien, falls vorhanden
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
-:: Startet die VM mit der neu generierten, standardkonformen ISO-Datei und OHNE Floppy
-"%QEMU_EXE%" -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -nodefaults -drive if=none,id=drive-fdc0-0,format=raw 2> qemu_error.log
+:: === DIE MODERNE Q35 LÖSUNG ===
+:: Das Q35 Mainboard hat keinen Floppy-Controller mehr, was das /dev/fd0 Problem löst.
+"%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
 
 :: Fehlerbehandlung ohne Klammer-Verschachtelung
 if not exist "%PROJEKT_PFAD%qemu_error.log" goto :POST_RUN
