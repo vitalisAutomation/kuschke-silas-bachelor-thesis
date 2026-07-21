@@ -23,7 +23,7 @@ if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 net session >nul 2>&1
 if %errorLevel% neq 0 (
     echo %YELLOW%[Check] Benoetige Administratorrechte...%RESET%
-    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d %~dp0 && %~f0' -Verb RunAs"
+    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d ""%~dp0"" && ""%~f0""' -Verb RunAs"
     exit
 )
 
@@ -44,7 +44,7 @@ cls
 echo %BLUE%=======================================================================%RESET%
 echo %YELLOW%               LOKALES QEMU INITIALISIEREN (Portabilität)%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 echo %YELLOW%👉 HINWEIS ZUM INSTALLATIONS-PROZESS & PROJEKT-ISOLATION:%RESET%
 echo Dieses Skript kann zwar global installierte QEMU-Instanzen auf Ihrem PC
 echo finden (z. B. von einer bestehenden ctrlX WORKS Installation).
@@ -87,7 +87,7 @@ cls
 echo %BLUE%=======================================================================%RESET%
 echo      ctrlX OS SDK App Build-Environment Console %GREEN%(Consolidated Setup)%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 echo Dieses Setup verwaltet und startet Ihre ctrlX App Build-VMs direkt.
 echo.
 echo %BLUE%[STATUS] Vorhandene VMs im Verzeichnis 'instances':%RESET%
@@ -98,17 +98,17 @@ if exist ".\instances\ubuntu-build-env-core24.qcow2" set VM24_STATUS=%GREEN%Vorh
 
 echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) -> %VM22_STATUS%
 echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       -> %VM24_STATUS%
-echo.
+echo(
 echo %BLUE%[QEMU-Laufzeitumgebung]%RESET%
 echo   - Modus: %GREEN%%QEMU_SOURCE%%RESET%
 echo   - Pfad:  %YELLOW%%QEMU_EXE%%RESET%
-echo.
+echo(
 echo %BLUE%=======================================================================%RESET%
 echo Bitte waehlen Sie eine Aktion:
 echo 1) Vorhandene VM starten
 echo 2) Neue VM herunterladen und einrichten (ctrlX OS Version waehlen)
 echo 3) Beenden
-echo.
+echo(
 set /p MAIN_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
 
 if "%MAIN_CHOICE%"=="1" goto :CHOOSE_START_VM
@@ -125,12 +125,12 @@ cls
 echo %BLUE%=======================================================================%RESET%
 echo %GREEN%                    VORHANDENE VM STARTEN%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 echo Welche VM möchten Sie starten?
 echo 1) Ubuntu Core 22 (für ctrlX OS 1.x / 2.x / 3.x) [%VM22_STATUS%]
 echo 2) Ubuntu Core 24 (für ctrlX OS 4.x)             [%VM24_STATUS%]
 echo 3) Zurück zum Hauptmenü
-echo.
+echo(
 set /p START_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
 
 if "%START_CHOICE%"=="1" goto :PREPARE_START_VM22
@@ -167,7 +167,7 @@ cls
 echo %BLUE%=======================================================================%RESET%
 echo %GREEN%               NEUE VM DOWNLOADEN UND EINRICHTEN%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 echo Bitte waehlen Sie die gewuenschte ctrlX OS Zielversion aus:
 echo.
 echo 1) ctrlX OS 1.xx %YELLOW%(Nutzt standardmaeßig Core 20; nutzt Core 22 als Fallback)%RESET%
@@ -175,7 +175,7 @@ echo 2) ctrlX OS 2.xx %GREEN%(Basiert auf Ubuntu Core 22)%RESET%
 echo 3) ctrlX OS 3.xx %GREEN%(Basiert auf Ubuntu Core 22)%RESET%
 echo 4) ctrlX OS 4.xx %GREEN%(Basiert auf Ubuntu Core 24)%RESET%
 echo 5) Zurück zum Hauptmenü
-echo.
+echo(
 set /p OS_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2, 3, 4 oder 5): %RESET%"
 
 if "%OS_CHOICE%"=="1" (
@@ -212,13 +212,13 @@ cls
 echo %BLUE%=======================================================================%RESET%
 echo %GREEN%                 NETZWERK- und PROXY-ABFRAGE%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 echo [Netzwerk] %YELLOW%Bestimme Arbeitsumgebung...%RESET%
 echo Bitte waehlen Sie Ihre Arbeitsumgebung aus:
 echo 1) Ich bin Bosch-Mitarbeiter %BLUE%(RB Local Proxy Manager)%RESET%
 echo 2) Ich bin ein partner MIT einem %BLUE%Firmen-Proxy%RESET%
 echo 3) Ich bin ein partner %BLUE%OHNE Proxy (Direkt)%RESET%
-echo.
+echo(
 set /p NET_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
 
 set USE_PROXY=false
@@ -276,7 +276,7 @@ cls
 echo %BLUE%=======================================================================%RESET%
 echo %GREEN%               DOWNLOADE UND INSTALLIERE LOKALES QEMU%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 :: Stabiles QEMU Windows 64-Bit Release von weilnetz.de
 set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
 set "QEMU_TEMP_FILE=.\qemu_temp_setup.exe"
@@ -284,7 +284,7 @@ set "QEMU_TEMP_FILE=.\qemu_temp_setup.exe"
 echo %BLUE%[Download]%RESET% Lade das offizielle QEMU Windows-Paket herunter...
 echo %YELLOW%(Dauer: ca. 1-2 Minuten - Der Ladebalken zeigt den Fortschritt)%RESET%
 echo URL: %QEMU_INSTALLER_URL%
-echo.
+echo(
 
 if "%USE_PROXY%"=="true" (
     curl.exe -k -x %PROXY_URL% -L -# -o "%QEMU_TEMP_FILE%" "%QEMU_INSTALLER_URL%"
@@ -333,7 +333,7 @@ cls
 echo %BLUE%=======================================================================%RESET%
 echo %GREEN%                      DOWNLOAD DER SDK BUILD-VM%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 
 if not exist ".\instances" mkdir ".\instances" >nul 2>&1
 
@@ -349,7 +349,7 @@ if "%CORE_VER%"=="22" (
 echo %BLUE%[Download]%RESET% Lade die originale Bosch-Rexroth App Build-VM frisch herunter (Core %CORE_VER%)...
 echo %YELLOW%(Dauer: ca. 2-3 Minuten - Der Ladebalken zeigt den Fortschritt)%RESET%
 echo URL: %DOWNLOAD_URL%
-echo.
+echo(
 
 if "%USE_PROXY%"=="true" (
     curl.exe -k -x %PROXY_URL% -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
@@ -386,7 +386,7 @@ if %errorLevel% neq 0 (
 copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul 2>&1
 
 :: =======================================================================
-:: 🚀 CLOUD-INIT CONFIGURATION (CIDATA)
+:: 🚀 CLOUD-INIT CONFIGURATION & NATIVE ISO GENERATION (CIDATA)
 :: =======================================================================
 echo %BLUE%[Cloud-Init]%RESET% Erzeuge Konfigurationsdateien im CIDATA-Ordner...
 if not exist ".\instances\cidata" mkdir ".\instances\cidata" >nul 2>&1
@@ -416,6 +416,27 @@ echo   expire: False>> ".\instances\cidata\user-data"
 echo ssh_pwauth: True>> ".\instances\cidata\user-data"
 echo disable_root: False>> ".\instances\cidata\user-data"
 
+:GENERATE_ISO
+echo %BLUE%[ISO]%RESET% Generiere echte NoCloud-Konfigurations-ISO (seed.iso)...
+:: Dynamischer PowerShell-Brenner (Nutzt Windows-Schnittstelle IMAPI2)
+set "psScript=%PROJEKT_PFAD%instances\make_iso.ps1"
+if exist "%psScript%" del "%psScript%" >nul 2>&1
+
+(
+    echo Set-Location -Path "$PSScriptRoot\cidata"
+    echo $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
+    echo $fsi.FileSystemsToCreate = 1
+    echo $fsi.VolumeName = "cidata"
+    echo $fsi.Root.AddTree(".", $false)
+    echo $result = $fsi.CreateResultImage()
+    echo $stream = $result.ImageStream
+    echo Add-Type -TypeDefinition 'using System; using System.IO; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes; public static class IsoWriter { public static void Save(object comObj, string path) { IStream stream = comObj as IStream; using (FileStream fs = File.OpenWrite(path)) { byte[] buf = new byte[2048]; int read; IntPtr readPtr = Marshal.AllocHGlobal(sizeof(int)); try { do { stream.Read(buf, 2048, readPtr); read = Marshal.ReadInt32(readPtr); fs.Write(buf, 0, read); } while (read != 0); } finally { Marshal.FreeHGlobal(readPtr); } } } }'
+    echo [IsoWriter]::Save($stream, "$PSScriptRoot\seed.iso")
+) > "%psScript%"
+
+start /wait powershell -NoProfile -ExecutionPolicy Bypass -File "%psScript%"
+del "%psScript%" >nul 2>&1
+
 echo.
 echo %GREEN%=======================================================================%RESET%
 echo ✔ %GREEN%Setup erfolgreich abgeschlossen!%RESET%
@@ -428,40 +449,50 @@ goto :START_QEMU_VM
 
 
 :: =======================================================================
-:: 🚀 VM INTERN STARTEN (Direkte QEMU-Integration)
+:: 🚀 VM INTERN STARTEN (Direkte QEMU-Integration - Robust & Flat)
 :: =======================================================================
 :START_QEMU_VM
 cls
 echo %BLUE%=======================================================================%RESET%
 echo %GREEN%                  STARTE ctrlX SDK BUILD-ENVIRONMENT (Core %CORE_VER%)%RESET%
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 echo Aktiver QEMU-Pfad: %YELLOW%%QEMU_EXE%%RESET%
 echo Port 11022 auf dem Windows-Host leitet auf die VM um.
 echo.
 echo * SSH-Verbindung via VS Code Remote-SSH: %YELLOW%ctrlx-sdk-vm%RESET%
 echo * Manuelles Beenden der VM: In der VM %YELLOW%sudo shutdown -h now%RESET% eingeben.
 echo %BLUE%=======================================================================%RESET%
-echo.
+echo(
 
+:: Sicherheits-Check: Falls die seed.iso fehlt, springe zur Erstellung
+if exist "%PROJEKT_PFAD%instances\seed.iso" goto :START_QEMU_NOW
+if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
+    echo %YELLOW%[Sicherheit] seed.iso fehlt. Generiere neu...%RESET%
+    goto :GENERATE_ISO
+)
+echo %RED%[ERROR] Die Cloud-Init Konfiguration fehlt! Bitte VM neu downloaden (Option 2).%RESET%
+pause
+goto :MAIN_MENU
+
+:START_QEMU_NOW
 :: Loesche alte Logdateien, falls vorhanden
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
-:: Startet die VM mit der korrekten, geschachtelten 'file.driver' Syntax für Virtual-FAT (CIDATA)
-:: Wir nutzen media=cdrom um den "Block node is read-only" Fehler bei schreibgeschützten Laufwerken zu verhindern!
-"%QEMU_EXE%" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive file.driver=vvfat,file.dir=%PROJEKT_PFAD%instances\cidata,file.label=CIDATA,format=raw,media=cdrom -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
+:: Startet die VM mit der neu generierten, standardkonformen ISO-Datei und OHNE Floppy
+"%QEMU_EXE%" -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -nodefaults -drive if=none,id=drive-fdc0-0,format=raw 2> qemu_error.log
 
-:: Falls QEMU mit einem Fehler beendet wurde, oeffne das Log im Windows-Editor
-if exist qemu_error.log (
-    findstr /r "[a-zA-Z0-9]" qemu_error.log >nul 2>&1
-    if errorlevel 0 (
-        echo.
-        echo %RED%[WARNUNG] QEMU wurde unerwartet beendet! Oeffne Fehlerprotokoll...%RESET%
-        notepad.exe qemu_error.log
-    )
-)
+:: Fehlerbehandlung ohne Klammer-Verschachtelung
+if not exist "%PROJEKT_PFAD%qemu_error.log" goto :POST_RUN
+findstr /r "[a-zA-Z0-9]" "%PROJEKT_PFAD%qemu_error.log" >nul 2>&1
+if %errorLevel% neq 0 goto :POST_RUN
 
-echo.
+echo(
+echo %RED%[WARNUNG] QEMU wurde unerwartet beendet! Oeffne Fehlerprotokoll...%RESET%
+notepad.exe "%PROJEKT_PFAD%qemu_error.log"
+
+:POST_RUN
+echo(
 echo %YELLOW%Zurueck zum Hauptmenue...%RESET%
 pause
 goto :MAIN_MENU
