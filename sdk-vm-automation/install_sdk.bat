@@ -442,9 +442,10 @@ if "%USE_PROXY%"=="true" (
 echo %BLUE%[ISO]%RESET% Generiere echte NoCloud-Konfigurations-ISO (seed.iso)...
 if exist ".\instances\seed.iso" del ".\instances\seed.iso" >nul 2>&1
 
-:: ECHTE, ABSOLUT FEHLERFREIE ISO-ERSTELLUNG REIN ÜBER CMD (Kein PowerShell, keine COM-Fehler!)
-:: -J (Joliet) und -r (Rock Ridge) erzwingen die Beibehaltung von Kleinbuchstaben ("user-data", "meta-data")!
-".\instances\mkisofs.exe" -o ".\instances\seed.iso" -ignore-error -ldots -allow-lowercase -allow-multidot -l -quiet -J -r -V "CIDATA" ".\instances\cidata"
+:: ECHTE, ABSOLUT FEHLERFREIE ISO-ERSTELLUNG REIN ÜBER CMD (Beide Warnungen behoben!)
+:: -J (Joliet) und -r (Rock Ridge) garantieren perfekte Kleinbuchstaben.
+:: Ohne das legacy "-quiet" Flag gibt uns das Tool ein detailliertes Feedback der gepackten Dateien!
+".\instances\mkisofs.exe" -o ".\instances\seed.iso" -J -r -V "CIDATA" ".\instances\cidata"
 
 :: Überprüfe, ob die ISO-Datei erfolgreich erstellt wurde
 for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
@@ -499,7 +500,6 @@ goto :MAIN_MENU
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
 :: === DIE MODERNE Q35 LÖSUNG mit gezieltem ds=nocloud SMBIOS Parameter ===
-:: Wir weisen cloud-init explizit an, die nocloud-Schnittstelle im lokalen Modus zu nutzen!
 "%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial="ds=nocloud" 2> qemu_error.log
 
 :: Fehlerbehandlung ohne Klammer-Verschachtelung
