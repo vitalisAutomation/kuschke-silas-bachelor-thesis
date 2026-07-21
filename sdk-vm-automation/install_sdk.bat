@@ -28,7 +28,7 @@ if %errorLevel% neq 0 (
 )
 
 :: =======================================================================
-:: 🔍 SCHRITT 2: AUTO-DETEKTION LOKALES QEMU
+:: 🔍 SCHRITT 2: AUTO-DETEKTION LOKALES QEMU & CLI-HINWEIS
 :: =======================================================================
 set "QEMU_EXE="
 set "QEMU_SOURCE="
@@ -45,13 +45,24 @@ echo %BLUE%=====================================================================
 echo %YELLOW%               LOKALES QEMU INITIALISIEREN (Portabilität)%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo.
-echo Es wurde keine lokale QEMU-Installation im Projektordner gefunden.
-echo Um 100%% Unabhaengigkeit von ctrlX WORKS zu gewaehrleisten, kann dieses Setup
-echo das offizielle QEMU-Paket herunterladen und vollautomatisch im Projekt installieren.
+echo %YELLOW%👉 WICHTIGER HINWEIS ZUR PROJEKT-ISOLATION:%RESET%
+echo Dieses Skript kann zwar global installierte QEMU-Instanzen auf Ihrem PC
+echo finden (z. B. von einer bestehenden ctrlX WORKS Installation).
+echo.
+echo %GREEN%Es wird jedoch DRINGEND EMPFOHLEN, QEMU direkt LOKAL in diesem Projekt%RESET%
+echo %GREEN%zu installieren (Option 1).%RESET%
+echo.
+echo %BLUE%Warum?%RESET%
+echo   1. %GREEN%100%% Unabhängigkeit:%RESET% ctrlX WORKS kann deinstalliert, geupdatet oder
+echo      beschädigt werden - Ihr Projekt läuft unberührt und autark weiter.
+echo   2. %GREEN%Portabilität:%RESET% Sie können den gesamten Projektordner auf eine externe
+echo      Festplatte oder einen anderen PC kopieren und sofort loslegen.
+echo   3. %GREEN%Keine Versionskonflikte:%RESET% Keine unerwarteten Fehler durch abweichende
+echo      globale QEMU-Versionen auf Ihrem Host-System.
 echo.
 echo Das Setup benoetigt hierzu ca. 180 MB Downloadvolumen.
 echo.
-echo 1) QEMU jetzt vollautomatisch im Hintergrund installieren (Empfohlen)
+echo 1) QEMU jetzt lokal im Projektordner einrichten (Empfohlen)
 echo 2) Abbrechen und beenden
 echo.
 set /p QEMU_CHOICE="%YELLOW%Waehlen Sie eine Option (1 oder 2): %RESET%"
@@ -285,7 +296,7 @@ if not exist "%QEMU_TEMP_FILE%" (
 )
 
 echo.
-echo %BLUE%[Installation]%RESET% Installiere QEMU vollkommen unsichtbar im Projektordner '.\qemu\'...
+echo %BLUE%[Installation]%RESET% Installiere QEMU im Projektordner '.\qemu\'...
 echo Bitte warten, dies dauert einen kurzen Moment...
 
 :: Echte, 100% geräuschlose Hintergrundinstallation ohne GUI und ohne Prompts
@@ -432,8 +443,9 @@ echo.
 :: Loesche alte Logdateien, falls vorhanden
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
-:: Startet die VM im interaktiven Modus mit robuster vvfat-Einbindung über das klassische fat:-Protokoll
-"%QEMU_EXE%" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive file=fat:ro:%PROJEKT_PFAD%instances\cidata,label=CIDATA -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
+:: Startet die VM mit der korrekten, geschachtelten 'file.driver' Syntax für Virtual-FAT (CIDATA)
+:: Das verhindert sowohl die "Probe Warning" als auch den "Block format raw does not support label" Fehler.
+"%QEMU_EXE%" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive file.driver=vvfat,file.dir=%PROJEKT_PFAD%instances\cidata,file.label=CIDATA,format=raw,readonly=on -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
 
 :: Falls QEMU mit einem Fehler beendet wurde, oeffne das Log im Windows-Editor
 if exist qemu_error.log (
