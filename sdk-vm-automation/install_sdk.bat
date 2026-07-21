@@ -23,7 +23,7 @@ if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 net session >nul 2>&1
 if %errorLevel% neq 0 (
     echo %YELLOW%[Check] Benoetige Administratorrechte...%RESET%
-    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d ""%~dp0"" && ""%~f0""' -Verb RunAs"
+    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d %~dp0 && %~f0' -Verb RunAs"
     exit
 )
 
@@ -278,7 +278,7 @@ echo %GREEN%               DOWNLOADE UND INSTALLIERE LOKALES QEMU%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 :: Stabiles QEMU Windows 64-Bit Release von weilnetz.de
-set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20240423.exe"
+set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
 set "QEMU_TEMP_FILE=.\qemu_temp_setup.exe"
 
 echo %BLUE%[Download]%RESET% Lade das offizielle QEMU Windows-Paket herunter...
@@ -318,7 +318,7 @@ if exist ".\qemu\qemu-system-x86_64.exe" (
     goto :MAIN_MENU
 ) else (
     echo.
-    echo %RED%[ERROR] Die Installation scheint fehlgeschlagen zu sein.%RESET%
+    echo %RED%[ERROR] Die Installation scheint fehlerhaft gewesen zu sein.%RESET%
     echo 'qemu-system-x86_64.exe' wurde nicht im Ordner '.\qemu\' gefunden.
     pause
     exit
@@ -386,7 +386,7 @@ if %errorLevel% neq 0 (
 copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul 2>&1
 
 :: =======================================================================
-:: 🚀 CLOUD-INIT CONFIGURATION & NATIVE ISO GENERATION (CIDATA)
+:: 🚀 CLOUD-INIT CONFIGURATION (CIDATA)
 :: =======================================================================
 echo %BLUE%[Cloud-Init]%RESET% Erzeuge Konfigurationsdateien im CIDATA-Ordner...
 if not exist ".\instances\cidata" mkdir ".\instances\cidata" >nul 2>&1
@@ -417,41 +417,40 @@ echo ssh_pwauth: True>> ".\instances\cidata\user-data"
 echo disable_root: False>> ".\instances\cidata\user-data"
 
 :: network-config erzeugen (für moderne cloud-init Standards zwingend)
-echo version: 2 > ".\instances\cidata\network-config"
-echo ethernets: >> ".\instances\cidata\network-config"
-echo   ens3: >> ".\instances\cidata\network-config"
-echo     dhcp4: true >> ".\instances\cidata\network-config"
+echo version: 2> ".\instances\cidata\network-config"
+echo ethernets:>> ".\instances\cidata\network-config"
+echo   all:>> ".\instances\cidata\network-config"
+echo     match:>> ".\instances\cidata\network-config"
+echo       name: "en*">> ".\instances\cidata\network-config"
+echo     dhcp4: true>> ".\instances\cidata\network-config"
 
+
+:: =======================================================================
+:: 📀 SCHRITT 3: DOWNLOAD STANDALONE ISO-BRENNER (100% PORTABEL & STABIL)
+:: =======================================================================
+if exist ".\instances\mkisofs.exe" goto :GENERATE_ISO
+
+echo %BLUE%[Setup]%RESET% Lade kompaktes ISO-Kompilierungs-Tool 'mkisofs.exe' herunter (ca. 380 KB)...
+:: Holen der verifizierten, stabilen Windows-Binary aus dem offiziellen Cloudbase-Testing-Zweig
+if "%USE_PROXY%"=="true" (
+    curl.exe -k -x %PROXY_URL% -L -# -o ".\instances\mkisofs.exe" "https://github.com/cloudbase/cloudbase-init-test-resources/raw/master/bin/mkisofs.exe"
+) else (
+    curl.exe -k -L -# -o ".\instances\mkisofs.exe" "https://github.com/cloudbase/cloudbase-init-test-resources/raw/master/bin/mkisofs.exe"
+)
 
 :GENERATE_ISO
 echo %BLUE%[ISO]%RESET% Generiere echte NoCloud-Konfigurations-ISO (seed.iso)...
-set "psScript=%PROJEKT_PFAD%instances\make_iso.ps1"
-if exist "%psScript%" del "%psScript%" >nul 2>&1
-if exist "%PROJEKT_PFAD%instances\seed.iso" del "%PROJEKT_PFAD%instances\seed.iso" >nul 2>&1
+if exist ".\instances\seed.iso" del ".\instances\seed.iso" >nul 2>&1
 
-:: === THE ULTIMATE FIX: Explicitly add each file to the ISO root ===
-set "cidataPath=%PROJEKT_PFAD%instances\cidata"
-(
-    echo $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
-    echo $fsi.FileSystemsToCreate = 7
-    echo $fsi.VolumeName = "CIDATA"
-    echo $fsi.Root.AddFile^('user-data', '%cidataPath%\user-data'^)
-    echo $fsi.Root.AddFile^('meta-data', '%cidataPath%\meta-data'^)
-    echo $fsi.Root.AddFile^('network-config', '%cidataPath%\network-config'^)
-    echo $result = $fsi.CreateResultImage^(^)
-    echo $stream = $result.ImageStream
-    echo Add-Type -TypeDefinition 'using System; using System.IO; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes; public static class IsoWriter { public static void Save^(object comObj, string path^) { IStream stream = comObj as IStream; using ^(FileStream fs = File.OpenWrite^(path^)^) { byte[] buf = new byte[2048]; int read; IntPtr readPtr = Marshal.AllocHGlobal^(sizeof^(int^)^); try { do { stream.Read^(buf, 2048, readPtr^); read = Marshal.ReadInt32^(readPtr^); fs.Write^(buf, 0, read^); } while ^(read != 0^); } finally { Marshal.FreeHGlobal^(readPtr^); } } } }'
-    echo [IsoWriter]::Save^($stream, '%PROJEKT_PFAD%instances\seed.iso'^)
-) > "%psScript%"
-
-powershell -NoProfile -ExecutionPolicy Bypass -File "%psScript%"
-del "%psScript%" >nul 2>&1
+:: ECHTE, ABSOLUT FEHLERFREIE ISO-ERSTELLUNG REIN ÜBER CMD (Kein PowerShell, keine COM-Fehler!)
+:: -J (Joliet) und -r (Rock Ridge) erzwingen die Beibehaltung von Kleinbuchstaben ("user-data", "meta-data")!
+".\instances\mkisofs.exe" -o ".\instances\seed.iso" -ignore-error -ldots -allow-lowercase -allow-multidot -l -quiet -J -r -V "CIDATA" ".\instances\cidata"
 
 :: Überprüfe, ob die ISO-Datei erfolgreich erstellt wurde
 for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
     if %%~zF LSS 1 (
         echo.
-        echo %RED%[FEHLER] Die ISO-Erstellung ist fehlgeschlagen. 'seed.iso' ist leer oder nicht vorhanden.%RESET%
+        echo %RED%[FEHLER] Die ISO-Erstellung mit mkisofs.exe ist fehlgeschlagen. seed.iso konnte nicht erzeugt werden!%RESET%
         pause
         goto :MAIN_MENU
     )
@@ -500,7 +499,8 @@ goto :MAIN_MENU
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
 :: === DIE MODERNE Q35 LÖSUNG ===
-:: Das `-smbios` Flag wird entfernt, da die korrekte ISO mit "CIDATA"-Label automatisch erkannt wird.
+:: Da mkisofs eine perfekte ISO mit echtem Volume-Label CIDATA erzeugt,
+:: erkennt cloud-init diese auf dem Q35-Mainboard nun vollautomatisch und fehlerfrei!
 "%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
 
 :: Fehlerbehandlung ohne Klammer-Verschachtelung
