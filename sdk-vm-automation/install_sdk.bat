@@ -45,7 +45,7 @@ echo %BLUE%=====================================================================
 echo %YELLOW%               LOKALES QEMU INITIALISIEREN (Portabilität)%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo.
-echo %YELLOW%👉 WICHTIGER HINWEIS ZUR PROJEKT-ISOLATION:%RESET%
+echo %YELLOW%👉 HINWEIS ZUM INSTALLATIONS-PROZESS & PROJEKT-ISOLATION:%RESET%
 echo Dieses Skript kann zwar global installierte QEMU-Instanzen auf Ihrem PC
 echo finden (z. B. von einer bestehenden ctrlX WORKS Installation).
 echo.
@@ -59,6 +59,10 @@ echo   2. %GREEN%Portabilität:%RESET% Sie können den gesamten Projektordner au
 echo      Festplatte oder einen anderen PC kopieren und sofort loslegen.
 echo   3. %GREEN%Keine Versionskonflikte:%RESET% Keine unerwarteten Fehler durch abweichende
 echo      globale QEMU-Versionen auf Ihrem Host-System.
+echo.
+echo %YELLOW%Hinweis zum Ablauf:%RESET% Der Download startet im CLI. Anschließend startet der
+echo offizielle QEMU-Installer. %YELLOW%Bitte installieren Sie QEMU einfach direkt in den%RESET%
+echo %YELLOW%vorausgewählten Projekt-Pfad (.\qemu\).%RESET% Es sind keine weiteren Klicks nötig!
 echo.
 echo Das Setup benoetigt hierzu ca. 180 MB Downloadvolumen.
 echo.
@@ -444,8 +448,8 @@ echo.
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
 :: Startet die VM mit der korrekten, geschachtelten 'file.driver' Syntax für Virtual-FAT (CIDATA)
-:: Das verhindert sowohl die "Probe Warning" als auch den "Block format raw does not support label" Fehler.
-"%QEMU_EXE%" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive file.driver=vvfat,file.dir=%PROJEKT_PFAD%instances\cidata,file.label=CIDATA,format=raw,readonly=on -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
+:: Wir nutzen media=cdrom um den "Block node is read-only" Fehler bei schreibgeschützten Laufwerken zu verhindern!
+"%QEMU_EXE%" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive file.driver=vvfat,file.dir=%PROJEKT_PFAD%instances\cidata,file.label=CIDATA,format=raw,media=cdrom -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
 
 :: Falls QEMU mit einem Fehler beendet wurde, oeffne das Log im Windows-Editor
 if exist qemu_error.log (
