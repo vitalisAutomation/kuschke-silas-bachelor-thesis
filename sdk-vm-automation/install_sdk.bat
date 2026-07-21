@@ -112,9 +112,9 @@ echo.
 echo Bitte waehlen Sie die gewuenschte ctrlX OS Zielversion aus:
 echo.
 echo 1) ctrlX OS 1.xx %YELLOW%(Nutzt standardmaeßig Core 20; nutzt Core 22 als Fallback)%RESET%
-echo 2) ctrlX OS 2.[...](asc_slot://start-slot-9)xx %GREEN%(Basiert auf Ubuntu Core 22)%RESET%
-echo 3) ctrlX OS 3.[...](asc_slot://start-slot-11)xx %GREEN%(Basiert auf Ubuntu Core 22)%RESET%
-echo 4) ctrlX OS 4.[...](asc_slot://start-slot-13)xx %GREEN%(Basiert auf Ubuntu Core 24)%RESET%
+echo 2) ctrlX OS 2.xx %GREEN%(Basiert auf Ubuntu Core 22)%RESET%
+echo 3) ctrlX OS 3.xx %GREEN%(Basiert auf Ubuntu Core 22)%RESET%
+echo 4) ctrlX OS 4.xx %GREEN%(Basiert auf Ubuntu Core 24)%RESET%
 echo 5) Zurück zum Hauptmenü
 echo.
 set /p OS_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2, 3, 4 oder 5): %RESET%"
@@ -261,21 +261,35 @@ if %errorLevel% neq 0 (
 copy /Y "%KEY_FILE%.pub" ".\id_rsa_ctrlx.pub" >nul 2>&1
 
 :: =======================================================================
-:: 🚀 SCHRITT 5: ERZEUGE DIE CLOUD-INIT CONFIGURATION
+:: 🚀 SCHRITT 5: ERZEUGE DIE CLOUD-INIT CONFIGURATION (CIDATA)
 :: =======================================================================
-echo %BLUE%[Cloud-Init]%RESET% Erzeuge Benutzer-Konfigurationsdatei...
-echo #cloud-config> ".\instances\user-data"
-echo users:>> ".\instances\user-data"
-echo   - name: boschrexroth>> ".\instances\user-data"
-echo     groups: sudo>> ".\instances\user-data"
-echo     shell: /bin/bash>> ".\instances\user-data"
-echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> ".\instances\user-data"
-echo     chpasswd: { expire: False }>> ".\instances\user-data"
-echo     passwd: $6$rounds=4096$safesalt$e.B8Lq4FjW8F8W8F8W8F8W8F8W8F8W8F8W8F8W8F8W8>> ".\instances\user-data"
-echo     ssh_authorized_keys:>> ".\instances\user-data"
-echo       - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ...>> ".\instances\user-data"
-echo ssh_pwauth: True>> ".\instances\user-data"
-echo disable_root: False>> ".\instances\user-data"
+echo %BLUE%[Cloud-Init]%RESET% Erzeuge Konfigurationsdateien im CIDATA-Ordner...
+if not exist ".\instances\cidata" mkdir ".\instances\cidata" >nul 2>&1
+
+:: meta-data muss existieren
+echo instance-id: ctrlx-build-env-vm > ".\instances\cidata\meta-data"
+echo local-hostname: ctrlx-sdk-vm >> ".\instances\cidata\meta-data"
+
+:: user-data mit sauberer Klartext-Passwort-Zuweisung und SSH-Injektion
+echo #cloud-config> ".\instances\cidata\user-data"
+echo users:>> ".\instances\cidata\user-data"
+echo   - name: boschrexroth>> ".\instances\cidata\user-data"
+echo     groups: sudo>> ".\instances\cidata\user-data"
+echo     shell: /bin/bash>> ".\instances\cidata\user-data"
+echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> ".\instances\cidata\user-data"
+echo     ssh_authorized_keys:>> ".\instances\cidata\user-data"
+
+:: Liest den lokal generierten Key dynamisch aus und schreibt ihn direkt in das Cloud-Init File
+for /f "usebackq delims=" %%i in (".\id_rsa_ctrlx.pub") do (
+    echo       - %%i>> ".\instances\cidata\user-data"
+)
+
+echo chpasswd:>> ".\instances\cidata\user-data"
+echo   list: ^|>> ".\instances\cidata\user-data"
+echo     boschrexroth:boschrexroth>> ".\instances\cidata\user-data"
+echo   expire: False>> ".\instances\cidata\user-data"
+echo ssh_pwauth: True>> ".\instances\cidata\user-data"
+echo disable_root: False>> ".\instances\cidata\user-data"
 
 echo.
 echo %GREEN%=======================================================================%RESET%
@@ -307,8 +321,8 @@ echo.
 :: Loesche alte Logdateien, falls vorhanden
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
-:: Startet die VM im interaktiven Modus mit dynamischer Core-Auswahl
-"C:\Program Files\Rexroth\ctrlX WORKS\qemu\qemu-system-x86_64.exe" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
+:: Startet die VM im interaktiven Modus mit angehängtem virtuellen CIDATA-Laufwerk
+"C:\Program Files\Rexroth\ctrlX WORKS\qemu\qemu-system-x86_64.exe" -m 4G -smp 2 -drive file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off -drive driver=vvfat,dir=%PROJEKT_PFAD%instances\cidata,label=CIDATA,read-only=on -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
 
 :: Falls QEMU mit einem Fehler beendet wurde, oeffne das Log im Windows-Editor
 if exist qemu_error.log (
