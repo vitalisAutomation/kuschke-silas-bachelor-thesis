@@ -378,7 +378,7 @@ if %errorLevel% neq 0 (
     echo     User boschrexroth
     echo     Port 11022
     echo     IdentityFile %KEY_FILE:\=\\%
-    echo     StrictHostKeyChecking no
+    StrictHostKeyChecking no
     echo     UserKnownHostsFile /dev/null
     ) >> "%CONFIG_FILE%"
 )
@@ -416,13 +416,13 @@ echo   expire: False>> ".\instances\cidata\user-data"
 echo ssh_pwauth: True>> ".\instances\cidata\user-data"
 echo disable_root: False>> ".\instances\cidata\user-data"
 
-:: network-config erzeugen (für moderne cloud-init Standards zwingend)
-echo version: 2> ".\instances\cidata\network-config"
-echo ethernets:>> ".\instances\cidata\network-config"
-echo   all:>> ".\instances\cidata\network-config"
-echo     match:>> ".\instances\cidata\network-config"
-echo       name: "en*">> ".\instances\cidata\network-config"
-echo     dhcp4: true>> ".\instances\cidata\network-config"
+:: network-config erzeugen (Bulletproof vor-angestellte Umleitung um Stderr-Bug zu vermeiden)
+> ".\instances\cidata\network-config" echo version: 2
+>> ".\instances\cidata\network-config" echo ethernets:
+>> ".\instances\cidata\network-config" echo   all:
+>> ".\instances\cidata\network-config" echo     match:
+>> ".\instances\cidata\network-config" echo       name: "en*"
+>> ".\instances\cidata\network-config" echo     dhcp4: true
 
 
 :: =======================================================================
@@ -498,10 +498,9 @@ goto :MAIN_MENU
 :: Loesche alte Logdateien, falls vorhanden
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
-:: === DIE MODERNE Q35 LÖSUNG ===
-:: Da mkisofs eine perfekte ISO mit echtem Volume-Label CIDATA erzeugt,
-:: erkennt cloud-init diese auf dem Q35-Mainboard nun vollautomatisch und fehlerfrei!
-"%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
+:: === DIE MODERNE Q35 LÖSUNG mit gezieltem ds=nocloud SMBIOS Parameter ===
+:: Wir weisen cloud-init explizit an, die nocloud-Schnittstelle im lokalen Modus zu nutzen!
+"%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial="ds=nocloud" 2> qemu_error.log
 
 :: Fehlerbehandlung ohne Klammer-Verschachtelung
 if not exist "%PROJEKT_PFAD%qemu_error.log" goto :POST_RUN
