@@ -416,7 +416,7 @@ echo   expire: False>> ".\instances\cidata\user-data"
 echo ssh_pwauth: True>> ".\instances\cidata\user-data"
 echo disable_root: False>> ".\instances\cidata\user-data"
 
-:: === THE FIX: Create network-config file ===
+:: network-config erzeugen (für moderne cloud-init Standards zwingend)
 echo version: 2 > ".\instances\cidata\network-config"
 echo ethernets: >> ".\instances\cidata\network-config"
 echo   ens3: >> ".\instances\cidata\network-config"
@@ -427,24 +427,30 @@ echo     dhcp4: true >> ".\instances\cidata\network-config"
 echo %BLUE%[ISO]%RESET% Generiere echte NoCloud-Konfigurations-ISO (seed.iso)...
 set "psScript=%PROJEKT_PFAD%instances\make_iso.ps1"
 if exist "%psScript%" del "%psScript%" >nul 2>&1
+if exist "%PROJEKT_PFAD%instances\seed.iso" del "%PROJEKT_PFAD%instances\seed.iso" >nul 2>&1
 
-:: Zeilenweises Schreiben OHNE umschließende Batch-Klammern
-echo Set-Location -Path "$PSScriptRoot\cidata" > "%psScript%"
-echo $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage >> "%psScript%"
-echo $fsi.FileSystemsToCreate = 1 >> "%psScript%"
-echo $fsi.VolumeName = "cidata" >> "%psScript%"
-echo $fsi.Root.AddTree^(".", $false^) >> "%psScript%"
-echo $result = $fsi.CreateResultImage^(^) >> "%psScript%"
-echo $stream = $result.ImageStream >> "%psScript%"
-echo Add-Type -TypeDefinition 'using System; using System.IO; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes; public static class IsoWriter { public static void Save^(object comObj, string path^) { IStream stream = comObj as IStream; using ^(FileStream fs = File.OpenWrite^(path^)^) { byte[] buf = new byte[2048]; int read; IntPtr readPtr = Marshal.AllocHGlobal^(sizeof^(int^)^); try { do { stream.Read^(buf, 2048, readPtr^); read = Marshal.ReadInt32^(readPtr^); fs.Write^(buf, 0, read^); } while ^(read != 0^); } finally { Marshal.FreeHGlobal^(readPtr^); } } } }' >> "%psScript%"
-echo [IsoWriter]::Save^($stream, "$PSScriptRoot\seed.iso"^) >> "%psScript%"
+:: === THE ULTIMATE FIX: Explicitly add each file to the ISO root ===
+set "cidataPath=%PROJEKT_PFAD%instances\cidata"
+(
+    echo $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
+    echo $fsi.FileSystemsToCreate = 7
+    echo $fsi.VolumeName = "CIDATA"
+    echo $fsi.Root.AddFile^('user-data', '%cidataPath%\user-data'^)
+    echo $fsi.Root.AddFile^('meta-data', '%cidataPath%\meta-data'^)
+    echo $fsi.Root.AddFile^('network-config', '%cidataPath%\network-config'^)
+    echo $result = $fsi.CreateResultImage^(^)
+    echo $stream = $result.ImageStream
+    echo Add-Type -TypeDefinition 'using System; using System.IO; using System.Runtime.InteropServices; using System.Runtime.InteropServices.ComTypes; public static class IsoWriter { public static void Save^(object comObj, string path^) { IStream stream = comObj as IStream; using ^(FileStream fs = File.OpenWrite^(path^)^) { byte[] buf = new byte[2048]; int read; IntPtr readPtr = Marshal.AllocHGlobal^(sizeof^(int^)^); try { do { stream.Read^(buf, 2048, readPtr^); read = Marshal.ReadInt32^(readPtr^); fs.Write^(buf, 0, read^); } while ^(read != 0^); } finally { Marshal.FreeHGlobal^(readPtr^); } } } }'
+    echo [IsoWriter]::Save^($stream, '%PROJEKT_PFAD%instances\seed.iso'^)
+) > "%psScript%"
 
-start /wait powershell -NoProfile -ExecutionPolicy Bypass -File "%psScript%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%psScript%"
 del "%psScript%" >nul 2>&1
 
 :: Überprüfe, ob die ISO-Datei erfolgreich erstellt wurde
 for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
     if %%~zF LSS 1 (
+        echo.
         echo %RED%[FEHLER] Die ISO-Erstellung ist fehlgeschlagen. 'seed.iso' ist leer oder nicht vorhanden.%RESET%
         pause
         goto :MAIN_MENU
@@ -494,7 +500,7 @@ goto :MAIN_MENU
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
 :: === DIE MODERNE Q35 LÖSUNG ===
-:: Das Q35 Mainboard hat keinen Floppy-Controller mehr, was das /dev/fd0 Problem löst.
+:: Das `-smbios` Flag wird entfernt, da die korrekte ISO mit "CIDATA"-Label automatisch erkannt wird.
 "%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio 2> qemu_error.log
 
 :: Fehlerbehandlung ohne Klammer-Verschachtelung
