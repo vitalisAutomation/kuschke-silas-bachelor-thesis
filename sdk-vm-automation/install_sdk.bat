@@ -192,6 +192,8 @@ if "%VM24_STATUS%"=="Ja" set "VM24_TEXT=%GREEN%Vorhanden%RESET%"
 
 :DISPLAY_VM_STATUS
 
+:: Kein "->" mehr! Das verhindert die Fehlinterpretationen des CMD-Parsers (Schutz vor Redirects)
+
 echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
 
 echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       : %VM24_TEXT%
@@ -695,11 +697,12 @@ if %errorLevel% neq 0 (
     echo     UserKnownHostsFile /dev/null
 
     ) >> "%CONFIG_FILE%"
+
 )
 
 copy /Y "%KEY_FILE%.pub" "%PROJEKT_PFAD%id_rsa_ctrlx.pub" >nul 2>&1
 
-:: Errechne die Proxy-URL für die VM (Ersetzt Host-localhost zuverlässig durch QEMU-Gateway 10.0.2.2)
+:: Errechne die Proxy-URL für die VM (Ersetzt Host-localhost reliably durch QEMU-Gateway 10.0.2.2)
 
 set "VM_PROXY_URL="
 
@@ -769,7 +772,7 @@ echo ssh_pwauth: True>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 echo disable_root: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
-:: Standardpakete für Ubuntu vordefinieren
+:: Standardpakete für Ubuntu vordefinieren, jetzt MIT 'unzip'
 
 echo packages:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
@@ -781,6 +784,8 @@ echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
+echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
+
 :: Das automatisierte SDK Provisionierungs-Skript absolut flach erzeugen
 
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
@@ -789,130 +794,88 @@ if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 
 > "%SDK_SH%" echo #!/bin/bash
 
->> "%SDK_SH%" echo # Autologin Setup fuer ttyS0 (Serielle QEMU Konsole)
+:: Erzeuge Autologin-Konfig sauber über tee (verhindert CMD Redirect-Fehler!)
 
->> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
-
->> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I ^\$TERM" ^> /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
+>> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I ^\$TERM" ^| tee /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
 
 >> "%SDK_SH%" echo systemctl daemon-reload
 
 >> "%SDK_SH%" echo systemctl restart serial-getty@ttyS0.service
 
->> "%SDK_SH%" echo # Statusanzeige in der .bashrc konfigurieren
+:: Schreibe die .bashrc-Statusanzeige sauber als blockweise Linux-Injektion (Kein einziger Windows Redirect-Fehler!)
 
->> "%SDK_SH%" echo echo -e '\nif [ -f /var/lib/cloud/instance/boot-finished ]; then' ^>^^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo cat ^<^< 'EOF' ^| tee -a /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo.
+>> "%SDK_SH%" echo if [ -f /var/lib/cloud/instance/boot-finished ]; then
+>> "%SDK_SH%" echo     echo -e "\n\e[92m✔ ctrlX SDK-Setup ist vollständig abgeschlossen und einsatzbereit!\e[0m"
+>> "%SDK_SH%" echo else
+>> "%SDK_SH%" echo     echo -e "\n\e[93m⏳ Das ctrlX SDK-Setup läuft noch im Hintergrund. Bitte warten...\e[0m"
+>> "%SDK_SH%" echo     echo -e "Sie können den Fortschritt mit folgendem Befehl verfolgen:"
+>> "%SDK_SH%" echo     echo -e "   \e[94mtail -f /var/log/cloud-init-output.log\e[0m\n"
+>> "%SDK_SH%" echo fi
+>> "%SDK_SH%" echo EOF
 
->> "%SDK_SH%" echo echo -e '    echo -e "\\\n\\\\e[92m✔ ctrlX SDK-Setup ist vollstaendig abgeschlossen und einsatzbereit!\\\\e[0m"' ^>^^> /home/boschrexroth/.bashrc
+:: SPRINGE ZU PROXY-ERSTELLUNG (Völlig flache, klammerfreie Auswertung schützt vor Caret-Fehlern!)
+if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 
->> "%SDK_SH%" echo echo -e 'else' ^>^^> /home/boschrexroth/.bashrc
+>> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
+>> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%"
+>> "%SDK_SH%" echo export https_proxy="%VM_PROXY_URL%"
+>> "%SDK_SH%" echo export HTTP_PROXY="%VM_PROXY_URL%"
+>> "%SDK_SH%" echo export HTTPS_PROXY="%VM_PROXY_URL%"
+>> "%SDK_SH%" echo export no_proxy="localhost,127.0.0.1,10.0.2.2,.bosch.com"
+>> "%SDK_SH%" echo export NO_PROXY="localhost,127.0.0.1,10.0.2.2,.bosch.com"
 
->> "%SDK_SH%" echo echo -e '    echo -e "\\\n\\\\e[93m⏳ Das ctrlX SDK-Setup laeuft noch im Hintergrund. Bitte warten...\\\\e[0m"' ^>^^> /home/boschrexroth/.bashrc
-
->> "%SDK_SH%" echo echo -e '    echo -e "Sie koennen den Fortschritt mit folgendem Befehl verfolgen:"' ^>^^> /home/boschrexroth/.bashrc
-
->> "%SDK_SH%" echo echo -e '    echo -e "   \\\\e[94mtail -f /var/log/cloud-init-output.log\\\\e[0m\\\n"' ^>^^> /home/boschrexroth/.bashrc
-
->> "%SDK_SH%" echo echo -e 'fi' ^>^^> /home/boschrexroth/.bashrc
-
-:: Wenn ein Proxy aktiv ist, binden wir ihn hier ein (Verhindert CMD-Auswertungsfehler auf dem Windows Host!)
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%"
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export https_proxy="%VM_PROXY_URL%"
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export HTTP_PROXY="%VM_PROXY_URL%"
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export HTTPS_PROXY="%VM_PROXY_URL%"
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export no_proxy="localhost,127.0.0.1,10.0.2.2,.bosch.com"
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo export NO_PROXY="localhost,127.0.0.1,10.0.2.2,.bosch.com"
-
-:: Umgebungsvariablen dauerhaft in /etc/environment eintragen (Verwendung von tee umgeht den CMD Parser-Bug!)
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo "http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo "https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo "HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo "HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo "no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo "NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
+:: Umgebungsvariablen dauerhaft in /etc/environment eintragen (Piped tee umgeht CMD-Parser vollständig!)
+>> "%SDK_SH%" echo echo "http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
+>> "%SDK_SH%" echo echo "https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
+>> "%SDK_SH%" echo echo "HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
+>> "%SDK_SH%" echo echo "HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
+>> "%SDK_SH%" echo echo "no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
+>> "%SDK_SH%" echo echo "NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
 
 :: Apt Proxy permanent konfigurieren
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo 'Acquire::http::Proxy "%VM_PROXY_URL%";' ^| tee /etc/apt/apt.conf.d/99proxy
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo 'Acquire::https::Proxy "%VM_PROXY_URL%";' ^| tee -a /etc/apt/apt.conf.d/99proxy
+>> "%SDK_SH%" echo echo "Acquire::http::Proxy \"%VM_PROXY_URL%\";" ^| tee /etc/apt/apt.conf.d/99proxy
+>> "%SDK_SH%" echo echo "Acquire::https::Proxy \"%VM_PROXY_URL%\";" ^| tee -a /etc/apt/apt.conf.d/99proxy
 
 :: Sudoers so konfigurieren, dass Umgebungsvariablen bei sudo apt beibehalten werden
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo echo 'Defaults env_keep += "http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY"' ^| tee /etc/sudoers.d/proxy
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo chmod 0440 /etc/sudoers.d/proxy
+>> "%SDK_SH%" echo echo "Defaults env_keep += \"http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY\"" ^| tee /etc/sudoers.d/proxy
+>> "%SDK_SH%" echo chmod 0440 /etc/sudoers.d/proxy
 
 :: Snap Daemon Proxy global einrichten
+>> "%SDK_SH%" echo systemctl start snapd.socket snapd
+>> "%SDK_SH%" echo sleep 5
+>> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
+>> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
 
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo systemctl start snapd.socket snapd
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo sleep 5
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
-
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
+:SKIP_PROXY_CONFIG
 
 >> "%SDK_SH%" echo # Klonen des SDK und Ausfuehren der Setup-Skripte im User-Kontext
-
-:: Umgehung von Bosch SSL-Intercepts bei Git & Wget
-
 >> "%SDK_SH%" echo su - boschrexroth -c "git config --global http.sslVerify false"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "wget --no-check-certificate https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "chmod a+x clone-install-sdk.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
 
 :: Binde das Provisionierungsskript nun sauber in die user-data Struktur ein
-
 echo write_files:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - path: /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     permissions: '0755'>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     content: ^|>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 :: Kopiert das flach geschriebene setup-sdk.sh Zeile für Zeile mit Einrückungen in die user-data
-
 for /f "usebackq delims=" %%G in ("%SDK_SH%") do echo       %%G>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 echo runcmd:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 :: network-config erzeugen (Bulletproof vor-angestellte Umleitung um Stderr-Bug zu vermeiden)
-
 > "%PROJEKT_PFAD%instances\cidata\network-config" echo version: 2
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo ethernets:
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo   all:
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo     match:
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo       name: "en\*"
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo     dhcp4: true
 
 :: =======================================================================
