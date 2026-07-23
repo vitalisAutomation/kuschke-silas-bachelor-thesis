@@ -28,25 +28,7 @@ if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 
 :: =======================================================================
 
-:: 🔐 SCHRITT 1: BOMBENSICHERE AUTO-ELEVATION (Admin-Rechte)
-
-:: =======================================================================
-
-net session >nul 2>&1
-
-if %errorLevel% neq 0 (
-
-    echo %YELLOW%[Check] Benoetige Administratorrechte...%RESET%
-
-    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d %~dp0 && %~f0' -Verb RunAs"
-
-    exit
-
-)
-
-:: =======================================================================
-
-:: 🔍 SCHRITT 2: AUTO-DETEKTION LOKALES QEMU & CLI-HINWEIS
+:: 🔍 SCHRITT 1: AUTO-DETEKTION LOKALES QEMU & CLI-HINWEIS (Ohne Adminrechte im Alltag!)
 
 :: =======================================================================
 
@@ -61,6 +43,24 @@ if exist "qemu\qemu-system-x86_64.exe" (
     set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
 
     goto :MAIN_MENU
+
+)
+
+:: =======================================================================
+
+:: 🔐 SCHRITT 2: QEMU FEHLT - FORDERE ADMINRECHTE NUR FÜR DIE ERSTINSTALLATION
+
+:: =======================================================================
+
+net session >nul 2>&1
+
+if %errorLevel% neq 0 (
+
+    echo %YELLOW%[Check] QEMU fehlt. Administratorrechte für die Erstinstallation erforderlich...%RESET%
+
+    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d %~dp0 && %~f0' -Verb RunAs"
+
+    exit
 
 )
 
