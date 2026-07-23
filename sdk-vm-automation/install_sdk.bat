@@ -110,7 +110,7 @@ echo %YELLOW%Hinweis zum Ablauf:%RESET% Der Download startet im CLI. Anschließe
 
 echo offizielle QEMU-Installer. %YELLOW%Bitte installieren Sie QEMU einfach direkt in den%RESET%
 
-echo %YELLOW%vorausgewählten Projekt-Pfad (.\\qemu\\).%RESET% Es sind keine weiteren Klicks nötig!
+echo %YELLOW%vorausgewählten Projekt-Pfad (.\\\qemu\\).%RESET% Es sind keine weiteren Klicks nötig!
 
 echo.
 
@@ -690,7 +690,7 @@ if %errorLevel% neq 0 (
 
     echo     Port 11022
 
-    echo     IdentityFile %KEY_FILE:\=/%
+    echo     IdentityFile %KEY_FILE:\\=/%
 
     echo     StrictHostKeyChecking no
 
@@ -805,25 +805,41 @@ if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 :: Schreibe die .bashrc-Statusanzeige sauber als blockweise Linux-Injektion (Kein einziger Windows Redirect-Fehler!)
 
 >> "%SDK_SH%" echo cat ^<^< 'EOF' ^| tee -a /home/boschrexroth/.bashrc
+
 >> "%SDK_SH%" echo.
+
 >> "%SDK_SH%" echo if [ -f /var/lib/cloud/instance/boot-finished ]; then
+
 >> "%SDK_SH%" echo     echo -e "\n\e[92m✔ ctrlX SDK-Setup ist vollständig abgeschlossen und einsatzbereit!\e[0m"
+
 >> "%SDK_SH%" echo else
+
 >> "%SDK_SH%" echo     echo -e "\n\e[93m⏳ Das ctrlX SDK-Setup läuft noch im Hintergrund. Bitte warten...\e[0m"
+
 >> "%SDK_SH%" echo     echo -e "Sie können den Fortschritt mit folgendem Befehl verfolgen:"
+
 >> "%SDK_SH%" echo     echo -e "   \e[94mtail -f /var/log/cloud-init-output.log\e[0m\n"
+
 >> "%SDK_SH%" echo fi
+
 >> "%SDK_SH%" echo EOF
 
 :: SPRINGE ZU PROXY-ERSTELLUNG (Völlig flache, klammerfreie Auswertung schützt vor Caret-Fehlern!)
+
 if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 
 >> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
+
 >> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%"
+
 >> "%SDK_SH%" echo export https_proxy="%VM_PROXY_URL%"
+
 >> "%SDK_SH%" echo export HTTP_PROXY="%VM_PROXY_URL%"
+
 >> "%SDK_SH%" echo export HTTPS_PROXY="%VM_PROXY_URL%"
+
 >> "%SDK_SH%" echo export no_proxy="localhost,127.0.0.1,10.0.2.2,.bosch.com"
+
 >> "%SDK_SH%" echo export NO_PROXY="localhost,127.0.0.1,10.0.2.2,.bosch.com"
 
 :: Umgebungsvariablen dauerhaft in /etc/environment eintragen (Piped tee umgeht CMD-Parser vollständig!)
@@ -843,39 +859,98 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo chmod 0440 /etc/sudoers.d/proxy
 
 :: Snap Daemon Proxy global einrichten
+
 >> "%SDK_SH%" echo systemctl start snapd.socket snapd
+
 >> "%SDK_SH%" echo sleep 5
+
 >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
+
 >> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
 
 :SKIP_PROXY_CONFIG
 
+>> "%SDK_SH%" echo # Patch APT-Quellen fuer arm64 Cross-Compilation (verhindert 404 Fehler)
+>> "%SDK_SH%" echo if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+>> "%SDK_SH%" echo     if ! grep -q "Architectures:" /etc/apt/sources.list.d/ubuntu.sources; then
+>> "%SDK_SH%" echo         cat ^<^< 'EOF' ^| tee /etc/apt/sources.list.d/ubuntu.sources
+>> "%SDK_SH%" echo Types: deb
+>> "%SDK_SH%" echo URIs: http://archive.ubuntu.com/ubuntu/
+>> "%SDK_SH%" echo Suites: noble noble-updates noble-backports
+>> "%SDK_SH%" echo Components: main restricted universe multiverse
+>> "%SDK_SH%" echo Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+>> "%SDK_SH%" echo Architectures: amd64
+>> "%SDK_SH%" echo.
+>> "%SDK_SH%" echo Types: deb
+>> "%SDK_SH%" echo URIs: http://security.ubuntu.com/ubuntu/
+>> "%SDK_SH%" echo Suites: noble-security
+>> "%SDK_SH%" echo Components: main restricted universe multiverse
+>> "%SDK_SH%" echo Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+>> "%SDK_SH%" echo Architectures: amd64
+>> "%SDK_SH%" echo.
+>> "%SDK_SH%" echo Types: deb
+>> "%SDK_SH%" echo URIs: http://ports.ubuntu.com/ubuntu-ports/
+>> "%SDK_SH%" echo Suites: noble noble-updates noble-security noble-backports
+>> "%SDK_SH%" echo Components: main restricted universe multiverse
+>> "%SDK_SH%" echo Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+>> "%SDK_SH%" echo Architectures: arm64
+>> "%SDK_SH%" echo EOF
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo elif [ -f /etc/apt/sources.list ]; then
+>> "%SDK_SH%" echo     if ! grep -q "arch=" /etc/apt/sources.list; then
+>> "%SDK_SH%" echo         sed -i -e 's/deb http/deb [arch=amd64,i386] http/g' -e 's/deb-src http/deb-src [arch=amd64,i386] http/g' /etc/apt/sources.list
+>> "%SDK_SH%" echo         cat ^<^< 'EOF' ^| tee -a /etc/apt/sources.list
+>> "%SDK_SH%" echo deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe multiverse
+>> "%SDK_SH%" echo deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe multiverse
+>> "%SDK_SH%" echo deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse
+>> "%SDK_SH%" echo EOF
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo fi
+
 >> "%SDK_SH%" echo # Klonen des SDK und Ausfuehren der Setup-Skripte im User-Kontext
+
 >> "%SDK_SH%" echo su - boschrexroth -c "git config --global http.sslVerify false"
+
 >> "%SDK_SH%" echo su - boschrexroth -c "wget --no-check-certificate https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh"
+
 >> "%SDK_SH%" echo su - boschrexroth -c "chmod a+x clone-install-sdk.sh"
+
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
+
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
+
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
 
 :: Binde das Provisionierungsskript nun sauber in die user-data Struktur ein
+
 echo write_files:>> "%PROJEKT_PFAD%instances\cidata\user-data"
+
 echo   - path: /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
+
 echo     permissions: '0755'>> "%PROJEKT_PFAD%instances\cidata\user-data"
+
 echo     content: ^|>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 :: Kopiert das flach geschriebene setup-sdk.sh Zeile für Zeile mit Einrückungen in die user-data
+
 for /f "usebackq delims=" %%G in ("%SDK_SH%") do echo       %%G>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 echo runcmd:>> "%PROJEKT_PFAD%instances\cidata\user-data"
+
 echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 :: network-config erzeugen (Bulletproof vor-angestellte Umleitung um Stderr-Bug zu vermeiden)
+
 > "%PROJEKT_PFAD%instances\cidata\network-config" echo version: 2
+
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo ethernets:
+
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo   all:
+
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo     match:
->> "%PROJEKT_PFAD%instances\cidata\network-config" echo       name: "en\*"
+
+>> "%PROJEKT_PFAD%instances\cidata\network-config" echo       name: 'en*'
+
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo     dhcp4: true
 
 :: =======================================================================
@@ -927,7 +1002,6 @@ for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
         goto :MAIN_MENU
 
     )
-
 )
 
 :: =======================================================================
@@ -1062,7 +1136,7 @@ if exist qemu_error.log del qemu_error.log >nul 2>&1
 
 if not exist "%PROJEKT_PFAD%qemu_error.log" goto :POST_RUN
 
-findstr /r "[a-zA-Z0-9]" "%PROJEKT_PFAD%qemu_error.log" >nul 2>&1
+findstr /r "\[a-zA-Z0-9\]" "%PROJEKT_PFAD%qemu_error.log" >nul 2>&1
 
 if %errorLevel% neq 0 goto :POST_RUN
 
