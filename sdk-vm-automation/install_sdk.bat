@@ -9,133 +9,75 @@ for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1)
 :: Farbcodes definieren
 
 set "BLUE=%ESC%[94m"
-
 set "GREEN=%ESC%[92m"
-
 set "YELLOW=%ESC%[93m"
-
 set "RED=%ESC%[91m"
-
 set "RESET=%ESC%[0m"
 
 cd /d "%~dp0"
-
 set "PROJEKT_PFAD=%~dp0"
 
 :: Bereite Logdatei vor
-
 if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 
 :: =======================================================================
-
-:: 🔍 SCHRITT 1: AUTO-DETEKTION LOKALES QEMU & CLI-HINWEIS (Ohne Adminrechte im Alltag!)
-
+:: 🔍 SCHRITT 1: PRÜFUNG DER QEMU-INSTALLATION (Keine Adminrechte im Alltag!)
 :: =======================================================================
-
 set "QEMU_EXE="
-
 set "QEMU_SOURCE="
 
 if exist "qemu\qemu-system-x86_64.exe" (
-
     set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
-
     set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
-
     goto :MAIN_MENU
-
 )
 
 :: =======================================================================
-
 :: 🔐 SCHRITT 2: QEMU FEHLT - FORDERE ADMINRECHTE NUR FÜR DIE ERSTINSTALLATION
-
 :: =======================================================================
-
 net session >nul 2>&1
-
 if %errorLevel% neq 0 (
-
-    echo %YELLOW%[Check] QEMU fehlt. Administratorrechte für die Erstinstallation erforderlich...%RESET%
-
+    echo %YELLOW%[Check] QEMU fehlt. Administratorrechte für die Installation erforderlich...%RESET%
     powershell -Command "Start-Process cmd -ArgumentList '/k cd /d %~dp0 && %~f0' -Verb RunAs"
-
     exit
-
 )
 
 :: Falls kein QEMU lokal existiert, bieten wir den automatischen Download an
-
 cls
-
 echo %BLUE%=======================================================================%RESET%
-
 echo %YELLOW%               LOKALES QEMU INITIALISIEREN (Portabilität)%RESET%
-
 echo %BLUE%=======================================================================%RESET%
-
 echo(
-
 echo %YELLOW%👉 HINWEIS ZUM INSTALLATIONS-PROZESS & PROJEKT-ISOLATION:%RESET%
-
 echo Dieses Skript kann zwar global installierte QEMU-Instanzen auf Ihrem PC
-
 echo finden (z. B. von einer bestehenden ctrlX WORKS Installation).
-
 echo.
-
 echo %GREEN%Es wird jedoch DRINGEND EMPFOHLEN, QEMU direkt LOKAL in diesem Projekt%RESET%
-
 echo %GREEN%zu installieren (Option 1).%RESET%
-
 echo.
-
 echo %BLUE%Warum?%RESET%
-
 echo   1. %GREEN%100%% Unabhängigkeit:%RESET% ctrlX WORKS kann deinstalliert, geupdatet oder
-
 echo      beschädigt werden - Ihr Projekt läuft unberührt und autark weiter.
-
 echo   2. %GREEN%Portabilität:%RESET% Sie können den gesamten Projektordner auf eine externe
-
 echo      Festplatte oder einen anderen PC kopieren und sofort loslegen.
-
 echo   3. %GREEN%Keine Versionskonflikte:%RESET% Keine unerwarteten Fehler durch abweichende
-
 echo      globale QEMU-Versionen auf Ihrem Host-System.
-
 echo.
-
 echo %YELLOW%Hinweis zum Ablauf:%RESET% Der Download startet im CLI. Anschließend startet der
-
 echo offizielle QEMU-Installer. %YELLOW%Bitte installieren Sie QEMU einfach direkt in den%RESET%
-
 echo %YELLOW%vorausgewählten Projekt-Pfad (.\\\qemu\\).%RESET% Es sind keine weiteren Klicks nötig!
-
 echo.
-
 echo Das Setup benoetigt hierzu ca. 180 MB Downloadvolumen.
-
 echo.
-
 echo 1) QEMU jetzt lokal im Projektordner einrichten (Empfohlen)
-
 echo 2) Abbrechen und beenden
-
 echo.
-
 set /p QEMU_CHOICE="%YELLOW%Waehlen Sie eine Option (1 oder 2): %RESET%"
-
 if "%QEMU_CHOICE%"=="1" (
-
     set "DOWNLOAD_TARGET=QEMU"
-
     goto :NET_PROXY_CHECK
-
 ) else (
-
     exit
-
 )
 
 :: =======================================================================
