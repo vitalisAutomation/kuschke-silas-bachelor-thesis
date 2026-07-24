@@ -1,5 +1,0 @@
-
-(qemu:14028): Gtk-WARNING **: Could not find the icon 'window-minimize-symbolic-ltr'. The 'hicolor' theme
-was not found either, perhaps you need to install it.
-You can get a copy from:
-	http://icon-theme.freedesktop.org/releases
