@@ -28,7 +28,9 @@ if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 if "%~1"=="-install" goto :INSTALL_DEPS
 
 :: Normale Ausführung: Abhängigkeiten prüfen und bei Bedarf Admin-Modus anfordern
-set "INSTALL_ARGS="
+set "INSTALL_QEMU_FLAG="
+set "INSTALL_VSCODE_FLAG="
+set "INSTALL_EXT_FLAG="
 set "MISSING_DEPS="
 call :CHECK_ALL_DEPS
 
@@ -58,10 +60,14 @@ echo.
 echo Drücken Sie eine beliebige Taste, um die Installation als Administrator zu starten...
 pause >nul
 
-:: Wir übergeben die To-Do-Liste an den neuen Administrator-Prozess
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '-install %INSTALL_ARGS%' -Verb RunAs"
-exit
+:: Baue einen einfachen, robusten Argument-String
+set "PS_ARGS=-install"
+if defined INSTALL_QEMU_FLAG set "PS_ARGS=%PS_ARGS% -install-qemu"
+if defined INSTALL_VSCODE_FLAG set "PS_ARGS=%PS_ARGS% -install-vscode"
+if defined INSTALL_EXT_FLAG set "PS_ARGS=%PS_ARGS% -install-extensions"
 
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '%PS_ARGS%' -Verb RunAs"
+exit
 
 :: =======================================================================
 :: 🛠️ PHASE 2: INSTALLATION DER ABHÄNGIGKEITEN (ADMIN-MODUS)
@@ -74,27 +80,26 @@ echo %GREEN%     SYSTEM-ABHÄNGIGKEITEN INSTALLIEREN (ADMIN-MODUS) %RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 
-:: 1. VS Code installieren, falls "-install-vscode" übergeben wurde
-echo %* | findstr /i "\-install-vscode" >nul
+:: Erstelle eine Zeichenkette mit allen übergebenen Argumenten für eine einfache Suche
+set "ARG_STRING=%*"
+
+:: 1. VS Code installieren
+echo %ARG_STRING% | findstr /i /c:"-install-vscode" >nul
 if %errorlevel% == 0 (
     echo %YELLOW%[VS Code] Visual Studio Code wird heruntergeladen...%RESET%
-    echo %YELLOW%Von: https://code.visualstudio.com%RESET%
     curl.exe -k -L -# -o ".\\vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
     if exist ".\\vscode_setup.exe" (
-        echo %YELLOW%[VS Code] Installation wird ausgeführt. Bitte warten...%RESET%
+        echo %YELLOW%[VS Code] Installation wird ausgeführt...%RESET%
         start /wait "" ".\\vscode_setup.exe" /verysilent /mergetasks
         del ".\\vscode_setup.exe" >nul 2>&1
-        echo %GREEN%✔ VS Code Installation erfolgreich abgeschlossen.%RESET%
-        echo Drücken Sie eine beliebige Taste, um fortzufahren...
-        pause >nul
+        echo %GREEN%✔ VS Code Installation erfolgreich.%RESET% & pause >nul
     ) else (
-        echo %RED%[ERROR] Download von VS Code fehlgeschlagen!%RESET%
-        pause
+        echo %RED%[ERROR] Download von VS Code fehlgeschlagen!%RESET% & pause
     )
 )
 
-:: 2. Erweiterungen installieren, falls "-install-extensions" übergeben wurde
-echo %* | findstr /i "\-install-extensions" >nul
+:: 2. Erweiterungen installieren
+echo %ARG_STRING% | findstr /i /c:"-install-extensions" >nul
 if %errorlevel% == 0 (
     call :CHECK_VSCODE_PATH_ROBUST
     if defined CODE_EXE (
@@ -107,53 +112,37 @@ if %errorlevel% == 0 (
                 "%CODE_EXE%" --install-extension %%e --force >> "install_debug.log" 2>&1
              )
         )
-        echo %GREEN%✔ Installation der Erweiterungen abgeschlossen.%RESET%
-        echo Drücken Sie eine beliebige Taste, um fortzufahren...
-        pause >nul
+        echo %GREEN%✔ Installation der Erweiterungen abgeschlossen.%RESET% & pause >nul
     )
 )
 
-:: 3. QEMU installieren, falls "-install-qemu" übergeben wurde
-echo %* | findstr /i "\-install-qemu" >nul
+:: 3. QEMU installieren
+echo %ARG_STRING% | findstr /i /c:"-install-qemu" >nul
 if %errorlevel% == 0 (
     echo.
-    echo %BLUE%=======================================================================%RESET%
-    echo %YELLOW%               LOKALES QEMU INITIALISIEREN%RESET%
-    echo %BLUE%=======================================================================%RESET%
-    echo.
-    echo %YELLOW%WICHTIGER HINWEIS ZUR INSTALLATION:%RESET%
-    echo Der QEMU-Installer wird sich gleich öffnen.
-    echo %GREEN%Bitte installieren Sie QEMU direkt in den vorgeschlagenen Projektordner (%PROJEKT_PFAD%qemu).%RESET%
-    echo %YELLOW%Warum? Dies garantiert, dass Ihr Projekt 100%% portabel und unabhängig bleibt.%RESET%
+    echo %YELLOW%[QEMU] WICHTIGER HINWEIS: Bitte installieren Sie im nächsten Schritt in den Projektordner.%RESET%
+    echo %GREEN%Ziel: %PROJEKT_PFAD%qemu%RESET%
     echo.
     echo %YELLOW%[QEMU] QEMU wird heruntergeladen...%RESET%
-    echo %YELLOW%Von: https://qemu.weilnetz.de%RESET%
     curl.exe -k -L -# -o ".\\qemu_setup.exe" "https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
     if exist ".\\qemu_setup.exe" (
-        echo %YELLOW%[QEMU] Installation wird gestartet... Bitte folgen Sie den Anweisungen.%RESET%
-        
-        :: HINWEIS: Bei der QEMU-Installation ist eine Benutzerinteraktion nötig, daher kein silent install.
+        echo %YELLOW%[QEMU] Installation wird gestartet...%RESET%
         start /wait "" ".\\qemu_setup.exe" /DIR="%PROJEKT_PFAD%qemu"
-        
         del ".\\qemu_setup.exe" >nul 2>&1
         if exist "%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe" (
-            echo %GREEN%✔ Lokales QEMU erfolgreich eingerichtet!%RESET%
+            echo %GREEN%✔ Lokales QEMU erfolgreich eingerichtet.%RESET%
         ) else (
             echo %RED%[FEHLER] QEMU wurde nicht im erwarteten Verzeichnis installiert.%RESET%
         )
-        echo Drücken Sie eine beliebige Taste, um fortzufahren...
         pause >nul
     ) else (
-        echo %RED%[ERROR] Download von QEMU fehlgeschlagen!%RESET%
-        pause
+        echo %RED%[ERROR] Download von QEMU fehlgeschlagen!%RESET% & pause
     )
 )
 
 echo.
-echo %GREEN%=======================================================================%RESET%
 echo %GREEN%✔ Alle notwendigen Installationen wurden durchgeführt.%RESET%
 echo %YELLOW%Das Hauptmenü wird gestartet...%RESET%
-echo %BLUE%=======================================================================%RESET%
 timeout /t 2 /nobreak >nul
 goto :MAIN_MENU
 
@@ -800,6 +789,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
+>> "%SDK_SH%" echo echo "TMPDIR=\"/tmp\"" ^| tee -a /etc/environment
 :: Globalen Profile.d-Proxy einrichten (für alle Login-Shells)
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
@@ -807,6 +797,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo chmod +x /etc/profile.d/proxy.sh
 :: Globalen Bashrc-Proxy einrichten (für alle Bash-Instanzen, auch nicht-interaktive SSH-Sessions)
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
@@ -815,11 +806,12 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
+>> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/bash.bashrc
 :: Apt Proxy permanent konfigurieren
 >> "%SDK_SH%" echo echo "Acquire::http::Proxy \"%VM_PROXY_URL%\";" ^| tee /etc/apt/apt.conf.d/99proxy
 >> "%SDK_SH%" echo echo "Acquire::https::Proxy \"%VM_PROXY_URL%\";" ^| tee -a /etc/apt/apt.conf.d/99proxy
 :: Sudoers so konfigurieren, dass Umgebungsvariablen bei sudo apt beibehalten werden
->> "%SDK_SH%" echo echo "Defaults env_keep += \"http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY\"" ^| tee /etc/sudoers.d/proxy
+>> "%SDK_SH%" echo echo "Defaults env_keep += \"http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY TMPDIR\"" ^| tee /etc/sudoers.d/proxy
 >> "%SDK_SH%" echo chmod 0440 /etc/sudoers.d/proxy
 :: Snap Daemon Proxy global einrichten
 >> "%SDK_SH%" echo systemctl restart snapd.socket snapd.service
@@ -879,6 +871,7 @@ echo     content: ^|>> "%PROJEKT_PFAD%instances\cidata\user-data"
 for /f "usebackq delims=" %%G in ("%SDK_SH%") do echo       %%G>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo runcmd:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
+
 :: network-config erzeugen (Bulletproof vor-angestellte Umleitung um Stderr-Bug zu vermeiden)
 > "%PROJEKT_PFAD%instances\cidata\network-config" echo version: 2
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo ethernets:
@@ -1091,23 +1084,24 @@ pause
 goto :MAIN_MENU
 
 :: =======================================================================
-:: HELPER SUBROUTINES
+:: -=[ HELPER SUBROUTINES ]=-
 :: =======================================================================
 :CHECK_ALL_DEPS
     if not exist "qemu\qemu-system-x86_64.exe" (
         call :ADD_MISSING "Lokales QEMU"
-        set "INSTALL_ARGS=%INSTALL_ARGS% -install-qemu"
+        set "INSTALL_QEMU_FLAG=1"
     )
     
     call :CHECK_VSCODE_PATH_ROBUST
     if "%VSCODE_OK%"=="No" (
-        call :ADD_MISSING "VS Code"
-        set "INSTALL_ARGS=%INSTALL_ARGS% -install-vscode -install-extensions"
+        call :ADD_MISSING "VS Code & Erweiterungen"
+        set "INSTALL_VSCODE_FLAG=1"
+        set "INSTALL_EXT_FLAG=1"
     ) else (
         call :CHECK_EXTENSIONS
         if "%EXTENSIONS_OK%"=="No" (
             call :ADD_MISSING "eine oder mehrere VS Code Erweiterungen"
-            set "INSTALL_ARGS=%INSTALL_ARGS% -install-extensions"
+            set "INSTALL_EXT_FLAG=1"
         )
     )
 goto :EOF
