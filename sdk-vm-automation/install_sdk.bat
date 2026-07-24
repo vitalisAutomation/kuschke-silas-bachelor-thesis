@@ -21,64 +21,141 @@ set "PROJEKT_PFAD=%~dp0"
 if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 
 :: =======================================================================
-:: 🔍 SCHRITT 1: PRÜFUNG DER QEMU-INSTALLATION (Keine Adminrechte im Alltag!)
+:: 🚦 ABLAUFSTEUERUNG
 :: =======================================================================
-set "QEMU_EXE="
-set "QEMU_SOURCE="
 
-if exist "qemu\qemu-system-x86_64.exe" (
-    set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
-    set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
+:: Prüfe, ob das Skript bereits im Admin-Modus zur Installation läuft
+if "%~1"=="-install" goto :INSTALL_DEPS
+
+:: Normale Ausführung: Abhängigkeiten prüfen und bei Bedarf Admin-Modus anfordern
+set "INSTALL_ARGS="
+set "MISSING_DEPS="
+call :CHECK_ALL_DEPS
+
+if defined MISSING_DEPS (
+    goto :REQUEST_ADMIN
+) else (
     goto :MAIN_MENU
 )
 
 :: =======================================================================
-:: 🔐 SCHRITT 2: QEMU FEHLT - FORDERE ADMINRECHTE NUR FÜR DIE ERSTINSTALLATION
+:: 🔐 PHASE 1: ADMIN-RECHTE ANFORDERN
 :: =======================================================================
-net session >nul 2>&1
-if %errorLevel% neq 0 (
-    echo %YELLOW%[Check] QEMU fehlt. Administratorrechte für die Installation erforderlich...%RESET%
-    powershell -Command "Start-Process cmd -ArgumentList '/k cd /d %~dp0 && %~f0' -Verb RunAs"
-    exit
-)
-
-:: Falls kein QEMU lokal existiert, bieten wir den automatischen Download an
+:REQUEST_ADMIN
 cls
 echo %BLUE%=======================================================================%RESET%
-echo %YELLOW%               LOKALES QEMU INITIALISIEREN (Portabilität)%RESET%
+echo %YELLOW%         ERFORDERLICHE KOMPONENTEN WERDEN EINGERICHTET%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+echo %YELLOW%[Check] Folgende System-Abhängigkeiten fehlen auf Ihrem System:%RESET%
+echo %RED%  * %MISSING_DEPS%%RESET%
+echo.
+echo %YELLOW%Administratorrechte sind für die automatische Installation erforderlich.%RESET%
+echo.
+echo %GREEN%Das Skript wird sich nun schließen und in einem neuen Fenster mit%RESET%
+echo %GREEN%Admin-Rechten neu starten, um die Installation durchzuführen.%RESET%
+echo.
+echo Drücken Sie eine beliebige Taste, um die Installation als Administrator zu starten...
+pause >nul
+
+:: Wir übergeben die To-Do-Liste an den neuen Administrator-Prozess
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '-install %INSTALL_ARGS%' -Verb RunAs"
+exit
+
+
+:: =======================================================================
+:: 🛠️ PHASE 2: INSTALLATION DER ABHÄNGIGKEITEN (ADMIN-MODUS)
+:: =======================================================================
+:INSTALL_DEPS
+@echo off
+cls
+echo %BLUE%=======================================================================%RESET%
+echo %GREEN%     SYSTEM-ABHÄNGIGKEITEN INSTALLIEREN (ADMIN-MODUS) %RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
-echo %YELLOW%👉 HINWEIS ZUM INSTALLATIONS-PROZESS & PROJEKT-ISOLATION:%RESET%
-echo Dieses Skript kann zwar global installierte QEMU-Instanzen auf Ihrem PC
-echo finden (z. B. von einer bestehenden ctrlX WORKS Installation).
-echo.
-echo %GREEN%Es wird jedoch DRINGEND EMPFOHLEN, QEMU direkt LOKAL in diesem Projekt%RESET%
-echo %GREEN%zu installieren (Option 1).%RESET%
-echo.
-echo %BLUE%Warum?%RESET%
-echo   1. %GREEN%100%% Unabhängigkeit:%RESET% ctrlX WORKS kann deinstalliert, geupdatet oder
-echo      beschädigt werden - Ihr Projekt läuft unberührt und autark weiter.
-echo   2. %GREEN%Portabilität:%RESET% Sie können den gesamten Projektordner auf eine externe
-echo      Festplatte oder einen anderen PC kopieren und sofort loslegen.
-echo   3. %GREEN%Keine Versionskonflikte:%RESET% Keine unerwarteten Fehler durch abweichende
-echo      globale QEMU-Versionen auf Ihrem Host-System.
-echo.
-echo %YELLOW%Hinweis zum Ablauf:%RESET% Der Download startet im CLI. Anschließend startet der
-echo offizielle QEMU-Installer. %YELLOW%Bitte installieren Sie QEMU einfach direkt in den%RESET%
-echo %YELLOW%vorausgewählten Projekt-Pfad (.\\\qemu\\).%RESET% Es sind keine weiteren Klicks nötig!
-echo.
-echo Das Setup benoetigt hierzu ca. 180 MB Downloadvolumen.
-echo.
-echo 1) QEMU jetzt lokal im Projektordner einrichten (Empfohlen)
-echo 2) Abbrechen und beenden
-echo.
-set /p QEMU_CHOICE="%YELLOW%Waehlen Sie eine Option (1 oder 2): %RESET%"
-if "%QEMU_CHOICE%"=="1" (
-    set "DOWNLOAD_TARGET=QEMU"
-    goto :NET_PROXY_CHECK
-) else (
-    exit
+
+:: 1. VS Code installieren, falls "-install-vscode" übergeben wurde
+echo %* | findstr /i "\-install-vscode" >nul
+if %errorlevel% == 0 (
+    echo %YELLOW%[VS Code] Visual Studio Code wird heruntergeladen...%RESET%
+    echo %YELLOW%Von: https://code.visualstudio.com%RESET%
+    curl.exe -k -L -# -o ".\\vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
+    if exist ".\\vscode_setup.exe" (
+        echo %YELLOW%[VS Code] Installation wird ausgeführt. Bitte warten...%RESET%
+        start /wait "" ".\\vscode_setup.exe" /verysilent /mergetasks
+        del ".\\vscode_setup.exe" >nul 2>&1
+        echo %GREEN%✔ VS Code Installation erfolgreich abgeschlossen.%RESET%
+        echo Drücken Sie eine beliebige Taste, um fortzufahren...
+        pause >nul
+    ) else (
+        echo %RED%[ERROR] Download von VS Code fehlgeschlagen!%RESET%
+        pause
+    )
 )
+
+:: 2. Erweiterungen installieren, falls "-install-extensions" übergeben wurde
+echo %* | findstr /i "\-install-extensions" >nul
+if %errorlevel% == 0 (
+    call :CHECK_VSCODE_PATH_ROBUST
+    if defined CODE_EXE (
+        echo.
+        echo %YELLOW%[VS Code] Installiere fehlende Erweiterungen...%RESET%
+        for %%e in (golang.go ms-dotnettools.csharp ms-python.python ms-vscode-remote.remote-ssh ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake) do (
+             "%CODE_EXE%" --list-extensions 2>nul | findstr /i /b /e /c:"%%e" >nul
+             if errorlevel 1 (
+                echo %BLUE%  * Installiere %%e...%RESET%
+                "%CODE_EXE%" --install-extension %%e --force >> "install_debug.log" 2>&1
+             )
+        )
+        echo %GREEN%✔ Installation der Erweiterungen abgeschlossen.%RESET%
+        echo Drücken Sie eine beliebige Taste, um fortzufahren...
+        pause >nul
+    )
+)
+
+:: 3. QEMU installieren, falls "-install-qemu" übergeben wurde
+echo %* | findstr /i "\-install-qemu" >nul
+if %errorlevel% == 0 (
+    echo.
+    echo %BLUE%=======================================================================%RESET%
+    echo %YELLOW%               LOKALES QEMU INITIALISIEREN%RESET%
+    echo %BLUE%=======================================================================%RESET%
+    echo.
+    echo %YELLOW%WICHTIGER HINWEIS ZUR INSTALLATION:%RESET%
+    echo Der QEMU-Installer wird sich gleich öffnen.
+    echo %GREEN%Bitte installieren Sie QEMU direkt in den vorgeschlagenen Projektordner (%PROJEKT_PFAD%qemu).%RESET%
+    echo %YELLOW%Warum? Dies garantiert, dass Ihr Projekt 100%% portabel und unabhängig bleibt.%RESET%
+    echo.
+    echo %YELLOW%[QEMU] QEMU wird heruntergeladen...%RESET%
+    echo %YELLOW%Von: https://qemu.weilnetz.de%RESET%
+    curl.exe -k -L -# -o ".\\qemu_setup.exe" "https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
+    if exist ".\\qemu_setup.exe" (
+        echo %YELLOW%[QEMU] Installation wird gestartet... Bitte folgen Sie den Anweisungen.%RESET%
+        
+        :: HINWEIS: Bei der QEMU-Installation ist eine Benutzerinteraktion nötig, daher kein silent install.
+        start /wait "" ".\\qemu_setup.exe" /DIR="%PROJEKT_PFAD%qemu"
+        
+        del ".\\qemu_setup.exe" >nul 2>&1
+        if exist "%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe" (
+            echo %GREEN%✔ Lokales QEMU erfolgreich eingerichtet!%RESET%
+        ) else (
+            echo %RED%[FEHLER] QEMU wurde nicht im erwarteten Verzeichnis installiert.%RESET%
+        )
+        echo Drücken Sie eine beliebige Taste, um fortzufahren...
+        pause >nul
+    ) else (
+        echo %RED%[ERROR] Download von QEMU fehlgeschlagen!%RESET%
+        pause
+    )
+)
+
+echo.
+echo %GREEN%=======================================================================%RESET%
+echo %GREEN%✔ Alle notwendigen Installationen wurden durchgeführt.%RESET%
+echo %YELLOW%Das Hauptmenü wird gestartet...%RESET%
+echo %BLUE%=======================================================================%RESET%
+timeout /t 2 /nobreak >nul
+goto :MAIN_MENU
 
 :: =======================================================================
 
@@ -92,7 +169,7 @@ cls
 
 echo %BLUE%=======================================================================%RESET%
 
-echo     ctrlX OS SDK App Build-Environment Console %GREEN%(Consolidated Setup)%RESET%
+echo     ctrlX OS SDK App Build-Environment Console %RESET%
 
 echo %BLUE%=======================================================================%RESET%
 
@@ -141,13 +218,16 @@ echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
 echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       : %VM24_TEXT%
 
 :QEMU_STATUS
-
 echo(
-
 echo %BLUE%[QEMU-Laufzeitumgebung]%RESET%
-
+if not exist "qemu\qemu-system-x86_64.exe" (
+    set "QEMU_SOURCE=Nicht installiert"
+    set "QEMU_EXE=N/A"
+) else (
+    set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
+    set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
+)
 echo   - Modus: %GREEN%%QEMU_SOURCE%%RESET%
-
 echo   - Pfad:  %YELLOW%%QEMU_EXE%%RESET%
 
 echo(
@@ -518,7 +598,7 @@ if exist "qemu\qemu-system-x86_64.exe" (
 
     set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
 
-    set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
+    set "QEMU_SOURCE=Lokal im Projekt"
 
     echo.
 
@@ -653,137 +733,66 @@ if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
 if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
 
 :: =======================================================================
-
 :: 🚀 CLOUD-INIT CONFIGURATION (CIDATA)
-
 :: =======================================================================
-
 echo %BLUE%[Cloud-Init]%RESET% Erzeuge Konfigurationsdateien im CIDATA-Ordner...
-
 :: Absoluten Pfad für das Verzeichnis sicherstellen!
-
 if not exist "%PROJEKT_PFAD%instances\cidata" mkdir "%PROJEKT_PFAD%instances\cidata" >nul 2>&1
-
 :: meta-data muss existieren
-
 echo instance-id: ctrlx-build-env-vm > "%PROJEKT_PFAD%instances\cidata\meta-data"
-
 echo local-hostname: ctrlx-sdk-vm >> "%PROJEKT_PFAD%instances\cidata\meta-data"
-
 :: user-data mit sauberer Klartext-Passwort-Zuweisung und SSH-Injektion
-
 echo #cloud-config> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 :: Proxy-Definitionen direkt für Cloud-Init, damit Paket-Downloads (packages-Block) funktionieren!
-
 if "%USE_PROXY%"=="true" echo proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 if "%USE_PROXY%"=="true" echo apt:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 if "%USE_PROXY%"=="true" echo   proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo users:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - name: boschrexroth>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     groups: sudo, lxd>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     shell: /bin/bash>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     ssh_authorized_keys:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 :: Liest den lokal generierten Key dynamisch aus und schreibt ihn direkt in das Cloud-Init File
-
 for /f "usebackq delims=" %%i in ("%PROJEKT_PFAD%id_rsa_ctrlx.pub") do (
-
     echo       - %%i>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 )
-
 echo chpasswd:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   list: ^|>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     boschrexroth:boschrexroth>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   expire: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo ssh_pwauth: True>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo disable_root: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 :: Standardpakete für Ubuntu vordefinieren, jetzt MIT 'unzip'
-
 echo packages:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - git>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - curl>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 :: Das automatisierte SDK Provisionierungs-Skript absolut flach erzeugen
-
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
-
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
-
 > "%SDK_SH%" echo #!/bin/bash
-
 :: Erzeuge Autologin-Konfig sauber über tee (verhindert CMD Redirect-Fehler!)
-
+>> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
 >> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I ^\$TERM" ^| tee /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
-
 >> "%SDK_SH%" echo systemctl daemon-reload
-
 >> "%SDK_SH%" echo systemctl restart serial-getty@ttyS0.service
-
 :: Schreibe die .bashrc-Statusanzeige sauber als blockweise Linux-Injektion (Kein einziger Windows Redirect-Fehler!)
-
 >> "%SDK_SH%" echo cat ^<^< 'EOF' ^| tee -a /home/boschrexroth/.bashrc
-
 >> "%SDK_SH%" echo.
-
 >> "%SDK_SH%" echo if [ -f /var/lib/cloud/instance/boot-finished ]; then
-
 >> "%SDK_SH%" echo     echo -e "\n\e[92m✔ ctrlX SDK-Setup ist vollständig abgeschlossen und einsatzbereit!\e[0m"
-
 >> "%SDK_SH%" echo else
-
 >> "%SDK_SH%" echo     echo -e "\n\e[93m⏳ Das ctrlX SDK-Setup läuft noch im Hintergrund. Bitte warten...\e[0m"
-
 >> "%SDK_SH%" echo     echo -e "Sie können den Fortschritt mit folgendem Befehl verfolgen:"
-
 >> "%SDK_SH%" echo     echo -e "   \e[94mtail -f /var/log/cloud-init-output.log\e[0m\n"
-
 >> "%SDK_SH%" echo fi
-
 >> "%SDK_SH%" echo EOF
-
 :: SPRINGE ZU PROXY-ERSTELLUNG (Völlig flache, klammerfreie Auswertung schützt vor Caret-Fehlern!)
-
 if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
-
 >> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
-
->> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%"
-
->> "%SDK_SH%" echo export https_proxy="%VM_PROXY_URL%"
-
->> "%SDK_SH%" echo export HTTP_PROXY="%VM_PROXY_URL%"
-
->> "%SDK_SH%" echo export HTTPS_PROXY="%VM_PROXY_URL%"
-
->> "%SDK_SH%" echo export no_proxy="localhost,127.0.0.1,10.0.2.2,.bosch.com"
-
->> "%SDK_SH%" echo export NO_PROXY="localhost,127.0.0.1,10.0.2.2,.bosch.com"
-
 :: Umgebungsvariablen dauerhaft in /etc/environment eintragen (Piped tee umgeht CMD-Parser vollständig!)
 >> "%SDK_SH%" echo echo "http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
@@ -791,27 +800,33 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
-
+:: Globalen Profile.d-Proxy einrichten (für alle Login-Shells)
+>> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo echo "export HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo echo "export HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo echo "export no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo chmod +x /etc/profile.d/proxy.sh
+:: Globalen Bashrc-Proxy einrichten (für alle Bash-Instanzen, auch nicht-interaktive SSH-Sessions)
+>> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
+>> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
+>> "%SDK_SH%" echo echo "export HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
+>> "%SDK_SH%" echo echo "export HTTPS_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
+>> "%SDK_SH%" echo echo "export no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
+>> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
 :: Apt Proxy permanent konfigurieren
 >> "%SDK_SH%" echo echo "Acquire::http::Proxy \"%VM_PROXY_URL%\";" ^| tee /etc/apt/apt.conf.d/99proxy
 >> "%SDK_SH%" echo echo "Acquire::https::Proxy \"%VM_PROXY_URL%\";" ^| tee -a /etc/apt/apt.conf.d/99proxy
-
 :: Sudoers so konfigurieren, dass Umgebungsvariablen bei sudo apt beibehalten werden
 >> "%SDK_SH%" echo echo "Defaults env_keep += \"http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY\"" ^| tee /etc/sudoers.d/proxy
 >> "%SDK_SH%" echo chmod 0440 /etc/sudoers.d/proxy
-
 :: Snap Daemon Proxy global einrichten
-
->> "%SDK_SH%" echo systemctl start snapd.socket snapd
-
+>> "%SDK_SH%" echo systemctl restart snapd.socket snapd.service
 >> "%SDK_SH%" echo sleep 5
-
 >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
-
 >> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
-
 :SKIP_PROXY_CONFIG
-
 >> "%SDK_SH%" echo # Patch APT-Quellen fuer arm64 Cross-Compilation (verhindert 404 Fehler)
 >> "%SDK_SH%" echo if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
 >> "%SDK_SH%" echo     if ! grep -q "Architectures:" /etc/apt/sources.list.d/ubuntu.sources; then
@@ -848,51 +863,28 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo EOF
 >> "%SDK_SH%" echo     fi
 >> "%SDK_SH%" echo fi
-
 >> "%SDK_SH%" echo # Klonen des SDK und Ausfuehren der Setup-Skripte im User-Kontext
-
 >> "%SDK_SH%" echo su - boschrexroth -c "git config --global http.sslVerify false"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "wget --no-check-certificate https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "chmod a+x clone-install-sdk.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
-
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
-
 :: Binde das Provisionierungsskript nun sauber in die user-data Struktur ein
-
 echo write_files:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - path: /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     permissions: '0755'>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo     content: ^|>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 :: Kopiert das flach geschriebene setup-sdk.sh Zeile für Zeile mit Einrückungen in die user-data
-
 for /f "usebackq delims=" %%G in ("%SDK_SH%") do echo       %%G>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo runcmd:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
-
 :: network-config erzeugen (Bulletproof vor-angestellte Umleitung um Stderr-Bug zu vermeiden)
-
 > "%PROJEKT_PFAD%instances\cidata\network-config" echo version: 2
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo ethernets:
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo   all:
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo     match:
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo       name: 'en*'
-
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo     dhcp4: true
 
 :: =======================================================================
@@ -1097,3 +1089,63 @@ echo %YELLOW%Zurueck zum Hauptmenue...%RESET%
 pause
 
 goto :MAIN_MENU
+
+:: =======================================================================
+:: HELPER SUBROUTINES
+:: =======================================================================
+:CHECK_ALL_DEPS
+    if not exist "qemu\qemu-system-x86_64.exe" (
+        call :ADD_MISSING "Lokales QEMU"
+        set "INSTALL_ARGS=%INSTALL_ARGS% -install-qemu"
+    )
+    
+    call :CHECK_VSCODE_PATH_ROBUST
+    if "%VSCODE_OK%"=="No" (
+        call :ADD_MISSING "VS Code"
+        set "INSTALL_ARGS=%INSTALL_ARGS% -install-vscode -install-extensions"
+    ) else (
+        call :CHECK_EXTENSIONS
+        if "%EXTENSIONS_OK%"=="No" (
+            call :ADD_MISSING "eine oder mehrere VS Code Erweiterungen"
+            set "INSTALL_ARGS=%INSTALL_ARGS% -install-extensions"
+        )
+    )
+goto :EOF
+
+:CHECK_VSCODE_PATH_ROBUST
+    set "VSCODE_OK=No"
+    set "CODE_EXE="
+    for /f "tokens=*" %%p in ('where code 2^>nul') do (
+        if not defined CODE_EXE (
+           set "CODE_EXE=%%p"
+           set "VSCODE_OK=Yes"
+        )
+    )
+    if defined CODE_EXE goto :EOF
+
+    for /d %%u in (C:\Users\*) do (
+        if exist "%%u\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd" (
+            set "CODE_EXE=%%u\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd"
+            set "VSCODE_OK=Yes"
+            goto :EOF
+        )
+    )
+goto :EOF
+
+:CHECK_EXTENSIONS
+    set "EXTENSIONS_OK=Yes"
+    for %%e in (golang.go ms-dotnettools.csharp ms-python.python ms-vscode-remote.remote-ssh ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake) do (
+        "%CODE_EXE%" --list-extensions 2>nul | findstr /i /b /e /c:"%%e" >nul
+        if errorlevel 1 (
+            set "EXTENSIONS_OK=No"
+        )
+    )
+goto :EOF
+
+:ADD_MISSING
+    if defined MISSING_DEPS (
+        set "MISSING_DEPS=%MISSING_DEPS%, %~1"
+    ) else (
+        set "MISSING_DEPS=%~1"
+    )
+goto :EOF
