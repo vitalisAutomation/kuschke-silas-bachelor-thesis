@@ -49,15 +49,15 @@ echo %BLUE%=====================================================================
 echo %YELLOW%         ERFORDERLICHE KOMPONENTEN WERDEN EINGERICHTET%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo.
-echo %YELLOW%[Check] Folgende System-Abhängigkeiten fehlen auf Ihrem System:%RESET%
+echo %YELLOW%[Check] Folgende System-Abhaengigkeiten fehlen auf Ihrem System:%RESET%
 echo %RED%  * %MISSING_DEPS%%RESET%
 echo.
-echo %YELLOW%Administratorrechte sind für die automatische Installation erforderlich.%RESET%
+echo %YELLOW%Administratorrechte sind fuer die automatische Installation erforderlich.%RESET%
 echo.
-echo %GREEN%Das Skript wird sich nun schließen und in einem neuen Fenster mit%RESET%
-echo %GREEN%Admin-Rechten neu starten, um die Installation durchzuführen.%RESET%
+echo %GREEN%Das Skript wird sich nun schliessen und in einem neuen Fenster mit%RESET%
+echo %GREEN%Admin-Rechten neu starten, um die Installation durchzufuehren.%RESET%
 echo.
-echo Drücken Sie eine beliebige Taste, um die Installation als Administrator zu starten...
+echo Druecken Sie eine beliebige Taste, um die Installation als Administrator zu starten...
 pause >nul
 
 :: Baue einen einfachen, robusten Argument-String
@@ -76,7 +76,7 @@ exit
 @echo off
 cls
 echo %BLUE%=======================================================================%RESET%
-echo %GREEN%     SYSTEM-ABHÄNGIGKEITEN INSTALLIEREN (ADMIN-MODUS) %RESET%
+echo %GREEN%     SYSTEM-ABHAENGIGKEITEN INSTALLIEREN (ADMIN-MODUS) %RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 
@@ -89,7 +89,7 @@ if %errorlevel% == 0 (
     echo %YELLOW%[VS Code] Visual Studio Code wird heruntergeladen...%RESET%
     curl.exe -k -L -# -o ".\\vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
     if exist ".\\vscode_setup.exe" (
-        echo %YELLOW%[VS Code] Installation wird ausgeführt...%RESET%
+        echo %YELLOW%[VS Code] Installation wird ausgefuehrt...%RESET%
         start /wait "" ".\\vscode_setup.exe" /verysilent /mergetasks
         del ".\\vscode_setup.exe" >nul 2>&1
         echo %GREEN%✔ VS Code Installation erfolgreich.%RESET% & pause >nul
@@ -120,7 +120,7 @@ if %errorlevel% == 0 (
 echo %ARG_STRING% | findstr /i /c:"-install-qemu" >nul
 if %errorlevel% == 0 (
     echo.
-    echo %YELLOW%[QEMU] WICHTIGER HINWEIS: Bitte installieren Sie im nächsten Schritt in den Projektordner.%RESET%
+    echo %YELLOW%[QEMU] WICHTIGER HINWEIS: Bitte installieren Sie im naechsten Schritt in den Projektordner.%RESET%
     echo %GREEN%Ziel: %PROJEKT_PFAD%qemu%RESET%
     echo.
     echo %YELLOW%[QEMU] QEMU wird heruntergeladen...%RESET%
@@ -141,8 +141,8 @@ if %errorlevel% == 0 (
 )
 
 echo.
-echo %GREEN%✔ Alle notwendigen Installationen wurden durchgeführt.%RESET%
-echo %YELLOW%Das Hauptmenü wird gestartet...%RESET%
+echo %GREEN%✔ Alle notwendigen Installationen wurden durchgefuehrt.%RESET%
+echo %YELLOW%Das Hauptmenue wird gestartet...%RESET%
 timeout /t 2 /nobreak >nul
 goto :MAIN_MENU
 
@@ -164,7 +164,7 @@ echo %BLUE%=====================================================================
 
 echo(
 
-echo Dieses Setup verwaltet und startet Ihre ctrlX App Build-VMs direkt.
+echo Dieses Setup verwaltet und startet Ihre ctrlX App Build-VMs.
 
 echo.
 
@@ -202,9 +202,9 @@ if "%VM24_STATUS%"=="Ja" set "VM24_TEXT=%GREEN%Vorhanden%RESET%"
 
 :: Kein "->" mehr! Das verhindert die Fehlinterpretationen des CMD-Parsers (Schutz vor Redirects)
 
-echo   - Ubuntu Core 22 (für ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
+echo   - Ubuntu Core 22 (fuer ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
 
-echo   - Ubuntu Core 24 (für ctrlX OS 4.x)       : %VM24_TEXT%
+echo   - Ubuntu Core 24 (fuer ctrlX OS 4.x)       : %VM24_TEXT%
 
 :QEMU_STATUS
 echo(
@@ -214,7 +214,7 @@ if not exist "qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=N/A"
 ) else (
     set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
-    set "QEMU_SOURCE=Lokal im Projekt (Isoliert und Autark)"
+    set "QEMU_SOURCE=Lokal im Projekt"
 )
 echo   - Modus: %GREEN%%QEMU_SOURCE%%RESET%
 echo   - Pfad:  %YELLOW%%QEMU_EXE%%RESET%
@@ -261,13 +261,13 @@ echo %BLUE%=====================================================================
 
 echo(
 
-echo Welche VM möchten Sie starten?
+echo Welche VM moechten Sie starten?
 
-echo 1) Ubuntu Core 22 (für ctrlX OS 1.x / 2.x / 3.x) [%VM22_TEXT%]
+echo 1) Ubuntu Core 22 (fuer ctrlX OS 1.x / 2.x / 3.x) [%VM22_TEXT%]
 
-echo 2) Ubuntu Core 24 (für ctrlX OS 4.x)             [%VM24_TEXT%]
+echo 2) Ubuntu Core 24 (fuer ctrlX OS 4.x)             [%VM24_TEXT%]
 
-echo 3) Zurück zum Hauptmenü
+echo 3) Zurueck zum Hauptmenue
 
 echo(
 
@@ -339,7 +339,7 @@ echo Bitte waehlen Sie die gewuenschte ctrlX OS Zielversion aus:
 
 echo.
 
-echo 1) ctrlX OS 1.xx %YELLOW%(Nutzt standardmaeßig Core 20; nutzt Core 22 als Fallback)%RESET%
+echo 1) ctrlX OS 1.xx %YELLOW%(Nutzt standardmaessig Core 20; nutzt Core 22 als Fallback)%RESET%
 
 echo 2) ctrlX OS 2.xx %GREEN%(Basiert on Ubuntu Core 22)%RESET%
 
@@ -347,7 +347,7 @@ echo 3) ctrlX OS 3.xx %GREEN%(Basiert on Ubuntu Core 22)%RESET%
 
 echo 4) ctrlX OS 4.xx %GREEN%(Basiert on Ubuntu Core 24)%RESET%
 
-echo 5) Zurück zum Hauptmenü
+echo 5) Zurueck zum Hauptmenue
 
 echo(
 
@@ -359,7 +359,7 @@ if "%OS_CHOICE%"=="1" (
 
     set "DOWNLOAD_TARGET=VM"
 
-    echo %YELLOW%[Info] ctrlX OS 1.xx nutzt standardmaeßig Core 20. Wir richten Core 22 ein.%RESET%
+    echo %YELLOW%[Info] ctrlX OS 1.xx nutzt standardmaessig Core 20. Wir richten Core 22 ein.%RESET%
 
     pause
 
@@ -561,7 +561,7 @@ if not exist "%QEMU_TEMP_FILE%" (
 
     echo.
 
-    echo %RED%[ERROR] Download fehlgeschlagen! Bitte Netzwerk- und Proxy-Einstellungen prüfen.%RESET%
+    echo %RED%[ERROR] Download fehlgeschlagen! Bitte Netzwerk- und Proxy-Einstellungen pruefen.%RESET%
 
     pause
 
@@ -772,10 +772,10 @@ if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 >> "%SDK_SH%" echo cat ^<^< 'EOF' ^| tee -a /home/boschrexroth/.bashrc
 >> "%SDK_SH%" echo.
 >> "%SDK_SH%" echo if [ -f /var/lib/cloud/instance/boot-finished ]; then
->> "%SDK_SH%" echo     echo -e "\n\e[92m✔ ctrlX SDK-Setup ist vollständig abgeschlossen und einsatzbereit!\e[0m"
+>> "%SDK_SH%" echo     echo -e "\n\e[92m✔ ctrlX SDK-Setup ist vollstaendig abgeschlossen und einsatzbereit!\e[0m"
 >> "%SDK_SH%" echo else
->> "%SDK_SH%" echo     echo -e "\n\e[93m⏳ Das ctrlX SDK-Setup läuft noch im Hintergrund. Bitte warten...\e[0m"
->> "%SDK_SH%" echo     echo -e "Sie können den Fortschritt mit folgendem Befehl verfolgen:"
+>> "%SDK_SH%" echo     echo -e "\n\e[93m⏳ Das ctrlX SDK-Setup laeuft noch im Hintergrund. Bitte warten...\e[0m"
+>> "%SDK_SH%" echo     echo -e "Sie koennen den Fortschritt mit folgendem Befehl verfolgen:"
 >> "%SDK_SH%" echo     echo -e "   \e[94mtail -f /var/log/cloud-init-output.log\e[0m\n"
 >> "%SDK_SH%" echo fi
 >> "%SDK_SH%" echo EOF
@@ -969,11 +969,11 @@ if exist "%PROJEKT_PFAD%instances\cidata\network-config" (
 
 )
 
-echo %GREEN%[Prüfung] Überprüfe den Inhalt der erstellten ISO-Schnittstelle...%RESET%
+echo %GREEN%[Pruefung] Ueberpruefe den Inhalt der erstellten ISO-Schnittstelle...%RESET%
 
 echo   - Instances Ordner: %GREEN%OK%RESET%
 
-echo   - seed.iso Größe:   %GREEN%%SEED_SIZE% Bytes%RESET%
+echo   - seed.iso Groesse:   %GREEN%%SEED_SIZE% Bytes%RESET%
 
 echo   - user-data:        %GREEN%%USER_DATA_SIZE%%RESET%
 
@@ -995,7 +995,7 @@ echo VM ist einsatzbereit (Ubuntu Core %CORE_VER%).
 
 echo.
 
-echo %YELLOW%Druecken Sie eine beliebige Taste, um die VM jetzt direkt zu starten...%RESET%
+echo %YELLOW%Druecken Sie eine beliebige Taste, um die VM jetzt zu starten...%RESET%
 
 pause >nul
 
