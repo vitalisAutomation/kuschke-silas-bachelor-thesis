@@ -1,12 +1,11 @@
-"""
-ctrlX CORE Data Layer Console Client.
+"""Minimal demo application for testing ctrlX CORE REST interactions.
 
-This module provides a command-line interface to interact with the Bosch Rexroth
-ctrlX CORE Data Layer REST API. It allows querying system metrics and changing
-the controller's operating state.
+This script serves as a lightweight Flask-based test client for Bosch Rexroth
+ctrlX CORE systems. It demonstrates how to authenticate, read Data Layer
+values, and change the scheduler state over HTTPS using the local controller API.
 
-Source: Gemini 3.6 Flash
-Edited by: Silas Kuschke
+The script is intended for exploratory testing and validation workflows before
+production deployment.
 """
 
 import getpass
@@ -27,12 +26,11 @@ HTTP_SESSION.verify = False
 HTTP_SESSION.trust_env = False
 
 def configure_connection() -> None:
-    """
-    Prompt the user for ctrlX CORE connection details.
+    """Prompt the user for ctrlX CORE connection details.
 
-    If the user presses Enter without typing, fallback standard values
-    (IP: '192.168.1.1', User/Password: 'boschrexroth') are applied.
-    The password input is masked for security.
+    If the user presses Enter without typing, fallback values are used:
+    IP 192.168.1.1, username and password set to boschrexroth.
+    The password prompt masks the input for security.
     """
     print("\n--- Configure ctrlX CORE Connection (Press Enter for Default) ---")
     # Prompt for IP address
@@ -47,14 +45,14 @@ def configure_connection() -> None:
     print("-" * 65)
 
 def fetch_bearer_token() -> bool:
-    """
-    Authenticate against the Identity Manager of the ctrlX CORE.
+    """Authenticate against the ctrlX CORE Identity Manager.
 
-    Retrieves a valid Bearer token and updates the global HTTP session headers
-    for all subsequent API calls.
+    Retrieves a valid bearer token and stores it in the shared HTTP session.
+    This token is then used for subsequent requests to the ctrlX Data Layer and
+    scheduler endpoints.
 
-    :return: True if authentication succeeded, False otherwise.
-    :rtype: bool
+    Returns:
+        bool: True if authentication succeeds, otherwise False.
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/identity-manager/api/v2/auth/token"
@@ -79,13 +77,14 @@ def fetch_bearer_token() -> bool:
         return False
 
 def read_datalayer_value(path: str) -> dict | None:
-    """
-    Read a value from a specific ctrlX Data Layer node.
+    """Read a value from a specific ctrlX Data Layer node.
 
-    :param path: The Data Layer node path (e.g., 'scheduler/admin/state').
-    :type path: str
-    :return: The JSON response dictionary from the node if successful, None otherwise.
-    :rtype: dict or None
+    Args:
+        path: The node path, for example ``scheduler/admin/state``.
+
+    Returns:
+        dict | None: Parsed JSON payload returned by the controller, or None when
+        the request fails.
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/automation/api/v2/nodes/{path}"
@@ -98,16 +97,16 @@ def read_datalayer_value(path: str) -> dict | None:
         return None
 
 def change_scheduler_state(target_state: str) -> bool:
-    """
-    Change the scheduler operating state (OPERATING, SETUP, SERVICE).
+    """Change the ctrlX scheduler operating state.
 
-    Sends a PUT request to the 'scheduler/admin/state' node using the exact
-    payload structure analyzed from the ctrlX Web-UI network request.
+    The function sends the exact payload structure used by the controller admin
+    API and validates the result by reading the state back from the Data Layer.
 
-    :param target_state: The target state ('OPERATING', 'SETUP', 'SERVICE').
-    :type target_state: str
-    :return: True if state transition was successful and verified, False otherwise.
-    :rtype: bool
+    Args:
+        target_state: One of ``OPERATING``, ``SETUP`` or ``SERVICE``.
+
+    Returns:
+        bool: True when the requested state is confirmed, otherwise False.
     """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/automation/api/v2/nodes/scheduler/admin/state"
@@ -148,11 +147,10 @@ def change_scheduler_state(target_state: str) -> bool:
         return False
 
 def show_menu() -> str:
-    """
-    Display the interactive main console menu.
+    """Display the interactive CLI menu and return the selected option.
 
-    :return: The user's menu choice as a string.
-    :rtype: str
+    Returns:
+        str: User input representing the requested action.
     """
     print("\n--- Main Menu ---")
     print("1. Query current CPU utilization")
@@ -163,10 +161,10 @@ def show_menu() -> str:
     return input("Please select an option: ")
 
 def main() -> None:
-    """
-    Execute the main application loop.
+    """Run the interactive ctrlX CORE test console.
 
-    Handles the CLI menu routing and manages the connection states.
+    The function establishes the controller connection, authenticates, and then
+    loops through the available Data Layer actions until the user exits.
     """
     configure_connection()
     if not fetch_bearer_token():

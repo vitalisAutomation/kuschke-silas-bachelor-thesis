@@ -1,26 +1,29 @@
 Project API Reference
 =====================
 
-Flask Backend (app.py)
+Core Dashboard Backend
 ----------------------
 
 .. automodule:: app
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
-Deployment Automation (install_snap.py)
----------------------------------------
+Snap Installation Automation
+----------------------------
 
 .. automodule:: install_snap
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
-Flask App Test (app.py)
-----------------------------------
+License Installation Automation
+-------------------------------
 
-.. automodule:: app
+.. automodule:: install_license
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:

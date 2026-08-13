@@ -69,12 +69,14 @@
            <div itemprop="articleBody">
              
   <h1>Source code for app</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">ctrlX CORE Data Layer Console Client.</span>
+<span></span><span class="sd">&quot;&quot;&quot;Minimal demo application for testing ctrlX CORE REST interactions.</span>
 
-<span class="sd">This module provides a command-line interface to interact with the Bosch Rexroth</span>
-<span class="sd">ctrlX CORE Data Layer REST API. It allows querying system metrics and changing</span>
-<span class="sd">the controller&#39;s operating state.</span>
+<span class="sd">This script serves as a lightweight Flask-based test client for Bosch Rexroth</span>
+<span class="sd">ctrlX CORE systems. It demonstrates how to authenticate, read Data Layer</span>
+<span class="sd">values, and change the scheduler state over HTTPS using the local controller API.</span>
+
+<span class="sd">The script is intended for exploratory testing and validation workflows before</span>
+<span class="sd">production deployment.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">getpass</span>
@@ -97,12 +99,11 @@
 <div class="viewcode-block" id="configure_connection">
 <a class="viewcode-back" href="../modules.html#app.configure_connection">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">configure_connection</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Prompt the user for ctrlX CORE connection details.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Prompt the user for ctrlX CORE connection details.</span>
 
-<span class="sd">    If the user presses Enter without typing, fallback standard values</span>
-<span class="sd">    (IP: &#39;192.168.1.1&#39;, User/Password: &#39;boschrexroth&#39;) are applied.</span>
-<span class="sd">    The password input is masked for security.</span>
+<span class="sd">    If the user presses Enter without typing, fallback values are used:</span>
+<span class="sd">    IP 192.168.1.1, username and password set to boschrexroth.</span>
+<span class="sd">    The password prompt masks the input for security.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Configure ctrlX CORE Connection (Press Enter for Default) ---&quot;</span><span class="p">)</span>
     <span class="c1"># Prompt for IP address</span>
@@ -120,14 +121,14 @@
 <div class="viewcode-block" id="fetch_bearer_token">
 <a class="viewcode-back" href="../modules.html#app.fetch_bearer_token">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">fetch_bearer_token</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Authenticate against the Identity Manager of the ctrlX CORE.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Authenticate against the ctrlX CORE Identity Manager.</span>
 
-<span class="sd">    Retrieves a valid Bearer token and updates the global HTTP session headers</span>
-<span class="sd">    for all subsequent API calls.</span>
+<span class="sd">    Retrieves a valid bearer token and stores it in the shared HTTP session.</span>
+<span class="sd">    This token is then used for subsequent requests to the ctrlX Data Layer and</span>
+<span class="sd">    scheduler endpoints.</span>
 
-<span class="sd">    :return: True if authentication succeeded, False otherwise.</span>
-<span class="sd">    :rtype: bool</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True if authentication succeeds, otherwise False.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/identity-manager/api/v2/auth/token&quot;</span>
@@ -155,13 +156,14 @@
 <div class="viewcode-block" id="read_datalayer_value">
 <a class="viewcode-back" href="../modules.html#app.read_datalayer_value">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">read_datalayer_value</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Read a value from a specific ctrlX Data Layer node.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read a value from a specific ctrlX Data Layer node.</span>
 
-<span class="sd">    :param path: The Data Layer node path (e.g., &#39;scheduler/admin/state&#39;).</span>
-<span class="sd">    :type path: str</span>
-<span class="sd">    :return: The JSON response dictionary from the node if successful, None otherwise.</span>
-<span class="sd">    :rtype: dict or None</span>
+<span class="sd">    Args:</span>
+<span class="sd">        path: The node path, for example ``scheduler/admin/state``.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict | None: Parsed JSON payload returned by the controller, or None when</span>
+<span class="sd">        the request fails.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -177,16 +179,16 @@
 <div class="viewcode-block" id="change_scheduler_state">
 <a class="viewcode-back" href="../modules.html#app.change_scheduler_state">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">change_scheduler_state</span><span class="p">(</span><span class="n">target_state</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Change the scheduler operating state (OPERATING, SETUP, SERVICE).</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Change the ctrlX scheduler operating state.</span>
 
-<span class="sd">    Sends a PUT request to the &#39;scheduler/admin/state&#39; node using the exact</span>
-<span class="sd">    payload structure analyzed from the ctrlX Web-UI network request.</span>
+<span class="sd">    The function sends the exact payload structure used by the controller admin</span>
+<span class="sd">    API and validates the result by reading the state back from the Data Layer.</span>
 
-<span class="sd">    :param target_state: The target state (&#39;OPERATING&#39;, &#39;SETUP&#39;, &#39;SERVICE&#39;).</span>
-<span class="sd">    :type target_state: str</span>
-<span class="sd">    :return: True if state transition was successful and verified, False otherwise.</span>
-<span class="sd">    :rtype: bool</span>
+<span class="sd">    Args:</span>
+<span class="sd">        target_state: One of ``OPERATING``, ``SETUP`` or ``SERVICE``.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True when the requested state is confirmed, otherwise False.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="n">CTRLX_CONFIG</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/automation/api/v2/nodes/scheduler/admin/state&quot;</span>
@@ -230,11 +232,10 @@
 <div class="viewcode-block" id="show_menu">
 <a class="viewcode-back" href="../modules.html#app.show_menu">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">show_menu</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Display the interactive main console menu.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Display the interactive CLI menu and return the selected option.</span>
 
-<span class="sd">    :return: The user&#39;s menu choice as a string.</span>
-<span class="sd">    :rtype: str</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        str: User input representing the requested action.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Main Menu ---&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1. Query current CPU utilization&quot;</span><span class="p">)</span>
@@ -248,10 +249,10 @@
 <div class="viewcode-block" id="main">
 <a class="viewcode-back" href="../modules.html#app.main">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Execute the main application loop.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run the interactive ctrlX CORE test console.</span>
 
-<span class="sd">    Handles the CLI menu routing and manages the connection states.</span>
+<span class="sd">    The function establishes the controller connection, authenticates, and then</span>
+<span class="sd">    loops through the available Data Layer actions until the user exits.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">configure_connection</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">fetch_bearer_token</span><span class="p">():</span>

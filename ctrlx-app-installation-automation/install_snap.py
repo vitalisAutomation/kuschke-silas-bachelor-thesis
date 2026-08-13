@@ -31,7 +31,11 @@ WORKING_PAYLOAD_FORMAT = None
 
 
 def configure_connection() -> None:
-    """Prompt the user for ctrlX CORE connection details."""
+    """Prompt the user for ctrlX CORE connection details.
+
+    The values are stored in the global configuration dictionary and can later be
+    reused for authentication and package installation requests.
+    """
     print("\n--- Configure ctrlX CORE Connection (Press Enter for Default) ---")
     ip_in = input("Enter IP Address [192.168.1.1]: ").strip()
     CTRLX_CONFIG['ip'] = ip_in or "192.168.1.1"
@@ -42,7 +46,14 @@ def configure_connection() -> None:
 
 
 def fetch_bearer_token() -> bool:
-    """Authenticate against the Identity Manager and get a Bearer token."""
+    """Authenticate against the Identity Manager and obtain a bearer token.
+
+    The token is written into the shared HTTP session so that subsequent
+    installation and Data Layer requests can be authorized automatically.
+
+    Returns:
+        bool: True when authentication succeeds, otherwise False.
+    """
     ip = CTRLX_CONFIG["ip"]
     url = f"https://{ip}/identity-manager/api/v2/auth/token"
     payload = {
