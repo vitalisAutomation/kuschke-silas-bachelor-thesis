@@ -5,6 +5,9 @@ This module provides a robust command-line interface to automate the
 installation and management of Snap applications on Bosch Rexroth ctrlX CORE
 devices via the REST API, featuring highly robust, API-based state transition
 and upload handling.
+
+Source: Gemini 3.6 Flash
+Edited by: Silas Kuschke
 """
 
 import os

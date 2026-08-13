@@ -1,5 +1,8 @@
 """
 Robust, Sphinx-compliant Flask Backend for the ctrlX Dashboard App.
+
+Source: Gemini 3.6 Flash
+Edited by: Silas Kuschke
 """
 
 import os

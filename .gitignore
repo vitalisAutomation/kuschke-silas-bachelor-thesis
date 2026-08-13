@@ -25,3 +25,13 @@ stage
 # Licenses
 */licenses
 *ctrlx_cores.env
+
+# VM file
+*/instances
+sdk-vm-automation/qemu_error.log
+sdk-vm-automation/id_rsa_ctrlx.pub
+sdk-vm-automation/install_debug.log
+sdk-vm-automation/manual_start_vm_logs.txt
+
+# QEMU
+*/qemu

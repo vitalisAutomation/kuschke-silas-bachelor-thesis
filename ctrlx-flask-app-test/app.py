@@ -4,6 +4,9 @@ ctrlX CORE Data Layer Console Client.
 This module provides a command-line interface to interact with the Bosch Rexroth
 ctrlX CORE Data Layer REST API. It allows querying system metrics and changing
 the controller's operating state.
+
+Source: Gemini 3.6 Flash
+Edited by: Silas Kuschke
 """
 
 import getpass
