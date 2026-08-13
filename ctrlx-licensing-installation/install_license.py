@@ -5,6 +5,9 @@ This module provides a command-line interface to automate the installation
 of license capability responses (.bin files) on Bosch Rexroth ctrlX CORE devices
 via the REST API. It supports single or multi-device installation, secure
 credentials storage, and automatic 13-digit serial number retrieval.
+
+Source: Gemini 3.6 Flash
+Edited by: Silas Kuschke
 """
 
 import os

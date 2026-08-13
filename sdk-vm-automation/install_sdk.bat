@@ -1,3 +1,6 @@
+:: Source: Gemini 3.6 Flash
+:: Edited by: Silas Kuschke
+
 @echo off
 
 chcp 65001 >nul
