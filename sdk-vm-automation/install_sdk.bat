@@ -2,11 +2,11 @@
 
 chcp 65001 >nul
 
-:: Dynamische Generierung des ESC-Zeichens für fehlerfreie ANSI-Farben
+:: Dynamically generate the ESC character for reliable ANSI colors
 
 for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
 
-:: Farbcodes definieren
+:: Define color codes
 
 set "BLUE=%ESC%[94m"
 set "GREEN=%ESC%[92m"
@@ -17,17 +17,17 @@ set "RESET=%ESC%[0m"
 cd /d "%~dp0"
 set "PROJEKT_PFAD=%~dp0"
 
-:: Bereite Logdatei vor
+:: Prepare the log file
 if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 
 :: =======================================================================
-:: 🚦 ABLAUFSTEUERUNG
+:: WORKFLOW CONTROL
 :: =======================================================================
 
-:: Prüfe, ob das Skript bereits im Admin-Modus zur Installation läuft
+:: Check whether the script is already running in admin mode for installation
 if "%~1"=="-install" goto :INSTALL_DEPS
 
-:: Normale Ausführung: Abhängigkeiten prüfen und bei Bedarf Admin-Modus anfordern
+:: Normal execution: check dependencies and request admin mode if needed
 set "INSTALL_QEMU_FLAG="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_EXT_FLAG="
@@ -41,26 +41,26 @@ if defined MISSING_DEPS (
 )
 
 :: =======================================================================
-:: 🔐 PHASE 1: ADMIN-RECHTE ANFORDERN
+:: PHASE 1: REQUEST ADMIN RIGHTS
 :: =======================================================================
 :REQUEST_ADMIN
 cls
 echo %BLUE%=======================================================================%RESET%
-echo %YELLOW%         ERFORDERLICHE KOMPONENTEN WERDEN EINGERICHTET%RESET%
+echo %YELLOW%         REQUIRED COMPONENTS ARE BEING SET UP%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo.
-echo %YELLOW%[Check] Folgende System-Abhaengigkeiten fehlen auf Ihrem System:%RESET%
+echo %YELLOW%[Check] The following system dependencies are missing on your system:%RESET%
 echo %RED%  * %MISSING_DEPS%%RESET%
 echo.
-echo %YELLOW%Administratorrechte sind fuer die automatische Installation erforderlich.%RESET%
+echo %YELLOW%Administrator rights are required for the automatic installation.%RESET%
 echo.
-echo %GREEN%Das Skript wird sich nun schliessen und in einem neuen Fenster mit%RESET%
-echo %GREEN%Admin-Rechten neu starten, um die Installation durchzufuehren.%RESET%
+echo %GREEN%The script will now close and restart in a new window with%RESET%
+echo %GREEN%administrator rights to complete the installation.%RESET%
 echo.
-echo Druecken Sie eine beliebige Taste, um die Installation als Administrator zu starten...
+echo Press any key to start the installation as administrator...
 pause >nul
 
-:: Baue einen einfachen, robusten Argument-String
+:: Build a simple, reliable argument string
 set "PS_ARGS=-install"
 if defined INSTALL_QEMU_FLAG set "PS_ARGS=%PS_ARGS% -install-qemu"
 if defined INSTALL_VSCODE_FLAG set "PS_ARGS=%PS_ARGS% -install-vscode"
@@ -70,85 +70,85 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 
 exit
 
 :: =======================================================================
-:: 🛠️ PHASE 2: INSTALLATION DER ABHÄNGIGKEITEN (ADMIN-MODUS)
+:: PHASE 2: INSTALL DEPENDENCIES (ADMIN MODE)
 :: =======================================================================
 :INSTALL_DEPS
 @echo off
 cls
 echo %BLUE%=======================================================================%RESET%
-echo %GREEN%     SYSTEM-ABHAENGIGKEITEN INSTALLIEREN (ADMIN-MODUS) %RESET%
+echo %GREEN%     INSTALLING SYSTEM DEPENDENCIES (ADMIN MODE) %RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 
-:: Erstelle eine Zeichenkette mit allen übergebenen Argumenten für eine einfache Suche
+:: Create a string of all provided arguments for simple matching
 set "ARG_STRING=%*"
 
-:: 1. VS Code installieren
+:: 1. Install VS Code
 echo %ARG_STRING% | findstr /i /c:"-install-vscode" >nul
 if %errorlevel% == 0 (
-    echo %YELLOW%[VS Code] Visual Studio Code wird heruntergeladen...%RESET%
+    echo %YELLOW%[VS Code] Downloading Visual Studio Code...%RESET%
     curl.exe -k -L -# -o ".\\vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
     if exist ".\\vscode_setup.exe" (
-        echo %YELLOW%[VS Code] Installation wird ausgefuehrt...%RESET%
+        echo %YELLOW%[VS Code] Running installation...%RESET%
         start /wait "" ".\\vscode_setup.exe" /verysilent /mergetasks
         del ".\\vscode_setup.exe" >nul 2>&1
-        echo %GREEN%✔ VS Code Installation erfolgreich.%RESET% & pause >nul
+        echo %GREEN%VS Code installation successful.%RESET% & pause >nul
     ) else (
-        echo %RED%[ERROR] Download von VS Code fehlgeschlagen!%RESET% & pause
+        echo %RED%[ERROR] Download of VS Code failed!%RESET% & pause
     )
 )
 
-:: 2. Erweiterungen installieren
+:: 2. Install extensions
 echo %ARG_STRING% | findstr /i /c:"-install-extensions" >nul
 if %errorlevel% == 0 (
     call :CHECK_VSCODE_PATH_ROBUST
     if defined CODE_EXE (
         echo.
-        echo %YELLOW%[VS Code] Installiere fehlende Erweiterungen...%RESET%
+        echo %YELLOW%[VS Code] Installing missing extensions...%RESET%
         for %%e in (golang.go ms-dotnettools.csharp ms-python.python ms-vscode-remote.remote-ssh ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake) do (
              "%CODE_EXE%" --list-extensions 2>nul | findstr /i /b /e /c:"%%e" >nul
              if errorlevel 1 (
-                echo %BLUE%  * Installiere %%e...%RESET%
+                echo %BLUE%  * Installing %%e...%RESET%
                 "%CODE_EXE%" --install-extension %%e --force >> "install_debug.log" 2>&1
              )
         )
-        echo %GREEN%✔ Installation der Erweiterungen abgeschlossen.%RESET% & pause >nul
+        echo %GREEN%Installation of extensions completed.%RESET% & pause >nul
     )
 )
 
-:: 3. QEMU installieren
+:: 3. Install QEMU
 echo %ARG_STRING% | findstr /i /c:"-install-qemu" >nul
 if %errorlevel% == 0 (
     echo.
-    echo %YELLOW%[QEMU] WICHTIGER HINWEIS: Bitte installieren Sie im naechsten Schritt in den Projektordner.%RESET%
-    echo %GREEN%Ziel: %PROJEKT_PFAD%qemu%RESET%
+    echo %YELLOW%[QEMU] IMPORTANT NOTE: In the next step, install it into the project folder.%RESET%
+    echo %GREEN%Target: %PROJEKT_PFAD%qemu%RESET%
     echo.
-    echo %YELLOW%[QEMU] QEMU wird heruntergeladen...%RESET%
+    echo %YELLOW%[QEMU] Downloading QEMU...%RESET%
     curl.exe -k -L -# -o ".\\qemu_setup.exe" "https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
     if exist ".\\qemu_setup.exe" (
-        echo %YELLOW%[QEMU] Installation wird gestartet...%RESET%
+        echo %YELLOW%[QEMU] Starting installation...%RESET%
         start /wait "" ".\\qemu_setup.exe" /DIR="%PROJEKT_PFAD%qemu"
         del ".\\qemu_setup.exe" >nul 2>&1
         if exist "%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe" (
-            echo %GREEN%✔ Lokales QEMU erfolgreich eingerichtet.%RESET%
+            echo %GREEN%Local QEMU successfully configured.%RESET%
         ) else (
-            echo %RED%[FEHLER] QEMU wurde nicht im erwarteten Verzeichnis installiert.%RESET%
+            echo %RED%[ERROR] QEMU was not installed in the expected directory.%RESET%
         )
         pause >nul
     ) else (
-        echo %RED%[ERROR] Download von QEMU fehlgeschlagen!%RESET% & pause
+        echo %RED%[ERROR] Download of QEMU failed!%RESET% & pause
     )
 )
 
 echo.
-echo %GREEN%✔ Alle notwendigen Installationen wurden durchgefuehrt.%RESET%
-echo %YELLOW%Das Hauptmenue wird gestartet...%RESET%
+echo %GREEN%All necessary installations were completed.%RESET%
+echo %YELLOW%The main menu is starting...%RESET%
 timeout /t 2 /nobreak >nul
 goto :MAIN_MENU
 
 :: =======================================================================
 
-:: 💻 HAUPTMENÜ (Direktstart bei bestehender Installation)
+:: MAIN MENU (direct start if already installed)
 
 :: =======================================================================
 
@@ -164,76 +164,76 @@ echo %BLUE%=====================================================================
 
 echo(
 
-echo Dieses Setup verwaltet und startet Ihre ctrlX App Build-VMs.
+echo This setup manages and starts your ctrlX app build VMs.
 
 echo.
 
-echo %BLUE%[STATUS] Vorhandene VMs im Verzeichnis 'instances':%RESET%
+echo %BLUE%[STATUS] Existing VMs in the 'instances' directory:%RESET%
 
 if not exist "instances" (
 
-    echo    %YELLOW%Das Verzeichnis 'instances' wurde noch nicht erstellt.%RESET%
+    echo    %YELLOW%The 'instances' directory has not been created yet.%RESET%
 
-    set "VM22_TEXT=%RED%Nicht vorhanden%RESET%"
+    set "VM22_TEXT=%RED%Not available%RESET%"
 
-    set "VM24_TEXT=%RED%Nicht vorhanden%RESET%"
+    set "VM24_TEXT=%RED%Not available%RESET%"
 
     goto :DISPLAY_VM_STATUS
 
 )
 
-set "VM22_STATUS=Nein"
+set "VM22_STATUS=No"
 
-set "VM24_STATUS=Nein"
+set "VM24_STATUS=No"
 
-if exist "instances\ubuntu-build-env-core22.qcow2" set "VM22_STATUS=Ja"
+if exist "instances\ubuntu-build-env-core22.qcow2" set "VM22_STATUS=Yes"
 
-if exist "instances\ubuntu-build-env-core24.qcow2" set "VM24_STATUS=Ja"
+if exist "instances\ubuntu-build-env-core24.qcow2" set "VM24_STATUS=Yes"
 
-set "VM22_TEXT=%RED%Nicht vorhanden%RESET%"
+set "VM22_TEXT=%RED%Not available%RESET%"
 
-if "%VM22_STATUS%"=="Ja" set "VM22_TEXT=%GREEN%Vorhanden%RESET%"
+if "%VM22_STATUS%"=="Yes" set "VM22_TEXT=%GREEN%Available%RESET%"
 
-set "VM24_TEXT=%RED%Nicht vorhanden%RESET%"
+set "VM24_TEXT=%RED%Not available%RESET%"
 
-if "%VM24_STATUS%"=="Ja" set "VM24_TEXT=%GREEN%Vorhanden%RESET%"
+if "%VM24_STATUS%"=="Yes" set "VM24_TEXT=%GREEN%Available%RESET%"
 
 :DISPLAY_VM_STATUS
 
-:: Kein "->" mehr! Das verhindert die Fehlinterpretationen des CMD-Parsers (Schutz vor Redirects)
+:: Avoid the "->" sequence to prevent CMD parser misinterpretation (redirect protection)
 
-echo   - Ubuntu Core 22 (fuer ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
+echo   - Ubuntu Core 22 (for ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
 
-echo   - Ubuntu Core 24 (fuer ctrlX OS 4.x)       : %VM24_TEXT%
+echo   - Ubuntu Core 24 (for ctrlX OS 4.x)       : %VM24_TEXT%
 
 :QEMU_STATUS
 echo(
-echo %BLUE%[QEMU-Laufzeitumgebung]%RESET%
+echo %BLUE%[QEMU Runtime Environment]%RESET%
 if not exist "qemu\qemu-system-x86_64.exe" (
-    set "QEMU_SOURCE=Nicht installiert"
+    set "QEMU_SOURCE=Not installed"
     set "QEMU_EXE=N/A"
 ) else (
     set "QEMU_EXE=%PROJEKT_PFAD%qemu\qemu-system-x86_64.exe"
-    set "QEMU_SOURCE=Lokal im Projekt"
+    set "QEMU_SOURCE=Local project installation"
 )
-echo   - Modus: %GREEN%%QEMU_SOURCE%%RESET%
-echo   - Pfad:  %YELLOW%%QEMU_EXE%%RESET%
+echo   - Mode: %GREEN%%QEMU_SOURCE%%RESET%
+echo   - Path:  %YELLOW%%QEMU_EXE%%RESET%
 
 echo(
 
 echo %BLUE%=======================================================================%RESET%
 
-echo Bitte waehlen Sie eine Aktion:
+echo Please choose an action:
 
-echo 1) Vorhandene VM starten
+echo 1) Start an existing VM
 
-echo 2) Neue VM herunterladen und einrichten (ctrlX OS Version waehlen)
+echo 2) Download and configure a new VM (select ctrlX OS version)
 
-echo 3) Beenden
+echo 3) Exit
 
 echo(
 
-set /p MAIN_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
+set /p MAIN_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
 
 if "%MAIN_CHOICE%"=="1" goto :CHOOSE_START_VM
 
@@ -245,7 +245,7 @@ goto :MAIN_MENU
 
 :: =======================================================================
 
-:: 🚀 MENÜ-OPTION 1: VORHANDENE VM STARTEN
+:: MENU OPTION 1: START AN EXISTING VM
 
 :: =======================================================================
 
@@ -255,23 +255,23 @@ cls
 
 echo %BLUE%=======================================================================%RESET%
 
-echo %GREEN%                    VORHANDENE VM STARTEN%RESET%
+echo %GREEN%                    START AN EXISTING VM%RESET%
 
 echo %BLUE%=======================================================================%RESET%
 
 echo(
 
-echo Welche VM moechten Sie starten?
+echo Which VM would you like to start?
 
-echo 1) Ubuntu Core 22 (fuer ctrlX OS 1.x / 2.x / 3.x) [%VM22_TEXT%]
+echo 1) Ubuntu Core 22 (for ctrlX OS 1.x / 2.x / 3.x) [%VM22_TEXT%]
 
-echo 2) Ubuntu Core 24 (fuer ctrlX OS 4.x)             [%VM24_TEXT%]
+echo 2) Ubuntu Core 24 (for ctrlX OS 4.x)             [%VM24_TEXT%]
 
-echo 3) Zurueck zum Hauptmenue
+echo 3) Back to main menu
 
 echo(
 
-set /p START_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
+set /p START_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
 
 if "%START_CHOICE%"=="1" goto :PREPARE_START_VM22
 
@@ -285,9 +285,9 @@ goto :CHOOSE_START_VM
 
 if not exist "instances\ubuntu-build-env-core22.qcow2" (
 
-    echo %RED%[ERROR] Die VM fuer Ubuntu Core 22 existiert nicht!%RESET%
+    echo %RED%[ERROR] The VM for Ubuntu Core 22 does not exist!%RESET%
 
-    echo Bitte laden Sie diese zuerst ueber Option 2 herunter.
+    echo Please download it first using option 2.
 
     pause
 
@@ -303,9 +303,9 @@ goto :START_QEMU_VM
 
 if not exist "instances\ubuntu-build-env-core24.qcow2" (
 
-    echo %RED%[ERROR] Die VM fuer Ubuntu Core 24 existiert nicht!%RESET%
+    echo %RED%[ERROR] The VM for Ubuntu Core 24 does not exist!%RESET%
 
-    echo Bitte laden Sie diese zuerst ueber Option 2 herunter.
+    echo Please download it first using option 2.
 
     pause
 
@@ -319,7 +319,7 @@ goto :START_QEMU_VM
 
 :: =======================================================================
 
-:: 🚀 MENÜ-OPTION 2: VM VERSIONAUSWAHL
+:: MENU OPTION 2: VM VERSION SELECTION
 
 :: =======================================================================
 
@@ -329,29 +329,29 @@ cls
 
 echo %BLUE%=======================================================================%RESET%
 
-echo %GREEN%               NEUE VM DOWNLOADEN UND EINRICHTEN%RESET%
+echo %GREEN%               DOWNLOAD AND SET UP A NEW VM%RESET%
 
 echo %BLUE%=======================================================================%RESET%
 
 echo(
 
-echo Bitte waehlen Sie die gewuenschte ctrlX OS Zielversion aus:
+echo Please choose the desired ctrlX OS target version:
 
 echo.
 
-echo 1) ctrlX OS 1.xx %YELLOW%(Nutzt standardmaessig Core 20; nutzt Core 22 als Fallback)%RESET%
+echo 1) ctrlX OS 1.xx %YELLOW%(Uses Core 20 by default; uses Core 22 as fallback)%RESET%
 
-echo 2) ctrlX OS 2.xx %GREEN%(Basiert on Ubuntu Core 22)%RESET%
+echo 2) ctrlX OS 2.xx %GREEN%(Based on Ubuntu Core 22)%RESET%
 
-echo 3) ctrlX OS 3.xx %GREEN%(Basiert on Ubuntu Core 22)%RESET%
+echo 3) ctrlX OS 3.xx %GREEN%(Based on Ubuntu Core 22)%RESET%
 
-echo 4) ctrlX OS 4.xx %GREEN%(Basiert on Ubuntu Core 24)%RESET%
+echo 4) ctrlX OS 4.xx %GREEN%(Based on Ubuntu Core 24)%RESET%
 
-echo 5) Zurueck zum Hauptmenue
+echo 5) Back to main menu
 
 echo(
 
-set /p OS_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2, 3, 4 oder 5): %RESET%"
+set /p OS_CHOICE="%YELLOW%Choose an option (1, 2, 3, 4 or 5): %RESET%"
 
 if "%OS_CHOICE%"=="1" (
 
@@ -359,7 +359,7 @@ if "%OS_CHOICE%"=="1" (
 
     set "DOWNLOAD_TARGET=VM"
 
-    echo %YELLOW%[Info] ctrlX OS 1.xx nutzt standardmaessig Core 20. Wir richten Core 22 ein.%RESET%
+    echo %YELLOW%[Info] ctrlX OS 1.xx uses Core 20 by default. Core 22 will be configured.%RESET%
 
     pause
 
@@ -403,7 +403,7 @@ goto :CHOOSE_DOWNLOAD_VERSION
 
 :: =======================================================================
 
-:: 🚀 PROXY-ABFRAGE (Dynamisch aufgerufen vor Downloads)
+:: PROXY CHECK (called dynamically before downloads)
 
 :: =======================================================================
 
@@ -413,25 +413,25 @@ cls
 
 echo %BLUE%=======================================================================%RESET%
 
-echo %GREEN%                 NETZWERK- und PROXY-ABFRAGE%RESET%
+echo %GREEN%                 NETWORK AND PROXY CHECK%RESET%
 
 echo %BLUE%=======================================================================%RESET%
 
 echo(
 
-echo [Netzwerk] %YELLOW%Bestimme Arbeitsumgebung...%RESET%
+echo [Network] %YELLOW%Determining environment...%RESET%
 
-echo Bitte waehlen Sie Ihre Arbeitsumgebung aus:
+echo Please choose your working environment:
 
-echo 1) Ich bin Bosch-Mitarbeiter %BLUE%(RB Local Proxy Manager)%RESET%
+echo 1) I am a Bosch employee %BLUE%(RB Local Proxy Manager)%RESET%
 
-echo 2) Ich bin ein partner MIT einem %BLUE%Firmen-Proxy%RESET%
+echo 2) I am a partner WITH a %BLUE%company proxy%RESET%
 
-echo 3) Ich bin ein partner %BLUE%OHNE Proxy (Direkt)%RESET%
+echo 3) I am a partner %BLUE%WITHOUT a proxy (direct connection)%RESET%
 
 echo(
 
-set /p NET_CHOICE="%YELLOW%Waehlen Sie eine Option (1, 2 oder 3): %RESET%"
+set /p NET_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
 
 set USE_PROXY=false
 
@@ -451,27 +451,27 @@ echo.
 
 echo %BLUE%=======================================================================%RESET%
 
-echo %RED%🔐 WICHTIGER BOSCH PROXY-HINWEIS VOR DEM STARTEN:%RESET%
+echo %RED%IMPORTANT BOSCH PROXY NOTICE BEFORE STARTING:%RESET%
 
 echo %BLUE%=======================================================================%RESET%
 
-echo Bitte oeffnen Sie jetzt den %GREEN%"RB Local Proxy Manager"%RESET% auf Ihrem PC.
+echo Please open the %GREEN%"RB Local Proxy Manager"%RESET% on your PC.
 
-echo Klicken Sie dort zwingend auf den gruenen Button %GREEN%"Execute"%RESET%!
+echo You must click the green %GREEN%"Execute"%RESET% button there.
 
 echo.
 
-echo Erst wenn das Bosch-Tool aktiv ist, oeffnet sich der Port 3128 fuer das Setup.
+echo The port 3128 will only open for the setup once the Bosch tool is active.
 
 echo %BLUE%=======================================================================%RESET%
 
 echo.
 
-echo %YELLOW%Druecken Sie Enter, wenn Sie das Bosch-Tool gestartet haben...%RESET%
+echo %YELLOW%Press Enter when you have started the Bosch tool...%RESET%
 
 pause >nul
 
-echo [Proxy] Starte mit Proxy %PROXY_URL% >> "install_debug.log" 2>&1
+echo [Proxy] Starting with proxy %PROXY_URL% >> "install_debug.log" 2>&1
 
 goto :ROUTE_DOWNLOAD
 
@@ -481,11 +481,11 @@ set USE_PROXY=true
 
 if not exist "proxy.env" (
 
-    echo CUSTOMER_PROXY_URL=http://ihr-proxy-server.de:8080 > proxy.env
+    echo CUSTOMER_PROXY_URL=http://your-proxy-server.de:8080 > proxy.env
 
     echo.
 
-    echo %RED%[ERROR] Bitte tragen Sie Ihre Proxy-Daten in die Datei 'proxy.env' ein und starten Sie neu!%RESET%
+    echo %RED%[ERROR] Please add your proxy data to the 'proxy.env' file and restart the setup!%RESET%
 
     pause
 
@@ -503,13 +503,7 @@ goto :ROUTE_DOWNLOAD
 
 echo.
 
-echo - %GREEN%Direkte Internetverbindung%RESET% aktiv.
-
-goto :ROUTE_DOWNLOAD
-
-:ROUTE_DOWNLOAD
-
-if "%DOWNLOAD_TARGET%"=="QEMU" goto :DOWNLOAD_QEMU_INST
+echo - %GREEN%Direct internet connection%RESET% active.
 
 if "%DOWNLOAD_TARGET%"=="VM" goto :DOWNLOAD_VM
 
@@ -517,7 +511,7 @@ goto :MAIN_MENU
 
 :: =======================================================================
 
-:: 📦 AUTOMATISIERTER QEMU DOWNLOAD & SILENT SETUP
+:: AUTOMATED QEMU DOWNLOAD AND SILENT INSTALLATION
 
 :: =======================================================================
 
@@ -527,21 +521,21 @@ cls
 
 echo %BLUE%=======================================================================%RESET%
 
-echo %GREEN%               DOWNLOADE UND INSTALLIERE LOKALES QEMU%RESET%
+echo %GREEN%               DOWNLOAD AND INSTALL LOCAL QEMU%RESET%
 
 echo %BLUE%=======================================================================%RESET%
 
 echo(
 
-:: Stabiles QEMU Windows 64-Bit Release von weilnetz.de
+:: Stable QEMU Windows 64-bit release from weilnetz.de
 
 set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
 
 set "QEMU_TEMP_FILE=.\\qemu_temp_setup.exe"
 
-echo %BLUE%[Download]%RESET% Lade das offizielle QEMU Windows-Paket herunter...
+echo %BLUE%[Download]%RESET% Downloading the official QEMU Windows package...
 
-echo %YELLOW%(Dauer: ca. 1-2 Minuten - Der Ladebalken zeigt den Fortschritt)%RESET%
+echo %YELLOW%(Duration: approx. 1-2 minutes - the progress bar shows the status)%RESET%
 
 echo URL: %QEMU_INSTALLER_URL%
 
@@ -561,7 +555,7 @@ if not exist "%QEMU_TEMP_FILE%" (
 
     echo.
 
-    echo %RED%[ERROR] Download fehlgeschlagen! Bitte Netzwerk- und Proxy-Einstellungen pruefen.%RESET%
+    echo %RED%[ERROR] Download failed! Please check the network and proxy settings.%RESET%
 
     pause
 
@@ -571,15 +565,15 @@ if not exist "%QEMU_TEMP_FILE%" (
 
 echo.
 
-echo %BLUE%[Installation]%RESET% Installiere QEMU im Projektordner '.\\qemu\\'...
+echo %BLUE%[Installation]%RESET% Installing QEMU in the project folder '.\\qemu\\'...
 
-echo Bitte warten, dies dauert einen kurzen Moment...
+echo Please wait, this will only take a moment...
 
-:: Echte, 100% geräuschlose Hintergrundinstallation ohne GUI und ohne Prompts
+:: Real silent background installation without GUI or prompts
 
 start /wait "" "%QEMU_TEMP_FILE%" /SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /DIR="%PROJEKT_PFAD%qemu" /LANG=en
 
-:: Aufräumen des heruntergeladenen Installers
+:: Clean up the downloaded installer
 
 del "%QEMU_TEMP_FILE%" >nul 2>&1
 
@@ -591,7 +585,7 @@ if exist "qemu\qemu-system-x86_64.exe" (
 
     echo.
 
-    echo %GREEN%✔ Lokales QEMU erfolgreich eingerichtet!%RESET%
+    echo %GREEN%Local QEMU successfully configured!%RESET%
 
     pause
 
@@ -601,9 +595,9 @@ if exist "qemu\qemu-system-x86_64.exe" (
 
     echo.
 
-    echo %RED%[ERROR] Die Installation scheint fehlerhaft gewesen zu sein.%RESET%
+    echo %RED%[ERROR] The installation appears to have failed.%RESET%
 
-    echo 'qemu-system-x86_64.exe' wurde nicht im Ordner '.\\qemu\\' gefunden.
+    echo 'qemu-system-x86_64.exe' was not found in the '.\\qemu\\' folder.
 
     pause
 
@@ -613,7 +607,7 @@ if exist "qemu\qemu-system-x86_64.exe" (
 
 :: =======================================================================
 
-:: 🚀 DOWNLOAD & SSH CONFIGURATION (VMs)
+:: DOWNLOAD AND SSH CONFIGURATION (VMs)
 
 :: =======================================================================
 
@@ -623,7 +617,7 @@ cls
 
 echo %BLUE%=======================================================================%RESET%
 
-echo %GREEN%                      DOWNLOAD DER SDK BUILD-VM%RESET%
+echo %GREEN%                      DOWNLOAD THE SDK BUILD VM%RESET%
 
 echo %BLUE%=======================================================================%RESET%
 
@@ -633,7 +627,7 @@ if not exist "%PROJEKT_PFAD%instances" mkdir "%PROJEKT_PFAD%instances" >nul 2>&1
 
 set "VM_FILE=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2"
 
-:: Setze passenden Download-Link basierend auf Core-Version
+:: Set the appropriate download link based on the core version
 
 if "%CORE_VER%"=="22" (
 
@@ -645,9 +639,9 @@ if "%CORE_VER%"=="22" (
 
 )
 
-echo %BLUE%[Download]%RESET% Lade die originale Bosch-Rexroth App Build-VM frisch herunter (Core %CORE_VER%)...
+echo %BLUE%[Download]%RESET% Downloading the original Bosch-Rexroth app build VM (Core %CORE_VER%)...
 
-echo %YELLOW%(Dauer: ca. 2-3 Minuten - Der Ladebalken zeigt den Fortschritt)%RESET%
+echo %YELLOW%(Duration: approx. 2-3 minutes - the progress bar shows the status)%RESET%
 
 echo URL: %DOWNLOAD_URL%
 
@@ -663,7 +657,7 @@ if "%USE_PROXY%"=="true" (
 
 )
 
-:: SSH-Schluessel generieren (Bypass aktiv)
+:: Generate the SSH key (bypass active)
 
 set "SSH_DIR=%USERPROFILE%\.ssh"
 
@@ -673,17 +667,17 @@ set "KEY_FILE=%SSH_DIR%\id_rsa_ctrlx"
 
 if not exist "%KEY_FILE%" (
 
-    echo %BLUE%[SSH]%RESET% Erzeuge SSH-Schluessel fuer VS Code Remote-Verbindung...
+    echo %BLUE%[SSH]%RESET% Generating the SSH key for the VS Code remote connection...
 
     ssh-keygen -t rsa -b 4096 -N "" -f "%KEY_FILE%" >> "install_debug.log" 2>&1
 
 )
 
-:: Windows SSH-Config beschreiben (Zielt felsenfest auf Ihren isolierten Port 11022)
+:: Configure the Windows SSH config (fixed to your isolated port 11022)
 
 set "CONFIG_FILE=%SSH_DIR%\config"
 
-echo %BLUE%[SSH]%RESET% Trage Verbindung in Windows SSH-Config ein...
+echo %BLUE%[SSH]%RESET% Adding the connection to the Windows SSH config...
 
 findstr /I "Host ctrlx-sdk-vm" "%CONFIG_FILE%" >nul 2>&1
 
@@ -713,7 +707,7 @@ if %errorLevel% neq 0 (
 
 copy /Y "%KEY_FILE%.pub" "%PROJEKT_PFAD%id_rsa_ctrlx.pub" >nul 2>&1
 
-:: Errechne die Proxy-URL für die VM (Ersetzt Host-localhost reliably durch QEMU-Gateway 10.0.2.2)
+:: Calculate the proxy URL for the VM (replaces localhost with the QEMU gateway 10.0.2.2)
 
 set "VM_PROXY_URL="
 
@@ -722,17 +716,17 @@ if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
 if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
 
 :: =======================================================================
-:: 🚀 CLOUD-INIT CONFIGURATION (CIDATA)
+:: CLOUD-INIT CONFIGURATION (CIDATA)
 :: =======================================================================
-echo %BLUE%[Cloud-Init]%RESET% Erzeuge Konfigurationsdateien im CIDATA-Ordner...
-:: Absoluten Pfad für das Verzeichnis sicherstellen!
+echo %BLUE%[Cloud-Init]%RESET% Generating configuration files in the CIDATA folder...
+:: Ensure the absolute path for the directory is set!
 if not exist "%PROJEKT_PFAD%instances\cidata" mkdir "%PROJEKT_PFAD%instances\cidata" >nul 2>&1
-:: meta-data muss existieren
+:: meta-data must exist
 echo instance-id: ctrlx-build-env-vm > "%PROJEKT_PFAD%instances\cidata\meta-data"
 echo local-hostname: ctrlx-sdk-vm >> "%PROJEKT_PFAD%instances\cidata\meta-data"
-:: user-data mit sauberer Klartext-Passwort-Zuweisung und SSH-Injektion
+:: user-data with clear-text password assignment and SSH injection
 echo #cloud-config> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Proxy-Definitionen direkt für Cloud-Init, damit Paket-Downloads (packages-Block) funktionieren!
+:: Proxy definitions for Cloud-Init so package downloads work correctly!
 if "%USE_PROXY%"=="true" echo proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
 if "%USE_PROXY%"=="true" echo apt:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 if "%USE_PROXY%"=="true" echo   proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
@@ -742,7 +736,7 @@ echo     groups: sudo, lxd>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     shell: /bin/bash>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     ssh_authorized_keys:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Liest den lokal generierten Key dynamisch aus und schreibt ihn direkt in das Cloud-Init File
+:: Read the locally generated key dynamically and write it directly to the Cloud-Init file
 for /f "usebackq delims=" %%i in ("%PROJEKT_PFAD%id_rsa_ctrlx.pub") do (
     echo       - %%i>> "%PROJEKT_PFAD%instances\cidata\user-data"
 )
@@ -752,37 +746,37 @@ echo     boschrexroth:boschrexroth>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   expire: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo ssh_pwauth: True>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo disable_root: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Standardpakete für Ubuntu vordefinieren, jetzt MIT 'unzip'
+:: Predefine the default Ubuntu packages, including unzip
 echo packages:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - git>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - curl>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Das automatisierte SDK Provisionierungs-Skript absolut flach erzeugen
+:: Generate the automated SDK provisioning script in a flat structure
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 > "%SDK_SH%" echo #!/bin/bash
-:: Erzeuge Autologin-Konfig sauber über tee (verhindert CMD Redirect-Fehler!)
+:: Generate the autologin configuration cleanly via tee (prevents CMD redirect errors)
 >> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
 >> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I ^\$TERM" ^| tee /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
 >> "%SDK_SH%" echo systemctl daemon-reload
 >> "%SDK_SH%" echo systemctl restart serial-getty@ttyS0.service
-:: Schreibe die .bashrc-Statusanzeige sauber als blockweise Linux-Injektion (Kein einziger Windows Redirect-Fehler!)
+:: Write the .bashrc status indicator cleanly as a block-wise Linux injection (no Windows redirect errors)
 >> "%SDK_SH%" echo cat ^<^< 'EOF' ^| tee -a /home/boschrexroth/.bashrc
 >> "%SDK_SH%" echo.
 >> "%SDK_SH%" echo if [ -f /var/lib/cloud/instance/boot-finished ]; then
->> "%SDK_SH%" echo     echo -e "\n\e[92m✔ ctrlX SDK-Setup ist vollstaendig abgeschlossen und einsatzbereit!\e[0m"
+>> "%SDK_SH%" echo     echo -e "\n\e[92m✔ ctrlX SDK setup is complete and ready to use!\e[0m"
 >> "%SDK_SH%" echo else
->> "%SDK_SH%" echo     echo -e "\n\e[93m⏳ Das ctrlX SDK-Setup laeuft noch im Hintergrund. Bitte warten...\e[0m"
->> "%SDK_SH%" echo     echo -e "Sie koennen den Fortschritt mit folgendem Befehl verfolgen:"
+>> "%SDK_SH%" echo     echo -e "\n\e[93m⏳ The ctrlX SDK setup is still running in the background. Please wait...\e[0m"
+>> "%SDK_SH%" echo     echo -e "You can monitor progress with the following command:"
 >> "%SDK_SH%" echo     echo -e "   \e[94mtail -f /var/log/cloud-init-output.log\e[0m\n"
 >> "%SDK_SH%" echo fi
 >> "%SDK_SH%" echo EOF
-:: SPRINGE ZU PROXY-ERSTELLUNG (Völlig flache, klammerfreie Auswertung schützt vor Caret-Fehlern!)
+:: MOVE TO PROXY CONFIGURATION (flat evaluation without brackets prevents caret errors)
 if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
->> "%SDK_SH%" echo # Proxy-Konfiguration fuer VM-Hintergrundprozesse
-:: Umgebungsvariablen dauerhaft in /etc/environment eintragen (Piped tee umgeht CMD-Parser vollständig!)
+>> "%SDK_SH%" echo # Proxy configuration for VM background processes
+:: Persist environment variables in /etc/environment (piped tee fully bypasses the CMD parser)
 >> "%SDK_SH%" echo echo "http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
@@ -790,7 +784,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "TMPDIR=\"/tmp\"" ^| tee -a /etc/environment
-:: Globalen Profile.d-Proxy einrichten (für alle Login-Shells)
+:: Configure the global Profile.d proxy for all login shells
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
@@ -799,7 +793,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo chmod +x /etc/profile.d/proxy.sh
-:: Globalen Bashrc-Proxy einrichten (für alle Bash-Instanzen, auch nicht-interaktive SSH-Sessions)
+:: Configure the global Bashrc proxy for all Bash instances, including non-interactive SSH sessions
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
@@ -807,19 +801,19 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/bash.bashrc
-:: Apt Proxy permanent konfigurieren
+:: Configure the apt proxy permanently
 >> "%SDK_SH%" echo echo "Acquire::http::Proxy \"%VM_PROXY_URL%\";" ^| tee /etc/apt/apt.conf.d/99proxy
 >> "%SDK_SH%" echo echo "Acquire::https::Proxy \"%VM_PROXY_URL%\";" ^| tee -a /etc/apt/apt.conf.d/99proxy
-:: Sudoers so konfigurieren, dass Umgebungsvariablen bei sudo apt beibehalten werden
+:: Configure sudoers so environment variables are preserved when using sudo apt
 >> "%SDK_SH%" echo echo "Defaults env_keep += \"http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY TMPDIR\"" ^| tee /etc/sudoers.d/proxy
 >> "%SDK_SH%" echo chmod 0440 /etc/sudoers.d/proxy
-:: Snap Daemon Proxy global einrichten
+:: Configure the snap daemon proxy globally
 >> "%SDK_SH%" echo systemctl restart snapd.socket snapd.service
 >> "%SDK_SH%" echo sleep 5
 >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
 >> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
 :SKIP_PROXY_CONFIG
->> "%SDK_SH%" echo # Patch APT-Quellen fuer arm64 Cross-Compilation (verhindert 404 Fehler)
+>> "%SDK_SH%" echo # Patch APT sources for arm64 cross-compilation (prevents 404 errors)
 >> "%SDK_SH%" echo if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
 >> "%SDK_SH%" echo     if ! grep -q "Architectures:" /etc/apt/sources.list.d/ubuntu.sources; then
 >> "%SDK_SH%" echo         cat ^<^< 'EOF' ^| tee /etc/apt/sources.list.d/ubuntu.sources
@@ -862,17 +856,17 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
-:: Binde das Provisionierungsskript nun sauber in die user-data Struktur ein
+:: Bind the provisioning script cleanly into the user-data structure
 echo write_files:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - path: /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     permissions: '0755'>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     content: ^|>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Kopiert das flach geschriebene setup-sdk.sh Zeile für Zeile mit Einrückungen in die user-data
+:: Copy the flat-generated setup-sdk.sh line by line into the user-data file with indentation
 for /f "usebackq delims=" %%G in ("%SDK_SH%") do echo       %%G>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo runcmd:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
-:: network-config erzeugen (Bulletproof vor-angestellte Umleitung um Stderr-Bug zu vermeiden)
+:: Generate network-config (bulletproof pre-redirect to avoid the stderr bug)
 > "%PROJEKT_PFAD%instances\cidata\network-config" echo version: 2
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo ethernets:
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo   all:
@@ -882,15 +876,15 @@ echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 :: =======================================================================
 
-:: 📀 SCHRITT 3: DOWNLOAD STANDALONE ISO-BRENNER (100% PORTABEL & STABIL)
+:: STEP 3: DOWNLOAD A STANDALONE ISO BURNER (100% PORTABLE AND STABLE)
 
 :: =======================================================================
 
 if exist "%PROJEKT_PFAD%instances\mkisofs.exe" goto :GENERATE_ISO
 
-echo %BLUE%[Setup]%RESET% Lade kompaktes ISO-Kompilierungs-Tool 'mkisofs.exe' herunter (ca. 380 KB)...
+echo %BLUE%[Setup]%RESET% Downloading the compact ISO compilation tool 'mkisofs.exe' (approx. 380 KB)...
 
-:: Holen der verifizierten, stabilen Windows-Binary aus dem offiziellen Cloudbase-Testing-Zweig
+:: Download the verified, stable Windows binary from the official Cloudbase testing branch
 
 if "%USE_PROXY%"=="true" (
 
@@ -904,17 +898,17 @@ if "%USE_PROXY%"=="true" (
 
 :GENERATE_ISO
 
-echo %BLUE%[ISO]%RESET% Generiere echte NoCloud-Konfigurations-ISO (seed.iso)...
+echo %BLUE%[ISO]%RESET% Generating a real NoCloud configuration ISO (seed.iso)...
 
 if exist "%PROJEKT_PFAD%instances\seed.iso" del "%PROJEKT_PFAD%instances\seed.iso" >nul 2>&1
 
-:: ECHTE, ABSOLUT FEHLERFREIE ISO-ERSTELLUNG REIN ÜBER CMD
+:: REAL ISO CREATION USING CMD ONLY
 
-:: -J (Joliet) und -r (Rock Ridge) garantieren perfekte Kleinbuchstaben.
+:: -J (Joliet) and -r (Rock Ridge) guarantee lowercase handling.
 
 "%PROJEKT_PFAD%instances\mkisofs.exe" -o "%PROJEKT_PFAD%instances\seed.iso" -J -r -V "CIDATA" "%PROJEKT_PFAD%instances\cidata" 2>nul
 
-:: Überprüfe, ob die ISO-Datei erfolgreich erstellt wurde
+:: Check whether the ISO file was created successfully
 
 for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
 
@@ -922,7 +916,7 @@ for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
 
         echo.
 
-        echo %RED%[FEHLER] Die ISO-Erstellung mit mkisofs.exe ist fehlgeschlagen. seed.iso konnte nicht erzeugt werden!%RESET%
+        echo %RED%[ERROR] ISO creation with mkisofs.exe failed. seed.iso could not be generated!%RESET%
 
         pause
 
@@ -933,7 +927,7 @@ for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
 
 :: =======================================================================
 
-:: 🔍 SCHRITT 4: ERWEITERTE ISO-VALIDIERUNGS-PRÜFUNG (LIVE IM CLI)
+:: STEP 4: EXTENDED ISO VALIDATION CHECK (LIVE IN CLI)
 
 :: =======================================================================
 
@@ -945,35 +939,35 @@ if exist "%PROJEKT_PFAD%instances\seed.iso" (
 
 )
 
-set "USER_DATA_SIZE=Fehlt!"
+set "USER_DATA_SIZE=Missing!"
 
 if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
 
-    for %%B in ("%PROJEKT_PFAD%instances\cidata\user-data") do set "USER_DATA_SIZE=Vorhanden (%%~zB Bytes)"
+    for %%B in ("%PROJEKT_PFAD%instances\cidata\user-data") do set "USER_DATA_SIZE=Available (%%~zB Bytes)"
 
 )
 
-set "META_DATA_SIZE=Fehlt!"
+set "META_DATA_SIZE=Missing!"
 
 if exist "%PROJEKT_PFAD%instances\cidata\meta-data" (
 
-    for %%C in ("%PROJEKT_PFAD%instances\cidata\meta-data") do set "META_DATA_SIZE=Vorhanden (%%~zC Bytes)"
+    for %%C in ("%PROJEKT_PFAD%instances\cidata\meta-data") do set "META_DATA_SIZE=Available (%%~zC Bytes)"
 
 )
 
-set "NET_CONFIG_SIZE=Fehlt!"
+set "NET_CONFIG_SIZE=Missing!"
 
 if exist "%PROJEKT_PFAD%instances\cidata\network-config" (
 
-    for %%D in ("%PROJEKT_PFAD%instances\cidata\network-config") do set "NET_CONFIG_SIZE=Vorhanden (%%~zD Bytes)"
+    for %%D in ("%PROJEKT_PFAD%instances\cidata\network-config") do set "NET_CONFIG_SIZE=Available (%%~zD Bytes)"
 
 )
 
-echo %GREEN%[Pruefung] Ueberpruefe den Inhalt der erstellten ISO-Schnittstelle...%RESET%
+echo %GREEN%[Check] Verifying the contents of the created ISO interface...%RESET%
 
-echo   - Instances Ordner: %GREEN%OK%RESET%
+echo   - Instances folder: %GREEN%OK%RESET%
 
-echo   - seed.iso Groesse:   %GREEN%%SEED_SIZE% Bytes%RESET%
+echo   - seed.iso size:   %GREEN%%SEED_SIZE% Bytes%RESET%
 
 echo   - user-data:        %GREEN%%USER_DATA_SIZE%%RESET%
 
@@ -987,15 +981,15 @@ echo.
 
 echo %GREEN%=======================================================================%RESET%
 
-echo ✔ %GREEN%Setup erfolgreich abgeschlossen!%RESET%
+echo %GREEN%Setup completed successfully!%RESET%
 
 echo %GREEN%=======================================================================%RESET%
 
-echo VM ist einsatzbereit (Ubuntu Core %CORE_VER%).
+echo The VM is ready to use (Ubuntu Core %CORE_VER%).
 
 echo.
 
-echo %YELLOW%Druecken Sie eine beliebige Taste, um die VM jetzt zu starten...%RESET%
+echo %YELLOW%Press any key to start the VM now...%RESET%
 
 pause >nul
 
@@ -1003,7 +997,7 @@ goto :START_QEMU_VM
 
 :: =======================================================================
 
-:: 🚀 VM INTERN STARTEN (Direkte QEMU-Integration - Robust & Flat)
+:: START THE VM INTERNALLY (direct QEMU integration - robust and flat)
 
 :: =======================================================================
 
@@ -1013,37 +1007,37 @@ cls
 
 echo %BLUE%=======================================================================%RESET%
 
-echo       STARTE ctrlX SDK BUILD-ENVIRONMENT (Core %CORE_VER%)
+echo       START ctrlX SDK BUILD-ENVIRONMENT (Core %CORE_VER%)
 
 echo %BLUE%=======================================================================%RESET%
 
 echo(
 
-echo Port 11022 auf dem Windows-Host leitet auf die VM um.
+echo Port 11022 on the Windows host forwards to the VM.
 
 echo.
 
-echo \* SSH-Verbindung via VS Code Remote-SSH: %YELLOW%ctrlx-sdk-vm%RESET%
+echo \* SSH connection via VS Code Remote-SSH: %YELLOW%ctrlx-sdk-vm%RESET%
 
-echo \* Manuelles Beenden der VM: In der VM %YELLOW%sudo shutdown -h now%RESET% eingeben.
+echo \* To shut down the VM manually, run %YELLOW%sudo shutdown -h now%RESET% inside the VM.
 
 echo %BLUE%=======================================================================%RESET%
 
 echo(
 
-:: Sicherheits-Check: Falls die seed.iso fehlt, springe zur Erstellung
+:: Safety check: if seed.iso is missing, generate it again
 
 if exist "%PROJEKT_PFAD%instances\seed.iso" goto :START_QEMU_NOW
 
 if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
 
-    echo %YELLOW%[Sicherheit] seed.iso fehlt. Generiere neu...%RESET%
+    echo %YELLOW%[Safety] seed.iso is missing. Generating it again...%RESET%
 
     goto :GENERATE_ISO
 
 )
 
-echo %RED%[ERROR] Die Cloud-Init Konfiguration fehlt! Bitte VM neu downloaden (Option 2).%RESET%
+echo %RED%[ERROR] The Cloud-Init configuration is missing! Please download the VM again (option 2).%RESET%
 
 pause
 
@@ -1051,7 +1045,7 @@ goto :MAIN_MENU
 
 :START_QEMU_NOW
 
-:: Loesche alte Logdateien, falls vorhanden
+:: Delete old log files if they exist
 
 if exist qemu_error.log del qemu_error.log >nul 2>&1
 
@@ -1059,7 +1053,7 @@ if exist qemu_error.log del qemu_error.log >nul 2>&1
 
 "%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial="ds=nocloud" -display none 2> qemu_error.log
 
-:: Fehlerbehandlung ohne Klammer-Verschachtelung
+:: Error handling without bracket nesting
 
 if not exist "%PROJEKT_PFAD%qemu_error.log" goto :POST_RUN
 
@@ -1069,7 +1063,7 @@ if %errorLevel% neq 0 goto :POST_RUN
 
 echo(
 
-echo %RED%[WARNUNG] QEMU wurde unerwartet beendet! Oeffne Fehlerprotokoll...%RESET%
+echo %RED%[WARNING] QEMU exited unexpectedly! Opening the error log...%RESET%
 
 notepad.exe "%PROJEKT_PFAD%qemu_error.log"
 
@@ -1077,7 +1071,7 @@ notepad.exe "%PROJEKT_PFAD%qemu_error.log"
 
 echo(
 
-echo %YELLOW%Zurueck zum Hauptmenue...%RESET%
+echo %YELLOW%Returning to the main menu...%RESET%
 
 pause
 
@@ -1088,19 +1082,19 @@ goto :MAIN_MENU
 :: =======================================================================
 :CHECK_ALL_DEPS
     if not exist "qemu\qemu-system-x86_64.exe" (
-        call :ADD_MISSING "Lokales QEMU"
+        call :ADD_MISSING "Local QEMU"
         set "INSTALL_QEMU_FLAG=1"
     )
     
     call :CHECK_VSCODE_PATH_ROBUST
     if "%VSCODE_OK%"=="No" (
-        call :ADD_MISSING "VS Code & Erweiterungen"
+        call :ADD_MISSING "VS Code & extensions"
         set "INSTALL_VSCODE_FLAG=1"
         set "INSTALL_EXT_FLAG=1"
     ) else (
         call :CHECK_EXTENSIONS
         if "%EXTENSIONS_OK%"=="No" (
-            call :ADD_MISSING "eine oder mehrere VS Code Erweiterungen"
+            call :ADD_MISSING "one or more VS Code extensions"
             set "INSTALL_EXT_FLAG=1"
         )
     )
