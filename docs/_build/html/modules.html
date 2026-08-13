@@ -44,40 +44,9 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Project API Reference</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#module-app">Flask Backend (app.py)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#app.change_scheduler_state"><code class="docutils literal notranslate"><span class="pre">change_scheduler_state()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#app.configure_connection"><code class="docutils literal notranslate"><span class="pre">configure_connection()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#app.fetch_bearer_token"><code class="docutils literal notranslate"><span class="pre">fetch_bearer_token()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#app.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#app.read_datalayer_value"><code class="docutils literal notranslate"><span class="pre">read_datalayer_value()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#app.show_menu"><code class="docutils literal notranslate"><span class="pre">show_menu()</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#module-install_snap">Deployment Automation (install_snap.py)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.change_scheduler_state"><code class="docutils literal notranslate"><span class="pre">change_scheduler_state()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.check_active_tasks"><code class="docutils literal notranslate"><span class="pre">check_active_tasks()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.check_architecture_compatibility"><code class="docutils literal notranslate"><span class="pre">check_architecture_compatibility()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.configure_connection"><code class="docutils literal notranslate"><span class="pre">configure_connection()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.fetch_bearer_token"><code class="docutils literal notranslate"><span class="pre">fetch_bearer_token()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.get_controller_info"><code class="docutils literal notranslate"><span class="pre">get_controller_info()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.get_installed_app_info"><code class="docutils literal notranslate"><span class="pre">get_installed_app_info()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.get_scheduler_state"><code class="docutils literal notranslate"><span class="pre">get_scheduler_state()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.get_task_status"><code class="docutils literal notranslate"><span class="pre">get_task_status()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.install_snap"><code class="docutils literal notranslate"><span class="pre">install_snap()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.wait_for_scheduler_state"><code class="docutils literal notranslate"><span class="pre">wait_for_scheduler_state()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install_snap.wait_for_task_completion"><code class="docutils literal notranslate"><span class="pre">wait_for_task_completion()</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#module-0">Flask App Test (app.py)</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id0"><code class="docutils literal notranslate"><span class="pre">change_scheduler_state()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id1"><code class="docutils literal notranslate"><span class="pre">configure_connection()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id2"><code class="docutils literal notranslate"><span class="pre">fetch_bearer_token()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id3"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id4"><code class="docutils literal notranslate"><span class="pre">read_datalayer_value()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id5"><code class="docutils literal notranslate"><span class="pre">show_menu()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="#core-dashboard-backend">Core Dashboard Backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#snap-installation-automation">Snap Installation Automation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#license-installation-automation">License Installation Automation</a></li>
 </ul>
 </li>
 </ul>
@@ -108,24 +77,26 @@
              
   <section id="project-api-reference">
 <h1>Project API Reference<a class="headerlink" href="#project-api-reference" title="Link to this heading"></a></h1>
-<section id="module-app">
-<span id="flask-backend-app-py"></span><h2>Flask Backend (app.py)<a class="headerlink" href="#module-app" title="Link to this heading"></a></h2>
-<p>ctrlX CORE Data Layer Console Client.</p>
-<p>This module provides a command-line interface to interact with the Bosch Rexroth
-ctrlX CORE Data Layer REST API. It allows querying system metrics and changing
-the controller’s operating state.</p>
+<section id="core-dashboard-backend">
+<h2>Core Dashboard Backend<a class="headerlink" href="#core-dashboard-backend" title="Link to this heading"></a></h2>
+<p>Minimal demo application for testing ctrlX CORE REST interactions.</p>
+<p>This script serves as a lightweight Flask-based test client for Bosch Rexroth
+ctrlX CORE systems. It demonstrates how to authenticate, read Data Layer
+values, and change the scheduler state over HTTPS using the local controller API.</p>
+<p>The script is intended for exploratory testing and validation workflows before
+production deployment.</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="app.change_scheduler_state">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">change_scheduler_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/app.html#change_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.change_scheduler_state" title="Link to this definition"></a></dt>
-<dd><p>Change the scheduler operating state (OPERATING, SETUP, SERVICE).</p>
-<p>Sends a PUT request to the ‘scheduler/admin/state’ node using the exact
-payload structure analyzed from the ctrlX Web-UI network request.</p>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">change_scheduler_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/app.html#change_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Change the ctrlX scheduler operating state.</p>
+<p>The function sends the exact payload structure used by the controller admin
+API and validates the result by reading the state back from the Data Layer.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>target_state</strong> (<em>str</em>) – The target state (‘OPERATING’, ‘SETUP’, ‘SERVICE’).</p>
+<dd class="field-odd"><p><strong>target_state</strong> – One of <code class="docutils literal notranslate"><span class="pre">OPERATING</span></code>, <code class="docutils literal notranslate"><span class="pre">SETUP</span></code> or <code class="docutils literal notranslate"><span class="pre">SERVICE</span></code>.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if state transition was successful and verified, False otherwise.</p>
+<dd class="field-even"><p>True when the requested state is confirmed, otherwise False.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>bool</p>
@@ -134,23 +105,24 @@ payload structure analyzed from the ctrlX Web-UI network request.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="app.configure_connection">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">configure_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#configure_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.configure_connection" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">configure_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#configure_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Prompt the user for ctrlX CORE connection details.</p>
-<p>If the user presses Enter without typing, fallback standard values
-(IP: ‘192.168.1.1’, User/Password: ‘boschrexroth’) are applied.
-The password input is masked for security.</p>
+<p>If the user presses Enter without typing, fallback values are used:
+IP 192.168.1.1, username and password set to boschrexroth.
+The password prompt masks the input for security.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="app.fetch_bearer_token">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">fetch_bearer_token</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/app.html#fetch_bearer_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.fetch_bearer_token" title="Link to this definition"></a></dt>
-<dd><p>Authenticate against the Identity Manager of the ctrlX CORE.</p>
-<p>Retrieves a valid Bearer token and updates the global HTTP session headers
-for all subsequent API calls.</p>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">fetch_bearer_token</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/app.html#fetch_bearer_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Authenticate against the ctrlX CORE Identity Manager.</p>
+<p>Retrieves a valid bearer token and stores it in the shared HTTP session.
+This token is then used for subsequent requests to the ctrlX Data Layer and
+scheduler endpoints.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>True if authentication succeeded, False otherwise.</p>
+<dd class="field-odd"><p>True if authentication succeeds, otherwise False.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>bool</p>
@@ -159,36 +131,38 @@ for all subsequent API calls.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="app.main">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.main" title="Link to this definition"></a></dt>
-<dd><p>Execute the main application loop.</p>
-<p>Handles the CLI menu routing and manages the connection states.</p>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Run the interactive ctrlX CORE test console.</p>
+<p>The function establishes the controller connection, authenticates, and then
+loops through the available Data Layer actions until the user exits.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="app.read_datalayer_value">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">read_datalayer_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#read_datalayer_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.read_datalayer_value" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">read_datalayer_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#read_datalayer_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Read a value from a specific ctrlX Data Layer node.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>path</strong> (<em>str</em>) – The Data Layer node path (e.g., ‘scheduler/admin/state’).</p>
+<dd class="field-odd"><p><strong>path</strong> – The node path, for example <code class="docutils literal notranslate"><span class="pre">scheduler/admin/state</span></code>.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The JSON response dictionary from the node if successful, None otherwise.</p>
+<dd class="field-even"><p>Parsed JSON payload returned by the controller, or None when
+the request fails.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict or None</p>
+<dd class="field-odd"><p>dict | None</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="app.show_menu">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">show_menu</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="_modules/app.html#show_menu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#app.show_menu" title="Link to this definition"></a></dt>
-<dd><p>Display the interactive main console menu.</p>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">show_menu</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="_modules/app.html#show_menu"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Display the interactive CLI menu and return the selected option.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The user’s menu choice as a string.</p>
+<dd class="field-odd"><p>User input representing the requested action.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>str</p>
@@ -197,86 +171,38 @@ for all subsequent API calls.</p>
 </dd></dl>
 
 </section>
-<section id="module-install_snap">
-<span id="deployment-automation-install-snap-py"></span><h2>Deployment Automation (install_snap.py)<a class="headerlink" href="#module-install_snap" title="Link to this heading"></a></h2>
+<section id="snap-installation-automation">
+<h2>Snap Installation Automation<a class="headerlink" href="#snap-installation-automation" title="Link to this heading"></a></h2>
 <p>ctrlX CORE App (Snap) Deployment Automation Script.</p>
-<p>This module provides a robust command-line interface to automate the installation
-and management of Snap applications on Bosch Rexroth ctrlX CORE devices via the
-Package Manager REST API.</p>
+<p>This module provides a robust command-line interface to automate the
+installation and management of Snap applications on Bosch Rexroth ctrlX CORE
+devices via the REST API, featuring highly robust, API-based state transition
+and upload handling.</p>
+<p>Source: Gemini 3.6 Flash
+Edited by: Silas Kuschke</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.change_scheduler_state">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">change_scheduler_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#change_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.change_scheduler_state" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">change_scheduler_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#change_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Request a change of the scheduler operating state.</p>
-<p>Iterates through multiple known API payload formats to ensure compatibility across
-various ctrlX OS firmware versions. Caches the successful format for subsequent calls.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>target_state</strong> (<em>str</em>) – The requested scheduler state (‘OPERATING’, ‘SETUP’, ‘SERVICE’).</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if the API accepted the state transition command, False otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.check_active_tasks">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">check_active_tasks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#check_active_tasks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.check_active_tasks" title="Link to this definition"></a></dt>
-<dd><p>Query the Package Manager API for any currently active background tasks.</p>
-<p>Checks if any installation, update, or maintenance task is running or pending,
-which might block Scheduler state transitions or other concurrent actions.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>True if an active or pending task exists, False otherwise.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="install_snap.check_architecture_compatibility">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">check_architecture_compatibility</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">snap_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expected_arch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#check_architecture_compatibility"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.check_architecture_compatibility" title="Link to this definition"></a></dt>
-<dd><p>Verify if the Snap filename is compatible with the controller’s architecture.</p>
-<p>Extracts architectural markers from the file name and compares them with the target architecture
-to prevent operational risks or system faults.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>snap_path</strong> (<em>str</em>) – The local file path to the .snap package.</p></li>
-<li><p><strong>expected_arch</strong> (<em>str</em>) – The target CPU architecture resolved from the controller (‘arm’ or ‘amd64’).</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if the architecture matches or the user explicitly overrides the mismatch, False otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="install_snap.configure_connection">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">configure_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#configure_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.configure_connection" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">configure_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#configure_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Prompt the user for ctrlX CORE connection details.</p>
-<p>Applies default connection parameters (IP: ‘192.168.1.1’, User/Password: ‘boschrexroth’)
-upon pressing Enter. Masking is applied to the password input for security.</p>
+<p>The values are stored in the global configuration dictionary and can later be
+reused for authentication and package installation requests.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.fetch_bearer_token">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">fetch_bearer_token</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#fetch_bearer_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.fetch_bearer_token" title="Link to this definition"></a></dt>
-<dd><p>Authenticate against the Identity Manager of the ctrlX CORE.</p>
-<p>Retrieves a valid OAuth2 Bearer token and updates the global HTTP session headers
-for all subsequent API requests.</p>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">fetch_bearer_token</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#fetch_bearer_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Authenticate against the Identity Manager and obtain a bearer token.</p>
+<p>The token is written into the shared HTTP session so that subsequent
+installation and Data Layer requests can be authorized automatically.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>True if authentication succeeded, False otherwise.</p>
+<dd class="field-odd"><p>True when authentication succeeds, otherwise False.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>bool</p>
@@ -285,162 +211,136 @@ for all subsequent API requests.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.get_controller_info">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_controller_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/install_snap.html#get_controller_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.get_controller_info" title="Link to this definition"></a></dt>
-<dd><p>Read the electronic typeplate to determine the hardware model and architecture.</p>
-<p>Queries the system typeplate API and parses the response to identify whether the target
-hardware is an ARM-based or AMD64-based controller.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>A tuple containing the resolved model name and the expected architecture.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>tuple[str, str]</p>
-</dd>
-</dl>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_datalayer_node_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">any</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_datalayer_node_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Generic function to read a value from any Data Layer node.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.get_installed_app_info">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_installed_app_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">app_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_installed_app_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.get_installed_app_info" title="Link to this definition"></a></dt>
-<dd><p>Check if the specified application is already installed on the controller.</p>
-<p>Queries the package manager API to retrieve all currently installed packages,
-filtering the list by the given application name (with typical ‘<a href="#id6"><span class="problematic" id="id7">snap_</span></a>’ prefix normalization).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>app_name</strong> (<em>str</em>) – The name of the application to check.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The package metadata dictionary if installed, None otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict or None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="install_snap.get_scheduler_state">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_scheduler_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.get_scheduler_state" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_scheduler_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Retrieve the current Scheduler operating state from the Data Layer.</p>
-<p>Queries the Data Layer node ‘scheduler/admin/state’ and extracts the active state value.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The active scheduler state string (e.g., ‘OPERATING’, ‘SETUP’, ‘SERVICE’) or None if the query fails.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>str or None</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.get_task_status">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_task_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_task_status"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.get_task_status" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_task_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_task_status"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Retrieve the status of a background package manager task.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>task_id</strong> (<em>str</em>) – The unique identifier of the task.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The raw task metadata dictionary if found, None otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict or None</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.install_snap">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">install_snap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">snap_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#install_snap"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.install_snap" title="Link to this definition"></a></dt>
-<dd><p>Upload the Snap file to the Package Manager API and monitor the installation task.</p>
-<p>Performs a multipart/form-data upload of the local Snap binary. If accepted (HTTP 202),
-it extracts the task ID from either the JSON response body or the Location header,
-and initiates the task polling loop.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>snap_path</strong> (<em>str</em>) – The local path to the .snap file.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if the package was successfully uploaded and installed, False otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">install_snap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">snap_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#install_snap"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Uploads the Snap and monitors the installation task.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.main">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.main" title="Link to this definition"></a></dt>
-<dd><p>Execute the automated app installation workflow.</p>
-<p>Runs pre-flight validation checks, manages Scheduler state transitions safely
-(including retries during lockouts), uploads and polls the installation task,
-and restores the controller’s state back to OPERATING mode.</p>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Execute the full automated app installation workflow.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.wait_for_scheduler_state">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">wait_for_scheduler_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">60</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#wait_for_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.wait_for_scheduler_state" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">wait_for_scheduler_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">60</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#wait_for_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Poll the Scheduler operating state until it reaches the target state.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>target_state</strong> (<em>str</em>) – The expected target state.</p></li>
-<li><p><strong>timeout_seconds</strong> (<em>int</em>) – The maximum duration in seconds to wait before timing out, defaults to 60.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if the target state was successfully reached within the timeout, False otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="install_snap.wait_for_task_completion">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">wait_for_task_completion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#wait_for_task_completion"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#install_snap.wait_for_task_completion" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">wait_for_system_and_scheduler_ready</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">180</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#wait_for_system_and_scheduler_ready"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Polls ‘system/admin/busy’ and ‘scheduler/admin/state/switching’.
+Waits until both are False. Uses ‘is not True’ for robust
+backwards-compatibility if nodes are not supported.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">wait_for_task_completion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#wait_for_task_completion"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Poll the task status endpoint until the installation task is complete.</p>
-<p>Monitors progress percentage and status strings. Implements protections for hangups
-at 100% and automated cleanup behaviors of completed tasks.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>task_id</strong> (<em>str</em>) – The unique identifier of the task to poll.</p></li>
-<li><p><strong>timeout_seconds</strong> (<em>int</em>) – The maximum duration in seconds to wait, defaults to 300.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if the installation task finished successfully, False otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
 </dd></dl>
 
 </section>
-<section id="module-0">
-<span id="flask-app-test-app-py"></span><h2>Flask App Test (app.py)<a class="headerlink" href="#module-0" title="Link to this heading"></a></h2>
-<p>ctrlX CORE Data Layer Console Client.</p>
-<p>This module provides a command-line interface to interact with the Bosch Rexroth
-ctrlX CORE Data Layer REST API. It allows querying system metrics and changing
-the controller’s operating state.</p>
+<section id="license-installation-automation">
+<h2>License Installation Automation<a class="headerlink" href="#license-installation-automation" title="Link to this heading"></a></h2>
+<p>ctrlX CORE License Deployment Automation Script.</p>
+<p>This module provides a command-line interface to automate the installation
+of license capability responses (.bin files) on Bosch Rexroth ctrlX CORE devices
+via the REST API. It supports single or multi-device installation, secure
+credentials storage, and automatic 13-digit serial number retrieval.</p>
+<p>Source: Gemini 3.6 Flash
+Edited by: Silas Kuschke</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="id0">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">change_scheduler_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/app.html#change_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
-<dd><p>Change the scheduler operating state (OPERATING, SETUP, SERVICE).</p>
-<p>Sends a PUT request to the ‘scheduler/admin/state’ node using the exact
-payload structure analyzed from the ctrlX Web-UI network request.</p>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">fetch_bearer_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_license.html#fetch_bearer_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Authenticates and stores the Bearer token in the global session.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">fetch_serial_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_license.html#fetch_serial_number"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Retrieves the 13-digit serial number from the ctrlX CORE.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">get_single_core_input</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="_modules/install_license.html#get_single_core_input"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Prompts the user for single-device connection details.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">load_cores</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="_modules/install_license.html#load_cores"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Loads CORE configurations from the secure .env file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A dictionary containing saved IP configurations and credentials.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/install_license.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Main execution flow.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">process_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">creds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_license.html#process_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Runs the full license installation and verification pipeline for a device.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">save_core</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_license.html#save_core"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Saves a CORE configuration securely to the .env file.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">update_session_headers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/install_license.html#update_session_headers"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Update session headers to mimic a web context request.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">upload_license</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_license.html#upload_license"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Uploads the license file using the confirmed PUT method and correct endpoint.</p>
+<p>This function parses the server’s change report to dynamically identify
+which licenses were added or if the license was already processed.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>target_state</strong> (<em>str</em>) – The target state (‘OPERATING’, ‘SETUP’, ‘SERVICE’).</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ip</strong> (<em>str</em>) – The IP address of the target ctrlX CORE.</p></li>
+<li><p><strong>file_path</strong> (<em>str</em>) – The local path to the .bin license file.</p></li>
+</ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if state transition was successful and verified, False otherwise.</p>
+<dd class="field-even"><p>True if the upload was successful, False otherwise.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>bool</p>
@@ -449,66 +349,9 @@ payload structure analyzed from the ctrlX Web-UI network request.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="id1">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">configure_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#configure_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
-<dd><p>Prompt the user for ctrlX CORE connection details.</p>
-<p>If the user presses Enter without typing, fallback standard values
-(IP: ‘192.168.1.1’, User/Password: ‘boschrexroth’) are applied.
-The password input is masked for security.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="id2">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">fetch_bearer_token</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/app.html#fetch_bearer_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id2" title="Link to this definition"></a></dt>
-<dd><p>Authenticate against the Identity Manager of the ctrlX CORE.</p>
-<p>Retrieves a valid Bearer token and updates the global HTTP session headers
-for all subsequent API calls.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>True if authentication succeeded, False otherwise.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="id3">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id3" title="Link to this definition"></a></dt>
-<dd><p>Execute the main application loop.</p>
-<p>Handles the CLI menu routing and manages the connection states.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="id4">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">read_datalayer_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/app.html#read_datalayer_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id4" title="Link to this definition"></a></dt>
-<dd><p>Read a value from a specific ctrlX Data Layer node.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>path</strong> (<em>str</em>) – The Data Layer node path (e.g., ‘scheduler/admin/state’).</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The JSON response dictionary from the node if successful, None otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict or None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="id5">
-<span class="sig-prename descclassname"><span class="pre">app.</span></span><span class="sig-name descname"><span class="pre">show_menu</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="_modules/app.html#show_menu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id5" title="Link to this definition"></a></dt>
-<dd><p>Display the interactive main console menu.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The user’s menu choice as a string.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>str</p>
-</dd>
-</dl>
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">verify_license_installation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">license_name_part</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_license.html#verify_license_installation"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Verifies installation by checking the activated capabilities on the CORE.</p>
 </dd></dl>
 
 </section>
