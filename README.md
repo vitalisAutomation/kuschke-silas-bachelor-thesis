@@ -5,9 +5,9 @@ Hallo Anton,
 
 schaue Dir bitte den main-branch an. Dort liegt der aktuell funktionierende Code. im Ordner sdk-vm-automation liegt die Batch-Datei install_sdk.bat. Öffne diese Datei in einem neuen Ordner, wo nichts Anderes als diese Datei enthalten ist. Führe die Datei via Doppelclick aus. Das ist das Setup-Skript, was eine VM mit SDK bereitstellt. Das Skript lädt automatisch alle notwendigen Softwarepakete auf die virtuelle Maschine. Du kannst auch zwischen unterschiedlichen Versionen von ctrlX OS auswählen und mehrere virtuelle Maschinen erstellen (ähnlich zu ctrlX Works).
 
-Wichtig: Vor der Ausführung des Batch-Skriptes den RB Local Proxy Manager aktivieren. Des Weiteren muss beim ersten Ausführen des Skriptes QEMU in den Projektordner installiert werden, den Du neu erstellt hast.
+Wichtig: Vor der Ausführung des Skripte, muss der RB Local Proxy Manager aktiviert werden. Des Weiteren muss beim ersten Ausführen des Batch-Skriptes QEMU in den Projektordner installiert werden, den Du neu erstellt hast.
 
-Was noch nicht fertig ist: 
+Was noch nicht fertig ist:
 
 Aktuell muss man sich manuell mit der virtuellen Maschinen über die VS-Code Extension Remote SSH verbinden. Das möchte ich noch in das Skript integrieren. Das Ziel soll am Ende sein: Skript wird geöffnet --> Offenes VS-Code Fenster auf der virtuellen Maschine, sodass man direkt Snaps entwickeln kann.
 
