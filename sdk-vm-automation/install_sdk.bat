@@ -1048,36 +1048,27 @@ goto :MAIN_MENU
 
 :START_QEMU_NOW
 
-:: Delete old log files if they exist
+:: === QEMU START WITH BOOT OUTPUT IN A DEDICATED TERMINAL ===
+start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /k ""%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive ""file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
-if exist qemu_error.log del qemu_error.log >nul 2>&1
+if errorlevel 1 (
+    echo %RED%[ERROR] QEMU could not be started.%RESET%
+    echo Please check %PROJEKT_PFAD%qemu_error.log for details.
+    pause
+    goto :MAIN_MENU
+)
 
-:: === HEADLESS QEMU START ===
+echo %GREEN%[Start]%RESET% VM process started. The boot output is visible in the QEMU console window.
+call :WAIT_FOR_VM_AND_OPEN_VSCODE
 
-"%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive "file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off" -cdrom "%PROJEKT_PFAD%instances\seed.iso" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial="ds=nocloud" -display none 2> qemu_error.log
-
-:: Error handling without bracket nesting
-
-if not exist "%PROJEKT_PFAD%qemu_error.log" goto :POST_RUN
-
-findstr /r "\[a-zA-Z0-9\]" "%PROJEKT_PFAD%qemu_error.log" >nul 2>&1
-
-if %errorLevel% neq 0 goto :POST_RUN
-
-echo(
-
-echo %RED%[WARNING] QEMU exited unexpectedly! Opening the error log...%RESET%
-
-notepad.exe "%PROJEKT_PFAD%qemu_error.log"
-
-:POST_RUN
+if errorlevel 1 (
+    echo %RED%[WARNING] QEMU exited unexpectedly! Opening the error log...%RESET%
+    notepad.exe "%PROJEKT_PFAD%qemu_error.log"
+)
 
 echo(
-
 echo %YELLOW%Returning to the main menu...%RESET%
-
-pause
-
+timeout /t 2 /nobreak >nul
 goto :MAIN_MENU
 
 :: =======================================================================
@@ -1126,7 +1117,7 @@ goto :EOF
 :CHECK_EXTENSIONS
     set "EXTENSIONS_OK=Yes"
     for %%e in (golang.go ms-dotnettools.csharp ms-python.python ms-vscode-remote.remote-ssh ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake) do (
-        "%CODE_EXE%" --list-extensions 2>nul | findstr /i /b /e /c:"%%e" >nul
+        "%CODE_EXE%" --list-extensions --show-versions 2>nul | findstr /i /r /b /c:"%%e$" /c:"%%e@" >nul
         if errorlevel 1 (
             set "EXTENSIONS_OK=No"
         )
@@ -1140,3 +1131,65 @@ goto :EOF
         set "MISSING_DEPS=%~1"
     )
 goto :EOF
+
+:WAIT_FOR_VM_AND_OPEN_VSCODE
+    echo.
+    echo %BLUE%[Auto Connect]%RESET% Waiting until the VM is ready for SSH...
+    echo %YELLOW%This can take several minutes on the first start.%RESET%
+
+    where ssh >nul 2>&1
+    if errorlevel 1 (
+        echo %RED%[WARNING]%RESET% OpenSSH client was not found. Auto-connect skipped.
+        exit /b 1
+    )
+
+    set /a WAIT_COUNT=0
+    set /a WAIT_MAX=360
+
+:WAIT_FOR_VM_LOOP
+    set /a WAIT_COUNT+=1
+    ssh -o BatchMode=yes -o ConnectTimeout=5 ctrlx-sdk-vm "test -f /var/lib/cloud/instance/boot-finished" >nul 2>&1
+    if %errorlevel%==0 goto :VM_READY_FOR_VSCODE
+
+    if %WAIT_COUNT% GEQ %WAIT_MAX% (
+        echo %RED%[WARNING]%RESET% Timeout while waiting for VM provisioning.
+        echo You can connect manually later with host %YELLOW%ctrlx-sdk-vm%RESET%.
+        exit /b 1
+    )
+
+    if %WAIT_COUNT% EQU 1 echo %YELLOW%[Auto Connect] VM is booting and provisioning. Please wait...%RESET%
+    timeout /t 10 /nobreak >nul
+    goto :WAIT_FOR_VM_LOOP
+
+:VM_READY_FOR_VSCODE
+    call :OPEN_VSCODE_REMOTE
+    exit /b %errorlevel%
+
+:OPEN_VSCODE_REMOTE
+    call :CHECK_VSCODE_PATH_ROBUST
+    if "%VSCODE_OK%"=="No" (
+        echo %RED%[WARNING]%RESET% VS Code was not found. Auto-connect skipped.
+        exit /b 1
+    )
+
+    "%CODE_EXE%" --list-extensions --show-versions 2>nul | findstr /i /r /b /c:"ms-vscode-remote\.remote-ssh$" /c:"ms-vscode-remote\.remote-ssh@" >nul
+    if errorlevel 1 (
+        echo %RED%[WARNING]%RESET% Remote-SSH extension is missing. Auto-connect skipped.
+        exit /b 1
+    )
+
+    tasklist /FI "IMAGENAME eq Code.exe" 2>nul | findstr /i /c:"Code.exe" >nul
+    if errorlevel 1 (
+        echo %YELLOW%[Auto Connect]%RESET% VS Code is not running. Starting a new window...
+    ) else (
+        echo %GREEN%[Auto Connect]%RESET% VS Code is already running. Starting a second Remote-SSH window...
+    )
+
+    start "" cmd /d /c call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-sdk-vm" "/home/boschrexroth"
+    if errorlevel 1 (
+        echo %RED%[WARNING]%RESET% VS Code could not be started with Remote-SSH.
+        exit /b 1
+    )
+
+    echo %GREEN%[Auto Connect]%RESET% VS Code started and connecting to ctrlx-sdk-vm.
+    exit /b 0
