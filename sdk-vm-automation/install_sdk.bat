@@ -1048,8 +1048,15 @@ goto :MAIN_MENU
 
 :START_QEMU_NOW
 
+set "VM_IMAGE=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2"
+if exist "%PROJEKT_PFAD%qemu\qemu-img.exe" (
+    echo %BLUE%[Storage]%RESET% Ensuring at least 12 GB virtual disk space for the VM...
+    "%PROJEKT_PFAD%qemu\qemu-img.exe" resize "%VM_IMAGE%" 12G >nul 2>&1
+    if errorlevel 1 echo %YELLOW%[Storage] Could not resize the VM image automatically.%RESET%
+)
+
 :: === QEMU START WITH BOOT OUTPUT IN A DEDICATED TERMINAL ===
-start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /k ""%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive ""file=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
+start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /k ""%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
 if errorlevel 1 (
     echo %RED%[ERROR] QEMU could not be started.%RESET%
@@ -1191,5 +1198,23 @@ goto :EOF
         exit /b 1
     )
 
+    call :INSTALL_VM_EXTENSIONS
     echo %GREEN%[Auto Connect]%RESET% VS Code started and connecting to ctrlx-sdk-vm.
+    exit /b 0
+
+:INSTALL_VM_EXTENSIONS
+    echo %BLUE%[VM Extensions]%RESET% Waiting for the Remote-SSH server to initialize...
+    timeout /t 15 /nobreak >nul
+    echo %BLUE%[Storage]%RESET% Expanding the VM root filesystem...
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo growpart /dev/vda 1 >/dev/null 2>&1 && sudo resize2fs /dev/vda1 >/dev/null 2>&1"
+    if errorlevel 1 (
+        echo %YELLOW%[Storage] Root filesystem could not be expanded. Extension installation may fail due to low disk space.%RESET%
+    )
+    echo %BLUE%[VM Extensions]%RESET% Installing extensions in the VM sequentially...
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); if [ -z \"$code_server\" ]; then echo 'VS Code Server CLI not found.'; exit 1; fi; for extension in golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo \"Installing $extension...\"; \"$code_server\" --install-extension \"$extension\" --force || exit 1; done" >> "install_debug.log" 2>&1
+    if errorlevel 1 (
+        echo %YELLOW%[VM Extensions] Installation failed. See install_debug.log for details.%RESET%
+        exit /b 1
+    )
+    echo %GREEN%[VM Extensions] Remote extensions processed.%RESET%
     exit /b 0
