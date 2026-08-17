@@ -1,15 +1,15 @@
-:: Source: Gemini 3.6 Flash
-:: Edited by: Silas Kuschke
+:: Source information
+:: Maintainer: Silas Kuschke
 
 @echo off
 
 chcp 65001 >nul
 
-:: Dynamically generate the ESC character for reliable ANSI colors
+:: Generate the ESC character for reliable ANSI color output
 
 for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
 
-:: Define color codes
+:: Define ANSI color codes
 
 set "BLUE=%ESC%[94m"
 set "GREEN=%ESC%[92m"
@@ -20,17 +20,17 @@ set "RESET=%ESC%[0m"
 cd /d "%~dp0"
 set "PROJEKT_PFAD=%~dp0"
 
-:: Prepare the log file
+:: Reset the installation log
 if exist "install_debug.log" del "install_debug.log" >nul 2>&1
 
 :: =======================================================================
-:: WORKFLOW CONTROL
+:: Workflow control
 :: =======================================================================
 
-:: Check whether the script is already running in admin mode for installation
+:: Continue directly when the script is running with administrator rights
 if "%~1"=="-install" goto :INSTALL_DEPS
 
-:: Normal execution: check dependencies and request admin mode if needed
+:: Check dependencies and request administrator rights when needed
 set "INSTALL_QEMU_FLAG="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_EXT_FLAG="
@@ -44,7 +44,7 @@ if defined MISSING_DEPS (
 )
 
 :: =======================================================================
-:: PHASE 1: REQUEST ADMIN RIGHTS
+:: Phase 1: request administrator rights
 :: =======================================================================
 :REQUEST_ADMIN
 cls
@@ -63,7 +63,7 @@ echo.
 echo Press any key to start the installation as administrator...
 pause >nul
 
-:: Build a simple, reliable argument string
+:: Build the argument string for the elevated process
 set "PS_ARGS=-install"
 if defined INSTALL_QEMU_FLAG set "PS_ARGS=%PS_ARGS% -install-qemu"
 if defined INSTALL_VSCODE_FLAG set "PS_ARGS=%PS_ARGS% -install-vscode"
@@ -73,7 +73,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 
 exit
 
 :: =======================================================================
-:: PHASE 2: INSTALL DEPENDENCIES (ADMIN MODE)
+:: Phase 2: install dependencies with administrator rights
 :: =======================================================================
 :INSTALL_DEPS
 @echo off
@@ -83,7 +83,7 @@ echo %GREEN%     INSTALLING SYSTEM DEPENDENCIES (ADMIN MODE) %RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 
-:: Create a string of all provided arguments for simple matching
+:: Store all arguments for simple option matching
 set "ARG_STRING=%*"
 
 :: 1. Install VS Code
@@ -101,7 +101,7 @@ if %errorlevel% == 0 (
     )
 )
 
-:: 2. Install extensions
+:: 2. Install host extensions
 echo %ARG_STRING% | findstr /i /c:"-install-extensions" >nul
 if %errorlevel% == 0 (
     call :CHECK_VSCODE_PATH_ROBUST
@@ -151,7 +151,7 @@ goto :MAIN_MENU
 
 :: =======================================================================
 
-:: MAIN MENU (direct start if already installed)
+:: Main menu for an already configured installation
 
 :: =======================================================================
 
@@ -203,7 +203,7 @@ if "%VM24_STATUS%"=="Yes" set "VM24_TEXT=%GREEN%Available%RESET%"
 
 :DISPLAY_VM_STATUS
 
-:: Avoid the "->" sequence to prevent CMD parser misinterpretation (redirect protection)
+:: Avoid the "->" sequence because CMD may interpret it as redirection
 
 echo   - Ubuntu Core 22 (for ctrlX OS 1.x/2.x/3.x) : %VM22_TEXT%
 
@@ -248,7 +248,7 @@ goto :MAIN_MENU
 
 :: =======================================================================
 
-:: MENU OPTION 1: START AN EXISTING VM
+:: Menu option 1: start an existing VM
 
 :: =======================================================================
 
@@ -322,7 +322,7 @@ goto :START_QEMU_VM
 
 :: =======================================================================
 
-:: MENU OPTION 2: VM VERSION SELECTION
+:: Menu option 2: select a VM version
 
 :: =======================================================================
 
@@ -406,7 +406,7 @@ goto :CHOOSE_DOWNLOAD_VERSION
 
 :: =======================================================================
 
-:: PROXY CHECK (called dynamically before downloads)
+:: Check the proxy configuration before downloading files
 
 :: =======================================================================
 
@@ -514,7 +514,7 @@ goto :MAIN_MENU
 
 :: =======================================================================
 
-:: AUTOMATED QEMU DOWNLOAD AND SILENT INSTALLATION
+:: Download and install QEMU silently
 
 :: =======================================================================
 
@@ -530,7 +530,7 @@ echo %BLUE%=====================================================================
 
 echo(
 
-:: Stable QEMU Windows 64-bit release from weilnetz.de
+:: Use the stable 64-bit QEMU release
 
 set "QEMU_INSTALLER_URL=https://qemu.weilnetz.de/w64/2024/qemu-w64-setup-20241220.exe"
 
@@ -572,11 +572,11 @@ echo %BLUE%[Installation]%RESET% Installing QEMU in the project folder '.\\qemu\
 
 echo Please wait, this will only take a moment...
 
-:: Real silent background installation without GUI or prompts
+:: Run the installer silently without a user interface
 
 start /wait "" "%QEMU_TEMP_FILE%" /SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /DIR="%PROJEKT_PFAD%qemu" /LANG=en
 
-:: Clean up the downloaded installer
+:: Remove the downloaded installer
 
 del "%QEMU_TEMP_FILE%" >nul 2>&1
 
@@ -610,7 +610,7 @@ if exist "qemu\qemu-system-x86_64.exe" (
 
 :: =======================================================================
 
-:: DOWNLOAD AND SSH CONFIGURATION (VMs)
+:: Download the VM and configure SSH access
 
 :: =======================================================================
 
@@ -630,7 +630,7 @@ if not exist "%PROJEKT_PFAD%instances" mkdir "%PROJEKT_PFAD%instances" >nul 2>&1
 
 set "VM_FILE=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2"
 
-:: Set the appropriate download link based on the core version
+:: Select the download URL for the requested core version
 
 if "%CORE_VER%"=="22" (
 
@@ -660,7 +660,7 @@ if "%USE_PROXY%"=="true" (
 
 )
 
-:: Generate the SSH key (bypass active)
+:: Generate the SSH key when it does not exist
 
 set "SSH_DIR=%USERPROFILE%\.ssh"
 
@@ -676,7 +676,7 @@ if not exist "%KEY_FILE%" (
 
 )
 
-:: Configure the Windows SSH config (fixed to your isolated port 11022)
+:: Configure the Windows SSH alias for the isolated port 11022
 
 set "CONFIG_FILE=%SSH_DIR%\config"
 
@@ -710,7 +710,7 @@ if %errorLevel% neq 0 (
 
 copy /Y "%KEY_FILE%.pub" "%PROJEKT_PFAD%id_rsa_ctrlx.pub" >nul 2>&1
 
-:: Calculate the proxy URL for the VM (replaces localhost with the QEMU gateway 10.0.2.2)
+:: Convert the host proxy address to the QEMU gateway address
 
 set "VM_PROXY_URL="
 
@@ -719,17 +719,17 @@ if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
 if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
 
 :: =======================================================================
-:: CLOUD-INIT CONFIGURATION (CIDATA)
+:: Configure Cloud-Init and the CIDATA directory
 :: =======================================================================
 echo %BLUE%[Cloud-Init]%RESET% Generating configuration files in the CIDATA folder...
-:: Ensure the absolute path for the directory is set!
+:: Ensure that the CIDATA directory exists
 if not exist "%PROJEKT_PFAD%instances\cidata" mkdir "%PROJEKT_PFAD%instances\cidata" >nul 2>&1
-:: meta-data must exist
+:: Create the required meta-data file
 echo instance-id: ctrlx-build-env-vm > "%PROJEKT_PFAD%instances\cidata\meta-data"
 echo local-hostname: ctrlx-sdk-vm >> "%PROJEKT_PFAD%instances\cidata\meta-data"
-:: user-data with clear-text password assignment and SSH injection
+:: Create user-data with credentials and the SSH public key
 echo #cloud-config> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Proxy definitions for Cloud-Init so package downloads work correctly!
+:: Add proxy settings so Cloud-Init can download packages
 if "%USE_PROXY%"=="true" echo proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
 if "%USE_PROXY%"=="true" echo apt:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 if "%USE_PROXY%"=="true" echo   proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
@@ -739,7 +739,7 @@ echo     groups: sudo, lxd>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     shell: /bin/bash>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     ssh_authorized_keys:>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Read the locally generated key dynamically and write it directly to the Cloud-Init file
+:: Add the generated public key to the Cloud-Init configuration
 for /f "usebackq delims=" %%i in ("%PROJEKT_PFAD%id_rsa_ctrlx.pub") do (
     echo       - %%i>> "%PROJEKT_PFAD%instances\cidata\user-data"
 )
@@ -749,23 +749,23 @@ echo     boschrexroth:boschrexroth>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   expire: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo ssh_pwauth: True>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo disable_root: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Predefine the default Ubuntu packages, including unzip
+:: Define the default Ubuntu packages
 echo packages:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - git>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - curl>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Generate the automated SDK provisioning script in a flat structure
+:: Generate the SDK provisioning script
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 > "%SDK_SH%" echo #!/bin/bash
-:: Generate the autologin configuration cleanly via tee (prevents CMD redirect errors)
+:: Generate the serial console autologin configuration
 >> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
 >> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I ^\$TERM" ^| tee /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
 >> "%SDK_SH%" echo systemctl daemon-reload
 >> "%SDK_SH%" echo systemctl restart serial-getty@ttyS0.service
-:: Write the .bashrc status indicator cleanly as a block-wise Linux injection (no Windows redirect errors)
+:: Add the provisioning status indicator to the user's Bash profile
 >> "%SDK_SH%" echo cat ^<^< 'EOF' ^| tee -a /home/boschrexroth/.bashrc
 >> "%SDK_SH%" echo.
 >> "%SDK_SH%" echo if [ -f /var/lib/cloud/instance/boot-finished ]; then
@@ -776,10 +776,10 @@ if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 >> "%SDK_SH%" echo     echo -e "   \e[94mtail -f /var/log/cloud-init-output.log\e[0m\n"
 >> "%SDK_SH%" echo fi
 >> "%SDK_SH%" echo EOF
-:: MOVE TO PROXY CONFIGURATION (flat evaluation without brackets prevents caret errors)
+:: Configure the proxy when proxy mode is enabled
 if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo # Proxy configuration for VM background processes
-:: Persist environment variables in /etc/environment (piped tee fully bypasses the CMD parser)
+:: Persist proxy environment variables for system processes
 >> "%SDK_SH%" echo echo "http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/environment
@@ -787,7 +787,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/environment
 >> "%SDK_SH%" echo echo "TMPDIR=\"/tmp\"" ^| tee -a /etc/environment
-:: Configure the global Profile.d proxy for all login shells
+:: Configure the proxy for login shells
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/profile.d/proxy.sh
@@ -796,7 +796,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo chmod +x /etc/profile.d/proxy.sh
-:: Configure the global Bashrc proxy for all Bash instances, including non-interactive SSH sessions
+:: Configure the proxy for interactive and non-interactive Bash sessions
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export HTTP_PROXY=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
@@ -804,13 +804,13 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export no_proxy=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/bash.bashrc
-:: Configure the apt proxy permanently
+:: Configure the APT proxy permanently
 >> "%SDK_SH%" echo echo "Acquire::http::Proxy \"%VM_PROXY_URL%\";" ^| tee /etc/apt/apt.conf.d/99proxy
 >> "%SDK_SH%" echo echo "Acquire::https::Proxy \"%VM_PROXY_URL%\";" ^| tee -a /etc/apt/apt.conf.d/99proxy
-:: Configure sudoers so environment variables are preserved when using sudo apt
+:: Preserve proxy variables when using sudo with APT
 >> "%SDK_SH%" echo echo "Defaults env_keep += \"http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY TMPDIR\"" ^| tee /etc/sudoers.d/proxy
 >> "%SDK_SH%" echo chmod 0440 /etc/sudoers.d/proxy
-:: Configure the snap daemon proxy globally
+:: Configure the Snap daemon proxy
 >> "%SDK_SH%" echo systemctl restart snapd.socket snapd.service
 >> "%SDK_SH%" echo sleep 5
 >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
@@ -859,17 +859,17 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
-:: Bind the provisioning script cleanly into the user-data structure
+:: Embed the provisioning script in user-data
 echo write_files:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - path: /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     permissions: '0755'>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     content: ^|>> "%PROJEKT_PFAD%instances\cidata\user-data"
-:: Copy the flat-generated setup-sdk.sh line by line into the user-data file with indentation
+:: Copy the provisioning script into user-data with indentation
 for /f "usebackq delims=" %%G in ("%SDK_SH%") do echo       %%G>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo runcmd:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
-:: Generate network-config (bulletproof pre-redirect to avoid the stderr bug)
+:: Generate the network configuration
 > "%PROJEKT_PFAD%instances\cidata\network-config" echo version: 2
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo ethernets:
 >> "%PROJEKT_PFAD%instances\cidata\network-config" echo   all:
@@ -879,7 +879,7 @@ echo   - /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
 
 :: =======================================================================
 
-:: STEP 3: DOWNLOAD A STANDALONE ISO BURNER (100% PORTABLE AND STABLE)
+:: Step 3: download a portable ISO creation tool
 
 :: =======================================================================
 
@@ -887,7 +887,7 @@ if exist "%PROJEKT_PFAD%instances\mkisofs.exe" goto :GENERATE_ISO
 
 echo %BLUE%[Setup]%RESET% Downloading the compact ISO compilation tool 'mkisofs.exe' (approx. 380 KB)...
 
-:: Download the verified, stable Windows binary from the official Cloudbase testing branch
+:: Download the verified Windows binary from the official source
 
 if "%USE_PROXY%"=="true" (
 
@@ -905,13 +905,13 @@ echo %BLUE%[ISO]%RESET% Generating a real NoCloud configuration ISO (seed.iso)..
 
 if exist "%PROJEKT_PFAD%instances\seed.iso" del "%PROJEKT_PFAD%instances\seed.iso" >nul 2>&1
 
-:: REAL ISO CREATION USING CMD ONLY
+:: Create the ISO using the local command-line tool
 
-:: -J (Joliet) and -r (Rock Ridge) guarantee lowercase handling.
+:: Joliet and Rock Ridge options preserve compatible file naming
 
 "%PROJEKT_PFAD%instances\mkisofs.exe" -o "%PROJEKT_PFAD%instances\seed.iso" -J -r -V "CIDATA" "%PROJEKT_PFAD%instances\cidata" 2>nul
 
-:: Check whether the ISO file was created successfully
+:: Verify that the ISO was created successfully
 
 for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
 
@@ -930,7 +930,7 @@ for %%F in ("%PROJEKT_PFAD%instances\seed.iso") do (
 
 :: =======================================================================
 
-:: STEP 4: EXTENDED ISO VALIDATION CHECK (LIVE IN CLI)
+:: Step 4: validate the generated ISO
 
 :: =======================================================================
 
@@ -1000,7 +1000,7 @@ goto :START_QEMU_VM
 
 :: =======================================================================
 
-:: START THE VM INTERNALLY (direct QEMU integration - robust and flat)
+:: Start the VM with the local QEMU installation
 
 :: =======================================================================
 
@@ -1028,7 +1028,7 @@ echo %BLUE%=====================================================================
 
 echo(
 
-:: Safety check: if seed.iso is missing, generate it again
+:: Recreate seed.iso when it is missing
 
 if exist "%PROJEKT_PFAD%instances\seed.iso" goto :START_QEMU_NOW
 
@@ -1055,7 +1055,7 @@ if exist "%PROJEKT_PFAD%qemu\qemu-img.exe" (
     if errorlevel 1 echo %YELLOW%[Storage] Could not resize the VM image automatically.%RESET%
 )
 
-:: === QEMU START WITH BOOT OUTPUT IN A DEDICATED TERMINAL ===
+:: Start QEMU with boot output in a dedicated terminal
 start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
 if errorlevel 1 (
@@ -1081,7 +1081,7 @@ timeout /t 2 /nobreak >nul
 goto :MAIN_MENU
 
 :: =======================================================================
-:: -=[ HELPER SUBROUTINES ]=-
+:: Helper subroutines
 :: =======================================================================
 :WAIT_FOR_VM_SHUTDOWN
     echo.
