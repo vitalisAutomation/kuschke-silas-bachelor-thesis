@@ -1056,7 +1056,7 @@ if exist "%PROJEKT_PFAD%qemu\qemu-img.exe" (
 )
 
 :: === QEMU START WITH BOOT OUTPUT IN A DEDICATED TERMINAL ===
-start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /k ""%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
+start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
 if errorlevel 1 (
     echo %RED%[ERROR] QEMU could not be started.%RESET%
@@ -1069,18 +1069,33 @@ echo %GREEN%[Start]%RESET% VM process started. The boot output is visible in the
 call :WAIT_FOR_VM_AND_OPEN_VSCODE
 
 if errorlevel 1 (
-    echo %RED%[WARNING] QEMU exited unexpectedly! Opening the error log...%RESET%
-    notepad.exe "%PROJEKT_PFAD%qemu_error.log"
+    echo %RED%[WARNING] QEMU exited unexpectedly. The error log was not opened automatically.%RESET%
+    echo %YELLOW%Please inspect %PROJEKT_PFAD%qemu_error.log manually if troubleshooting is needed.%RESET%
 )
 
+call :WAIT_FOR_VM_SHUTDOWN
+
 echo(
-echo %YELLOW%Returning to the main menu...%RESET%
+echo %GREEN%VM process ended. Returning to the main menu.%RESET%
 timeout /t 2 /nobreak >nul
 goto :MAIN_MENU
 
 :: =======================================================================
 :: -=[ HELPER SUBROUTINES ]=-
 :: =======================================================================
+:WAIT_FOR_VM_SHUTDOWN
+    echo.
+    echo %BLUE%[VM Monitor]%RESET% VM is running. Waiting for shutdown before returning to the main menu...
+
+:VM_SHUTDOWN_LOOP
+    ssh -o BatchMode=yes -o ConnectTimeout=5 ctrlx-sdk-vm "true" >nul 2>&1
+    if not errorlevel 1 (
+        timeout /t 5 /nobreak >nul
+        goto :VM_SHUTDOWN_LOOP
+    )
+    echo %GREEN%[VM Monitor]%RESET% SSH connection closed. VM shutdown detected.
+goto :EOF
+
 :CHECK_ALL_DEPS
     if not exist "qemu\qemu-system-x86_64.exe" (
         call :ADD_MISSING "Local QEMU"
@@ -1192,7 +1207,7 @@ goto :EOF
         echo %GREEN%[Auto Connect]%RESET% VS Code is already running. Starting a second Remote-SSH window...
     )
 
-    start "" cmd /d /c call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-sdk-vm" "/home/boschrexroth"
+    call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-sdk-vm" "/home/boschrexroth"
     if errorlevel 1 (
         echo %RED%[WARNING]%RESET% VS Code could not be started with Remote-SSH.
         exit /b 1
@@ -1219,12 +1234,19 @@ goto :EOF
 
 :CODE_SERVER_READY
     echo %BLUE%[Storage]%RESET% Expanding the VM root filesystem...
-    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo growpart /dev/vda 1 >/dev/null 2>&1 && sudo resize2fs /dev/vda1 >/dev/null 2>&1"
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo growpart /dev/vda 1 >/tmp/ctrlx-growpart.log 2>&1"
     if errorlevel 1 (
-        echo %YELLOW%[Storage] Root filesystem could not be expanded. Extension installation may fail due to low disk space.%RESET%
+        ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "grep -q NOCHANGE /tmp/ctrlx-growpart.log"
+        if errorlevel 1 (
+            echo %YELLOW%[Storage] Root filesystem could not be expanded. Extension installation may fail due to low disk space.%RESET%
+        ) else (
+            echo %GREEN%[Storage] Root filesystem is already fully expanded.%RESET%
+        )
     )
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo resize2fs /dev/vda1 >/dev/null 2>&1"
+    if errorlevel 1 echo %YELLOW%[Storage] Filesystem resize could not be completed.%RESET%
     echo %BLUE%[VM Extensions]%RESET% Installing extensions in the VM sequentially...
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); installed=$($code_server --list-extensions 2>/dev/null); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do if ! printf '%s\n' $installed | grep -Fxiq $extension; then echo Installing $extension; $code_server --install-extension $extension --force || exit 1; fi; done; echo Installed VM extensions:; $code_server --list-extensions" >> "install_debug.log" 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "set -e; code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --force; done; echo Installed VM extensions:; $code_server --list-extensions" >> "install_debug.log" 2>&1
     if errorlevel 1 (
         echo %YELLOW%[VM Extensions] Installation failed. See install_debug.log for details.%RESET%
         exit /b 1
