@@ -1204,17 +1204,30 @@ goto :EOF
 
 :INSTALL_VM_EXTENSIONS
     echo %BLUE%[VM Extensions]%RESET% Waiting for the Remote-SSH server to initialize...
-    timeout /t 15 /nobreak >nul
+    echo %YELLOW%[VM Extensions]%RESET% These extensions are installed in the VM's Remote Extension Host, not on Windows.
+    set /a EXTENSION_WAIT_COUNT=0
+:WAIT_FOR_CODE_SERVER
+    set /a EXTENSION_WAIT_COUNT+=1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "test -n $(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit)" >nul 2>&1
+    if %errorlevel%==0 goto :CODE_SERVER_READY
+    if %EXTENSION_WAIT_COUNT% GEQ 60 (
+        echo %YELLOW%[VM Extensions] The VS Code Server did not become ready in time. Open the VM in VS Code once and run the script again.%RESET%
+        exit /b 1
+    )
+    timeout /t 5 /nobreak >nul
+    goto :WAIT_FOR_CODE_SERVER
+
+:CODE_SERVER_READY
     echo %BLUE%[Storage]%RESET% Expanding the VM root filesystem...
     ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo growpart /dev/vda 1 >/dev/null 2>&1 && sudo resize2fs /dev/vda1 >/dev/null 2>&1"
     if errorlevel 1 (
         echo %YELLOW%[Storage] Root filesystem could not be expanded. Extension installation may fail due to low disk space.%RESET%
     )
     echo %BLUE%[VM Extensions]%RESET% Installing extensions in the VM sequentially...
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); if [ -z \"$code_server\" ]; then echo 'VS Code Server CLI not found.'; exit 1; fi; for extension in golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo \"Installing $extension...\"; \"$code_server\" --install-extension \"$extension\" --force || exit 1; done" >> "install_debug.log" 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); installed=$($code_server --list-extensions 2>/dev/null); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do if ! printf '%s\n' $installed | grep -Fxiq $extension; then echo Installing $extension; $code_server --install-extension $extension --force || exit 1; fi; done; echo Installed VM extensions:; $code_server --list-extensions" >> "install_debug.log" 2>&1
     if errorlevel 1 (
         echo %YELLOW%[VM Extensions] Installation failed. See install_debug.log for details.%RESET%
         exit /b 1
     )
-    echo %GREEN%[VM Extensions] Remote extensions processed.%RESET%
+    echo %GREEN%[VM Extensions] Remote extensions installed and verified in the VM.%RESET%
     exit /b 0
