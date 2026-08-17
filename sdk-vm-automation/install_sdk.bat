@@ -1,5 +1,6 @@
 :: Source information
-:: Maintainer: Silas Kuschke
+:: Source: Gemini 3.6
+:: Edited by Silas Kuschke
 
 @echo off
 
