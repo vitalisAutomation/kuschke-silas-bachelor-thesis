@@ -38,7 +38,7 @@ if ! lxc info "$CONTAINER" >/dev/null 2>&1; then
 fi
 
 echo "== Copying sources into the container =="
-lxc exec "$CONTAINER" -- rm -rf /root/project
+# The existing parts/stage/prime dirs are kept so rebuilds stay incremental.
 lxc exec "$CONTAINER" -- mkdir -p /root/project
 tar --exclude=./parts --exclude=./stage --exclude=./prime --exclude=./.git \
 	--exclude=./venv --exclude=./.venv --exclude=./qemu --exclude='./*.snap' \
@@ -46,11 +46,17 @@ tar --exclude=./parts --exclude=./stage --exclude=./prime --exclude=./.git \
 
 echo "== Building the snap (native arm64, emulated) =="
 # --destructive-mode: the container already is the arm64 build environment.
-lxc exec "$CONTAINER" -- bash -lc '
+# Rebuilds are incremental by default; set CLEAN=1 for a full rebuild.
+lxc exec "$CONTAINER" \
+	--env CLEAN="${CLEAN:-0}" \
+	--env SNAP_PIP_NO_BINARY="${SNAP_PIP_NO_BINARY:-:all:}" \
+	-- bash -lc '
 	set -euo pipefail
 	cd /root/project
 	export SNAPCRAFT_BUILD_ENVIRONMENT=host
-	snapcraft clean --destructive-mode || true
+	if [[ "$CLEAN" == "1" ]]; then
+		snapcraft clean --destructive-mode
+	fi
 	snapcraft pack --destructive-mode --verbosity=verbose
 '
 

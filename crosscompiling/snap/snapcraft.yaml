@@ -47,6 +47,7 @@ parts:
         "$CRAFT_PART_SRC/.craft"
     build-packages:
       - build-essential
+      - ccache
       - gfortran
       - pkg-config
       - python3-dev
@@ -68,13 +69,22 @@ parts:
     override-build: |
       craftctl default
 
+      # ccache and the pip cache live outside the part dir, so they survive
+      # 'snapcraft clean' and make emulated rebuilds far cheaper.
+      export PATH="/usr/lib/ccache:$PATH"
+      export CCACHE_DIR="${CCACHE_DIR:-/root/.ccache}"
+      export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
+      export MAKEFLAGS="-j$(nproc)"
+
       # Forces source builds. Restrict via SNAP_PIP_NO_BINARY if a package is
       # published as a wheel only (without an sdist).
       pip3 install \
-        --no-cache-dir \
+        --cache-dir "${PIP_CACHE_DIR:-/root/.cache/pip}" \
         --no-binary "${SNAP_PIP_NO_BINARY:-:all:}" \
         --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
         -r requirements.txt
+
+      ccache --show-stats || true
 
   wrapper-scripts:
     plugin: dump

@@ -1058,7 +1058,8 @@ if exist "%PROJEKT_PFAD%qemu\qemu-img.exe" (
 
 :: Start QEMU with boot output in a dedicated terminal
 :: whpx: Hardware acceleration via Windows Hypervisor Platform (works alongside VBS/Hyper-V).
-start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -accel whpx,kernel-irqchip=off -m 12G -smp 8 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
+:: cache=writeback,aio=threads speeds up the IO heavy snap builds noticeably.
+start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -accel whpx,kernel-irqchip=off -m 12G -smp 8 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off,cache=writeback,aio=threads,discard=unmap"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
 if errorlevel 1 (
     echo %RED%[ERROR] QEMU could not be started.%RESET%
