@@ -91,10 +91,10 @@ sudo env "WHEEL_NO_BINARY=${SNAP_PIP_NO_BINARY:-:all:}" "REBUILD_WHEELS=${REBUIL
 	export CCACHE_MAXSIZE=5G
 	export MAKEFLAGS="-j$(nproc)"
 	mkdir -p /root/wheelhouse
-	BUILD_SIGNATURE="$( { sha256sum /root/requirements.txt; printf '%s\n' "$WHEEL_NO_BINARY"; } | sha256sum | cut -d ' ' -f1)"
+	BUILD_SIGNATURE="$( { sha256sum /root/requirements.txt; printf "%s\n" "$WHEEL_NO_BINARY"; } | sha256sum | cut -d " " -f1)"
 	if [[ "$REBUILD_WHEELS" != "1" && -f /root/wheelhouse/.build-signature \
 		&& "$(cat /root/wheelhouse/.build-signature)" == "$BUILD_SIGNATURE" \
-		&& -n "$(compgen -G '/root/wheelhouse/*.whl' || true)" ]]; then
+		&& -n "$(compgen -G "/root/wheelhouse/*.whl" || true)" ]]; then
 		echo "Reusing cached ARM64 wheels. Set REBUILD_WHEELS=1 to rebuild."
 	else
 		rm -f /root/wheelhouse/*.whl
@@ -102,7 +102,7 @@ sudo env "WHEEL_NO_BINARY=${SNAP_PIP_NO_BINARY:-:all:}" "REBUILD_WHEELS=${REBUIL
 			--no-binary "$WHEEL_NO_BINARY" \
 			--wheel-dir /root/wheelhouse \
 			-r /root/requirements.txt
-		printf '%s\n' "$BUILD_SIGNATURE" > /root/wheelhouse/.build-signature
+		printf "%s\n" "$BUILD_SIGNATURE" > /root/wheelhouse/.build-signature
 	fi
 	ccache --show-stats || true
 '
