@@ -828,7 +828,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
 >> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
 :SKIP_PROXY_CONFIG
-:: LXD for the emulated arm64 snap builds - required with and without proxy
+:: LXD remains the isolated environment for Snapcraft packing
 >> "%SDK_SH%" echo snap install lxd ^|^| snap refresh lxd
 >> "%SDK_SH%" echo lxd init --auto --storage-backend=dir ^|^| true
 if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_PROXY_URL%" ^|^| true

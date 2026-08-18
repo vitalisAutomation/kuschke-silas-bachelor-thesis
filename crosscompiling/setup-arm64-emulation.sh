@@ -56,6 +56,7 @@ else
 	sudo apt-get install -y "qemu-user-static:$HOST_ARCH" "binfmt-support:$HOST_ARCH"
 	sudo systemctl restart systemd-binfmt || true
 fi
+sudo apt-get install -y "debootstrap:$HOST_ARCH"
 
 # Guard against the arm64 build of qemu-user-static, which would register an
 # ARM interpreter for the host's own binaries.
