@@ -53,10 +53,11 @@ parts:
     build-packages:
       - python3-pip
     stage-packages:
+      # NumPy links against OpenBLAS/LAPACK at runtime.
+      # Add libsystemd0 here again as soon as cysystemd is back in requirements.txt.
       - libopenblas0-pthread
       - libgfortran5
       - liblapack3
-      - libsystemd0
     prime:
       - -wheelhouse
     override-build: |

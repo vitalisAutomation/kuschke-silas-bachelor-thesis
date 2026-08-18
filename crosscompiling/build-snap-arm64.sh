@@ -47,11 +47,12 @@ if ! lxc info "$CONTAINER" >/dev/null 2>&1; then
 		set -euo pipefail
 		export DEBIAN_FRONTEND=noninteractive
 		apt-get update
+		# libsystemd-dev would be needed here again for cysystemd.
 		apt-get install -y \
 			build-essential ccache gfortran pkg-config patchelf \
 			python3-dev python3-pip python3-venv python3-setuptools python3-wheel \
 			cython3 meson ninja-build \
-			libopenblas-dev liblapack-dev libsystemd-dev
+			libopenblas-dev liblapack-dev
 		python3 -m venv /root/buildenv
 		/root/buildenv/bin/pip install --upgrade pip wheel
 	'
