@@ -8,7 +8,9 @@ set -euo pipefail
 # KVM is NOT required for the arm64 build: the emulation runs through qemu-user
 # in user space. A missing /dev/kvm therefore only produces a warning.
 echo "== 1) KVM (optional) =="
-sudo apt-get update
+# Not fatal: the host may have broken arm64 sources, which does not matter here.
+# arm64 packages are only needed inside the emulated container.
+sudo apt-get update || echo "apt-get update reported errors - continuing."
 sudo apt-get install -y cpu-checker
 
 if [[ -e /dev/kvm ]] && kvm-ok >/dev/null 2>&1; then
