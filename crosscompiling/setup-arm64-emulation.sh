@@ -5,13 +5,24 @@
 #   - Install and initialize LXD plus snapcraft
 set -euo pipefail
 
+# This SDK VM has arm64 registered as a foreign architecture and APT may even
+# default to it. Every package here must therefore be pinned to the host
+# architecture explicitly - installing qemu-user-static:arm64 would register an
+# ARM interpreter for x86-64 binaries and render the VM unusable.
+HOST_ARCH="$(dpkg --print-architecture)"
+APT_ARCH="$(apt-config dump APT::Architecture | cut -d '"' -f2)"
+if [[ "$APT_ARCH" != "$HOST_ARCH" ]]; then
+	echo "Note: APT defaults to '$APT_ARCH' while the host is '$HOST_ARCH'."
+	echo "All packages below are pinned to :$HOST_ARCH."
+fi
+
 # KVM is NOT required for the arm64 build: the emulation runs through qemu-user
 # in user space. A missing /dev/kvm therefore only produces a warning.
 echo "== 1) KVM (optional) =="
 # Not fatal: the host may have broken arm64 sources, which does not matter here.
 # arm64 packages are only needed inside the emulated container.
 sudo apt-get update || echo "apt-get update reported errors - continuing."
-sudo apt-get install -y cpu-checker
+sudo apt-get install -y "cpu-checker:$HOST_ARCH"
 
 if [[ -e /dev/kvm ]] && kvm-ok >/dev/null 2>&1; then
 	sudo usermod -aG kvm "$USER"
@@ -38,8 +49,16 @@ echo "Note: the arm64 emulation runs through qemu-user and is NOT accelerated by
 
 echo
 echo "== 2) ARM64 emulation via binfmt_misc =="
-sudo apt-get install -y qemu-user-static binfmt-support
+sudo apt-get install -y "qemu-user-static:$HOST_ARCH" "binfmt-support:$HOST_ARCH"
 sudo systemctl restart systemd-binfmt || true
+
+# Guard against the arm64 build of qemu-user-static, which would register an
+# ARM interpreter for the host's own binaries.
+if [[ -e /proc/sys/fs/binfmt_misc/qemu-x86_64 ]]; then
+	echo "ERROR: a qemu-x86_64 binfmt handler is registered on an x86-64 host." >&2
+	echo "This breaks execution of native binaries. Remove qemu-user-static:arm64." >&2
+	exit 1
+fi
 
 # The 'F' (fix-binary) flag is essential: the qemu interpreter is opened at
 # registration time and therefore also works inside containers without qemu.
