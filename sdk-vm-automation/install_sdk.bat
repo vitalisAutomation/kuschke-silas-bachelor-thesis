@@ -820,13 +820,13 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo sleep 5
 >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
 >> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
-:: LXD needs its own proxy settings to reach the image server
+:SKIP_PROXY_CONFIG
+:: LXD for the emulated arm64 snap builds - required with and without proxy
 >> "%SDK_SH%" echo snap install lxd ^|^| snap refresh lxd
 >> "%SDK_SH%" echo lxd init --auto --storage-backend=dir ^|^| true
->> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_PROXY_URL%" ^|^| true
->> "%SDK_SH%" echo lxc config set core.proxy_https "%VM_PROXY_URL%" ^|^| true
->> "%SDK_SH%" echo lxc config set core.proxy_ignore_hosts "localhost,127.0.0.1,10.0.2.2" ^|^| true
-:SKIP_PROXY_CONFIG
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_PROXY_URL%" ^|^| true
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_https "%VM_PROXY_URL%" ^|^| true
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_ignore_hosts "localhost,127.0.0.1,10.0.2.2" ^|^| true
 >> "%SDK_SH%" echo # Patch APT sources for arm64 cross-compilation (prevents 404 errors)
 >> "%SDK_SH%" echo if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
 >> "%SDK_SH%" echo     if ! grep -q "Architectures:" /etc/apt/sources.list.d/ubuntu.sources; then
