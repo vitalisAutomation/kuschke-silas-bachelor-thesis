@@ -5,7 +5,7 @@
 # Prerequisite: qemu-aarch64 binfmt and debootstrap are available.
 set -euo pipefail
 
-IMAGE_SERIES="${IMAGE_SERIES:-24.04}"   # must match the 'base' in snapcraft.yaml (core24)
+ROOTFS_SUITE="${ROOTFS_SUITE:-noble}"   # Ubuntu codename for the core24 base
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WHEELHOUSE="$PROJECT_DIR/wheelhouse"
 ROOTFS="${ROOTFS:-$PROJECT_DIR/.arm64-rootfs}"
@@ -25,7 +25,7 @@ fi
 
 if [[ ! -d "$ROOTFS/etc" ]]; then
 	echo "== Creating persistent ARM64 rootfs =="
-	sudo debootstrap --arch=arm64 --foreign "$IMAGE_SERIES" "$ROOTFS" "$ROOTFS_MIRROR"
+	sudo debootstrap --arch=arm64 --foreign "$ROOTFS_SUITE" "$ROOTFS" "$ROOTFS_MIRROR"
 	fi
 
 if [[ ! -x "$ROOTFS/usr/bin/qemu-aarch64-static" ]]; then
