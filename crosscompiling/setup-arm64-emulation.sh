@@ -52,7 +52,8 @@ echo
 echo "== 3) LXD and snapcraft =="
 sudo snap install lxd || sudo snap refresh lxd
 sudo snap install snapcraft --classic || sudo snap refresh snapcraft
-sudo lxd init --auto
+# dir backend: no fixed pool size, so builds cannot run out of pool space.
+sudo lxd init --auto --storage-backend=dir || echo "LXD is already initialized - keeping the existing configuration."
 sudo usermod -aG lxd "$USER"
 
 echo

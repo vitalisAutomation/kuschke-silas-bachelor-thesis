@@ -70,7 +70,9 @@ parts:
       # Install the prebuilt aarch64 wheels without resolving anything online.
       # Several --platform tags are needed because manylinux wheels do not
       # match the plain linux_aarch64 tag.
+      # --break-system-packages: Ubuntu 24.04 marks the build env as externally managed.
       pip3 install \
+        --break-system-packages \
         --no-index \
         --find-links wheelhouse \
         --only-binary :all: \
@@ -89,6 +91,10 @@ parts:
     source: wrapper/
     organize:
       ./run.sh : bin/run.sh
+    override-build: |
+      craftctl default
+      # Git on Windows does not preserve the executable bit.
+      chmod +x "$CRAFT_PART_INSTALL/run.sh"
 
 lint:
   ignore:
