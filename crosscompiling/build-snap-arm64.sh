@@ -34,16 +34,20 @@ if ! lxc info "$CONTAINER" >/dev/null 2>&1; then
 		apt-get update
 		apt-get install -y \
 			build-essential ccache gfortran pkg-config patchelf \
-			python3-dev python3-pip python3-setuptools python3-wheel \
+			python3-dev python3-pip python3-venv python3-setuptools python3-wheel \
 			cython3 meson ninja-build \
 			libopenblas-dev liblapack-dev libsystemd-dev
+		python3 -m venv /root/buildenv
+		/root/buildenv/bin/pip install --upgrade pip wheel
 	'
 fi
 
 echo "== Building wheels from source (native arm64, emulated) =="
 lxc file push "$PROJECT_DIR/requirements.txt" "$CONTAINER/root/requirements.txt"
+# Deliberately not named PIP_NO_BINARY: that env var would also leak into pip's
+# build isolation and force meson/ninja/cython to be compiled from source too.
 lxc exec "$CONTAINER" \
-	--env PIP_NO_BINARY="${SNAP_PIP_NO_BINARY:-:all:}" \
+	--env WHEEL_NO_BINARY="${SNAP_PIP_NO_BINARY:-:all:}" \
 	-- bash -lc '
 	set -euo pipefail
 	export PATH="/usr/lib/ccache:$PATH"
@@ -51,8 +55,8 @@ lxc exec "$CONTAINER" \
 	export CCACHE_MAXSIZE=5G
 	export MAKEFLAGS="-j$(nproc)"
 	mkdir -p /root/wheelhouse
-	pip3 wheel \
-		--no-binary "$PIP_NO_BINARY" \
+	/root/buildenv/bin/pip wheel \
+		--no-binary "$WHEEL_NO_BINARY" \
 		--wheel-dir /root/wheelhouse \
 		-r /root/requirements.txt
 	ccache --show-stats || true

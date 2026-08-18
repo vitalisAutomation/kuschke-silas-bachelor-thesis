@@ -35,17 +35,21 @@ parts:
     source: .
     # The ctrlX package manager only reads manifests from $SNAP/package-assets.
     organize:
-      configs/package-assets/: package-assets/
+      configs/package-assets/*.package-manifest.json: package-assets/
     override-pull: |
       craftctl default
       rm -rf \
         "$CRAFT_PART_SRC/venv" \
         "$CRAFT_PART_SRC/.venv" \
+        "$CRAFT_PART_SRC/qemu" \
+        "$CRAFT_PART_SRC/.git" \
+        "$CRAFT_PART_SRC/.vscode" \
         "$CRAFT_PART_SRC/parts" \
         "$CRAFT_PART_SRC/prime" \
         "$CRAFT_PART_SRC/stage" \
         "$CRAFT_PART_SRC/overlay" \
         "$CRAFT_PART_SRC/.craft"
+      rm -f "$CRAFT_PART_SRC"/*.snap
     build-packages:
       - python3-pip
     stage-packages:
@@ -55,8 +59,6 @@ parts:
       - libsystemd0
     prime:
       - -wheelhouse
-      - -requirements.txt
-      - -configs
     override-build: |
       craftctl default
 
