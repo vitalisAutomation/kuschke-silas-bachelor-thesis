@@ -2,7 +2,7 @@
 # One-time setup on the Ubuntu VM:
 #   - Check KVM (optional, informational only)
 #   - Register qemu-user-static + binfmt so arm64 binaries run transparently
-#   - Install and initialize LXD
+#   - Install and initialize LXD plus snapcraft
 set -euo pipefail
 
 # KVM is NOT required for the arm64 build: the emulation runs through qemu-user
@@ -49,8 +49,9 @@ fi
 echo "binfmt qemu-aarch64 registered (fix-binary)."
 
 echo
-echo "== 3) LXD =="
+echo "== 3) LXD and snapcraft =="
 sudo snap install lxd || sudo snap refresh lxd
+sudo snap install snapcraft --classic || sudo snap refresh snapcraft
 sudo lxd init --auto
 sudo usermod -aG lxd "$USER"
 

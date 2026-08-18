@@ -12,10 +12,11 @@ grade: stable
 contact: https://github.com/boschrexroth/ctrlx-automation-sdk
 license: MIT
 
-# Built natively on arm64 - emulated via qemu-user-static/binfmt on x86 hosts.
+# The aarch64 wheels are built beforehand by build-snap-arm64.sh in an emulated
+# container, so packing itself runs natively on the amd64 host.
 platforms:
   arm64:
-    build-on: [arm64]
+    build-on: [amd64, arm64]
     build-for: [arm64]
 
 apps:
@@ -46,45 +47,40 @@ parts:
         "$CRAFT_PART_SRC/overlay" \
         "$CRAFT_PART_SRC/.craft"
     build-packages:
-      - build-essential
-      - ccache
-      - gfortran
-      - pkg-config
-      - python3-dev
       - python3-pip
-      - python3-setuptools
-      - python3-wheel
-      - cython3
-      - meson
-      - ninja-build
-      - patchelf
-      - libopenblas-dev
-      - liblapack-dev
-      - libsystemd-dev
     stage-packages:
       - libopenblas0-pthread
       - libgfortran5
       - liblapack3
       - libsystemd0
+    prime:
+      - -wheelhouse
+      - -requirements.txt
+      - -configs
     override-build: |
       craftctl default
 
-      # ccache and the pip cache live outside the part dir, so they survive
-      # 'snapcraft clean' and make emulated rebuilds far cheaper.
-      export PATH="/usr/lib/ccache:$PATH"
-      export CCACHE_DIR="${CCACHE_DIR:-/root/.ccache}"
-      export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
-      export MAKEFLAGS="-j$(nproc)"
+      if [ ! -d wheelhouse ]; then
+        echo "wheelhouse/ is missing - run build-snap-arm64.sh instead of snapcraft directly." >&2
+        exit 1
+      fi
 
-      # Forces source builds. Restrict via SNAP_PIP_NO_BINARY if a package is
-      # published as a wheel only (without an sdist).
+      # Install the prebuilt aarch64 wheels without resolving anything online.
+      # Several --platform tags are needed because manylinux wheels do not
+      # match the plain linux_aarch64 tag.
       pip3 install \
-        --cache-dir "${PIP_CACHE_DIR:-/root/.cache/pip}" \
-        --no-binary "${SNAP_PIP_NO_BINARY:-:all:}" \
+        --no-index \
+        --find-links wheelhouse \
+        --only-binary :all: \
+        --platform linux_aarch64 \
+        --platform manylinux2014_aarch64 \
+        --platform manylinux_2_17_aarch64 \
+        --platform manylinux_2_28_aarch64 \
+        --python-version 3.12 \
+        --implementation cp \
+        --abi cp312 \
         --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
         -r requirements.txt
-
-      ccache --show-stats || true
 
   wrapper-scripts:
     plugin: dump

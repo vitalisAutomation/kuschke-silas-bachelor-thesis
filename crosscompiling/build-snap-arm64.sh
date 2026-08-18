@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# Builds the snap natively for arm64 inside an emulated arm64 LXD container.
+# Two-stage arm64 snap build:
+#   1. Build all Python wheels from source inside an emulated arm64 LXD container.
+#   2. Pack the snap natively on the amd64 host, consuming the prebuilt wheels.
 # Prerequisite: ./setup-arm64-emulation.sh has been run once.
 set -euo pipefail
 
-CONTAINER="${CONTAINER:-snapbuild-arm64}"
+CONTAINER="${CONTAINER:-wheelbuild-arm64}"
 IMAGE_SERIES="${IMAGE_SERIES:-24.04}"   # must match the 'base' in snapcraft.yaml (core24)
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WHEELHOUSE="$PROJECT_DIR/wheelhouse"
 
 if ! grep -q "flags:.*F" /proc/sys/fs/binfmt_misc/qemu-aarch64 2>/dev/null; then
 	echo "qemu-aarch64 binfmt is not registered correctly. Please run ./setup-arm64-emulation.sh." >&2
@@ -21,48 +24,50 @@ if ! lxc info "$CONTAINER" >/dev/null 2>&1; then
 	fi
 
 	echo "== Launching arm64 container (emulated, this takes a while) =="
-	# security.nesting: snapd and snapcraft run inside the container
-	lxc launch "ubuntu:${FINGERPRINT}" "$CONTAINER" -c security.nesting=true
+	lxc launch "ubuntu:${FINGERPRINT}" "$CONTAINER"
 	lxc exec "$CONTAINER" -- cloud-init status --wait || true
 
-	echo "== Installing toolchain inside the container =="
+	echo "== Installing build dependencies inside the container =="
 	lxc exec "$CONTAINER" -- bash -lc '
 		set -euo pipefail
 		export DEBIAN_FRONTEND=noninteractive
 		apt-get update
-		apt-get install -y snapd
-		systemctl start snapd.socket
-		snap wait system seed.loaded
-		snap install snapcraft --classic
+		apt-get install -y \
+			build-essential ccache gfortran pkg-config patchelf \
+			python3-dev python3-pip python3-setuptools python3-wheel \
+			cython3 meson ninja-build \
+			libopenblas-dev liblapack-dev libsystemd-dev
 	'
 fi
 
-echo "== Copying sources into the container =="
-# The existing parts/stage/prime dirs are kept so rebuilds stay incremental.
-lxc exec "$CONTAINER" -- mkdir -p /root/project
-tar --exclude=./parts --exclude=./stage --exclude=./prime --exclude=./.git \
-	--exclude=./venv --exclude=./.venv --exclude=./qemu --exclude='./*.snap' \
-	-cf - -C "$PROJECT_DIR" . | lxc exec "$CONTAINER" -- tar -xf - -C /root/project
-
-echo "== Building the snap (native arm64, emulated) =="
-# --destructive-mode: the container already is the arm64 build environment.
-# Rebuilds are incremental by default; set CLEAN=1 for a full rebuild.
+echo "== Building wheels from source (native arm64, emulated) =="
+lxc file push "$PROJECT_DIR/requirements.txt" "$CONTAINER/root/requirements.txt"
 lxc exec "$CONTAINER" \
-	--env CLEAN="${CLEAN:-0}" \
-	--env SNAP_PIP_NO_BINARY="${SNAP_PIP_NO_BINARY:-:all:}" \
+	--env PIP_NO_BINARY="${SNAP_PIP_NO_BINARY:-:all:}" \
 	-- bash -lc '
 	set -euo pipefail
-	cd /root/project
-	export SNAPCRAFT_BUILD_ENVIRONMENT=host
-	if [[ "$CLEAN" == "1" ]]; then
-		snapcraft clean --destructive-mode
-	fi
-	snapcraft pack --destructive-mode --verbosity=verbose
+	export PATH="/usr/lib/ccache:$PATH"
+	export CCACHE_DIR=/root/.ccache
+	export CCACHE_MAXSIZE=5G
+	export MAKEFLAGS="-j$(nproc)"
+	mkdir -p /root/wheelhouse
+	pip3 wheel \
+		--no-binary "$PIP_NO_BINARY" \
+		--wheel-dir /root/wheelhouse \
+		-r /root/requirements.txt
+	ccache --show-stats || true
 '
 
-echo "== Retrieving the result =="
-SNAP_PATH="$(lxc exec "$CONTAINER" -- bash -lc 'ls -1 /root/project/*.snap | head -n1')"
-lxc file pull "$CONTAINER${SNAP_PATH}" "$PROJECT_DIR/$(basename "$SNAP_PATH")"
+echo "== Fetching the wheelhouse =="
+rm -rf "$WHEELHOUSE"
+lxc file pull -r "$CONTAINER/root/wheelhouse" "$PROJECT_DIR"
+ls -1 "$WHEELHOUSE"
 
-echo "Done: $PROJECT_DIR/$(basename "$SNAP_PATH")"
-echo "Stop the container with: lxc stop $CONTAINER   (delete: lxc delete -f $CONTAINER)"
+echo "== Packing the snap (native on amd64) =="
+cd "$PROJECT_DIR"
+if [[ "${CLEAN:-0}" == "1" ]]; then
+	snapcraft clean --use-lxd
+fi
+snapcraft pack --use-lxd --build-for=arm64 --verbosity=verbose
+
+echo "Done. Stop the container with: lxc stop $CONTAINER   (delete: lxc delete -f $CONTAINER)"
