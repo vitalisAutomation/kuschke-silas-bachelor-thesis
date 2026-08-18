@@ -503,6 +503,13 @@ set PROXY_URL=%CUSTOMER_PROXY_URL%
 
 goto :ROUTE_DOWNLOAD
 
+:: Shared dispatch for both proxy variants - a missing label aborts the batch.
+:ROUTE_DOWNLOAD
+
+if "%DOWNLOAD_TARGET%"=="VM" goto :DOWNLOAD_VM
+
+goto :MAIN_MENU
+
 :NO_PROXY
 
 echo.
