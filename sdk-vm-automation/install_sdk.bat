@@ -1051,13 +1051,14 @@ goto :MAIN_MENU
 
 set "VM_IMAGE=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2"
 if exist "%PROJEKT_PFAD%qemu\qemu-img.exe" (
-    echo %BLUE%[Storage]%RESET% Ensuring at least 12 GB virtual disk space for the VM...
-    "%PROJEKT_PFAD%qemu\qemu-img.exe" resize "%VM_IMAGE%" 12G >nul 2>&1
+    echo %BLUE%[Storage]%RESET% Ensuring at least 60 GB virtual disk space for the VM...
+    "%PROJEKT_PFAD%qemu\qemu-img.exe" resize "%VM_IMAGE%" 60G >nul 2>&1
     if errorlevel 1 echo %YELLOW%[Storage] Could not resize the VM image automatically.%RESET%
 )
 
 :: Start QEMU with boot output in a dedicated terminal
-start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -m 4G -smp 2 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
+:: whpx: Hardware acceleration via Windows Hypervisor Platform (works alongside VBS/Hyper-V).
+start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -accel whpx,kernel-irqchip=off -m 12G -smp 8 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
 if errorlevel 1 (
     echo %RED%[ERROR] QEMU could not be started.%RESET%
