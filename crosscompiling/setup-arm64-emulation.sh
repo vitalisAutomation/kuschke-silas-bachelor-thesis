@@ -19,12 +19,12 @@ fi
 # KVM is NOT required for the arm64 build: the emulation runs through qemu-user
 # in user space. A missing /dev/kvm therefore only produces a warning.
 echo "== 1) KVM (optional) =="
-# Not fatal: the host may have broken arm64 sources, which does not matter here.
-# arm64 packages are only needed inside the emulated container.
+# Not fatal: this VM may lack usable host-arch apt sources, which does not
+# matter here. arm64 packages are only needed inside the emulated container.
 sudo apt-get update || echo "apt-get update reported errors - continuing."
-sudo apt-get install -y "cpu-checker:$HOST_ARCH"
+sudo apt-get install -y "cpu-checker:$HOST_ARCH" || echo "cpu-checker unavailable - skipping the KVM check."
 
-if [[ -e /dev/kvm ]] && kvm-ok >/dev/null 2>&1; then
+if [[ -e /dev/kvm ]] && command -v kvm-ok >/dev/null && kvm-ok >/dev/null 2>&1; then
 	sudo usermod -aG kvm "$USER"
 	echo "KVM available - the Ubuntu VM itself runs accelerated."
 else
@@ -49,8 +49,13 @@ echo "Note: the arm64 emulation runs through qemu-user and is NOT accelerated by
 
 echo
 echo "== 2) ARM64 emulation via binfmt_misc =="
-sudo apt-get install -y "qemu-user-static:$HOST_ARCH" "binfmt-support:$HOST_ARCH"
-sudo systemctl restart systemd-binfmt || true
+# Cloud-init may already have installed and registered the emulator.
+if [[ -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ]]; then
+	echo "qemu-aarch64 handler already present - skipping installation."
+else
+	sudo apt-get install -y "qemu-user-static:$HOST_ARCH" "binfmt-support:$HOST_ARCH"
+	sudo systemctl restart systemd-binfmt || true
+fi
 
 # Guard against the arm64 build of qemu-user-static, which would register an
 # ARM interpreter for the host's own binaries.
