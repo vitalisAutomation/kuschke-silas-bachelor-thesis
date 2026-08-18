@@ -17,14 +17,14 @@ fi
 
 if ! lxc info "$CONTAINER" >/dev/null 2>&1; then
 	echo "== Resolving arm64 image =="
-	FINGERPRINT="$(lxc image list "ubuntu:${IMAGE_SERIES}" architecture=aarch64 type=virtual-machine --format csv -c f | head -n1 | tr -d '"')"
+	FINGERPRINT="$(lxc image list "ubuntu:${IMAGE_SERIES}" architecture=aarch64 --format csv -c f | head -n1 | tr -d '"')"
 	if [[ -z "$FINGERPRINT" ]]; then
 		echo "No aarch64 image found for ubuntu:${IMAGE_SERIES}." >&2
 		exit 1
 	fi
 
-	echo "== Launching arm64 VM (emulated, this takes a while) =="
-	lxc launch --vm "ubuntu:${FINGERPRINT}" "$CONTAINER"
+	echo "== Launching arm64 container (emulated, this takes a while) =="
+	lxc launch "ubuntu:${FINGERPRINT}" "$CONTAINER"
 
 	# The container does not inherit the host proxy, so apt and pip would fail.
 	PROXY="${https_proxy:-${http_proxy:-}}"
