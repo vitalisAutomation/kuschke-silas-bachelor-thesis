@@ -56,5 +56,15 @@ sudo snap install snapcraft --classic || sudo snap refresh snapcraft
 sudo lxd init --auto --storage-backend=dir || echo "LXD is already initialized - keeping the existing configuration."
 sudo usermod -aG lxd "$USER"
 
+# Behind a corporate proxy the LXD daemon needs its own configuration,
+# otherwise it cannot reach the image server.
+PROXY="${https_proxy:-${http_proxy:-}}"
+if [[ -n "$PROXY" ]]; then
+	echo "Configuring LXD for proxy $PROXY"
+	sudo lxc config set core.proxy_http "${http_proxy:-$PROXY}"
+	sudo lxc config set core.proxy_https "$PROXY"
+	sudo lxc config set core.proxy_ignore_hosts "${no_proxy:-localhost,127.0.0.1}"
+fi
+
 echo
 echo "Done. Log in again (or run 'newgrp lxd'), then start: ./build-snap-arm64.sh"

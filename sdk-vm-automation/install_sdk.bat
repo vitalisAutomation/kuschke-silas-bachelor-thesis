@@ -751,12 +751,16 @@ echo   expire: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo ssh_pwauth: True>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo disable_root: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
 :: Define the default Ubuntu packages
+:: qemu-user-static and binfmt-support enable emulated arm64 builds.
 echo packages:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - git>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - curl>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo   - qemu-user-static>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo   - binfmt-support>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo   - squashfs-tools>> "%PROJEKT_PFAD%instances\cidata\user-data"
 :: Generate the SDK provisioning script
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
@@ -816,6 +820,12 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo sleep 5
 >> "%SDK_SH%" echo snap set system proxy.http="%VM_PROXY_URL%"
 >> "%SDK_SH%" echo snap set system proxy.https="%VM_PROXY_URL%"
+:: LXD needs its own proxy settings to reach the image server
+>> "%SDK_SH%" echo snap install lxd ^|^| snap refresh lxd
+>> "%SDK_SH%" echo lxd init --auto --storage-backend=dir ^|^| true
+>> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_PROXY_URL%" ^|^| true
+>> "%SDK_SH%" echo lxc config set core.proxy_https "%VM_PROXY_URL%" ^|^| true
+>> "%SDK_SH%" echo lxc config set core.proxy_ignore_hosts "localhost,127.0.0.1,10.0.2.2" ^|^| true
 :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo # Patch APT sources for arm64 cross-compilation (prevents 404 errors)
 >> "%SDK_SH%" echo if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then

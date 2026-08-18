@@ -25,6 +25,21 @@ if ! lxc info "$CONTAINER" >/dev/null 2>&1; then
 
 	echo "== Launching arm64 container (emulated, this takes a while) =="
 	lxc launch "ubuntu:${FINGERPRINT}" "$CONTAINER"
+
+	# The container does not inherit the host proxy, so apt and pip would fail.
+	PROXY="${https_proxy:-${http_proxy:-}}"
+	if [[ -n "$PROXY" ]]; then
+		echo "Configuring the container for proxy $PROXY"
+		for var in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; do
+			lxc config set "$CONTAINER" "environment.$var" "$PROXY"
+		done
+		for var in no_proxy NO_PROXY; do
+			lxc config set "$CONTAINER" "environment.$var" "${no_proxy:-localhost,127.0.0.1}"
+		done
+		lxc exec "$CONTAINER" -- bash -c "printf 'Acquire::http::Proxy \"%s\";\nAcquire::https::Proxy \"%s\";\n' '$PROXY' '$PROXY' > /etc/apt/apt.conf.d/99proxy"
+		lxc restart "$CONTAINER"
+	fi
+
 	lxc exec "$CONTAINER" -- cloud-init status --wait || true
 
 	echo "== Installing build dependencies inside the container =="
