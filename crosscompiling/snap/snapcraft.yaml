@@ -12,9 +12,10 @@ grade: stable
 contact: https://github.com/boschrexroth/ctrlx-automation-sdk
 license: MIT
 
+# Built natively on arm64 - emulated via qemu-user-static/binfmt on x86 hosts.
 platforms:
   arm64:
-    build-on: [amd64]
+    build-on: [arm64]
     build-for: [arm64]
 
 apps:
@@ -31,6 +32,9 @@ parts:
   app:
     plugin: dump
     source: .
+    # The ctrlX package manager only reads manifests from $SNAP/package-assets.
+    organize:
+      configs/package-assets/: package-assets/
     override-pull: |
       craftctl default
       rm -rf \
@@ -46,19 +50,29 @@ parts:
       - gfortran
       - pkg-config
       - python3-dev
+      - python3-pip
       - python3-setuptools
       - python3-wheel
+      - cython3
+      - meson
+      - ninja-build
+      - patchelf
       - libopenblas-dev
       - liblapack-dev
+      - libsystemd-dev
     stage-packages:
       - libopenblas0-pthread
       - libgfortran5
       - liblapack3
+      - libsystemd0
     override-build: |
       craftctl default
 
-      PIP_ONLY_BINARY=:none: pip3 install \
+      # Forces source builds. Restrict via SNAP_PIP_NO_BINARY if a package is
+      # published as a wheel only (without an sdist).
+      pip3 install \
         --no-cache-dir \
+        --no-binary "${SNAP_PIP_NO_BINARY:-:all:}" \
         --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
         -r requirements.txt
 
