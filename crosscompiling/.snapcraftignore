@@ -1,0 +1,7 @@
+# Exclude local build artifacts from snap source upload
+parts/
+prime/
+stage/
+overlay/
+.craft/
+*.snap

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.boschrexroth.com/ctrlx-automation/ctrlx-core/apps/package-manifest/package-manifest.v1.6.schema.json",
+  "version": "1.0.0",
+  "id": "sdk-py-console",
+  "scopes-declaration": [],
+  "services": {
+    "proxyMapping": []
+  },
+  "menus": {
+    "sidebar": [],
+    "settings": [],
+    "overview": []
+  }
+}

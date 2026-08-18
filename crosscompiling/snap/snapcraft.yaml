@@ -1,0 +1,73 @@
+name: sdk-py-console
+title: SDK Python Console Program
+version: 1.0.0
+summary: Minimal NumPy console program for ctrlX
+description: |
+  This sample runs a minimal NumPy calculation and prints the result.
+
+base: core24
+confinement: strict
+grade: stable
+
+contact: https://github.com/boschrexroth/ctrlx-automation-sdk
+license: MIT
+
+platforms:
+  arm64:
+    build-on: [amd64]
+    build-for: [arm64]
+
+apps:
+  app:
+    command: bin/run.sh
+    plugs:
+      - network
+    daemon: simple
+    restart-condition: always
+    passthrough:
+      restart-delay: 5s
+
+parts:
+  app:
+    plugin: dump
+    source: .
+    override-pull: |
+      craftctl default
+      rm -rf \
+        "$CRAFT_PART_SRC/venv" \
+        "$CRAFT_PART_SRC/.venv" \
+        "$CRAFT_PART_SRC/parts" \
+        "$CRAFT_PART_SRC/prime" \
+        "$CRAFT_PART_SRC/stage" \
+        "$CRAFT_PART_SRC/overlay" \
+        "$CRAFT_PART_SRC/.craft"
+    build-packages:
+      - build-essential
+      - gfortran
+      - pkg-config
+      - python3-dev
+      - python3-setuptools
+      - python3-wheel
+      - libopenblas-dev
+      - liblapack-dev
+    stage-packages:
+      - libopenblas0-pthread
+      - libgfortran5
+      - liblapack3
+    override-build: |
+      craftctl default
+
+      PIP_ONLY_BINARY=:none: pip3 install \
+        --no-cache-dir \
+        --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
+        -r requirements.txt
+
+  wrapper-scripts:
+    plugin: dump
+    source: wrapper/
+    organize:
+      ./run.sh : bin/run.sh
+
+lint:
+  ignore:
+    - library

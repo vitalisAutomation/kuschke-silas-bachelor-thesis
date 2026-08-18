@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+parts/
+prime/
+stage/
+overlay/
+.craft/
+*.snap
