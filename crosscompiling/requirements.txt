@@ -4,8 +4,7 @@
 #   ctrlx-datalayer, ctrlx-fbs, flatbuffers -> only needed for Data Layer access.
 #     Re-adding them also requires the 'datalayer' content interface in
 #     snapcraft.yaml and matching code in app/main.py. They are published as
-#     wheels only, so build-snap-arm64.sh must then be called with
-#     SNAP_PIP_NO_BINARY=numpy - a source-only build would fail.
+#     wheels only, so the wheel-only download step can use them directly.
 #   cysystemd -> journal logging instead of stdout. Needs libsystemd-dev in the
 #     wheel container and libsystemd0 as a stage-package.
 #   PyJWT -> token handling for the ctrlX web API.

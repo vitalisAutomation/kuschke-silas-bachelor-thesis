@@ -12,9 +12,12 @@ grade: stable
 contact: https://github.com/boschrexroth/ctrlx-automation-sdk
 license: MIT
 
-# The aarch64 wheels are built beforehand by build-snap-arm64.sh in an emulated
-# ARM64 rootfs, so packing itself runs natively on the amd64 host.
+# The aarch64 wheels are downloaded beforehand by build-snap-arm64.sh, so the
+# snap is assembled only from precompiled wheels.
 platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
   arm64:
     build-on: [amd64, arm64]
     build-for: [arm64]
@@ -68,24 +71,33 @@ parts:
         exit 1
       fi
 
-      # Install the prebuilt aarch64 wheels without resolving anything online.
-      # Several --platform tags are needed because manylinux wheels do not
-      # match the plain linux_aarch64 tag.
+      # Install only the prebuilt aarch64 wheels; source builds and network
+      # dependency resolution are deliberately disabled here.
       # --break-system-packages: Ubuntu 24.04 marks the build env as externally managed.
-      pip3 install \
-        --break-system-packages \
-        --no-index \
-        --find-links wheelhouse \
-        --only-binary :all: \
-        --platform linux_aarch64 \
-        --platform manylinux2014_aarch64 \
-        --platform manylinux_2_17_aarch64 \
-        --platform manylinux_2_28_aarch64 \
-        --python-version 3.12 \
-        --implementation cp \
-        --abi cp312 \
-        --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
-        -r requirements.txt
+      if [ "$CRAFT_ARCH_BUILD_FOR" = "arm64" ]; then
+        pip3 install \
+          --break-system-packages \
+          --no-index \
+          --find-links wheelhouse \
+          --only-binary :all: \
+          --platform linux_aarch64 \
+          --platform manylinux2014_aarch64 \
+          --platform manylinux_2_17_aarch64 \
+          --platform manylinux_2_28_aarch64 \
+          --python-version 3.12 \
+          --implementation cp \
+          --abi cp312 \
+          --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
+          -r requirements.txt
+      else
+        pip3 install \
+          --break-system-packages \
+          --no-index \
+          --find-links wheelhouse \
+          --only-binary :all: \
+          --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
+          -r requirements.txt
+      fi
 
   wrapper-scripts:
     plugin: dump

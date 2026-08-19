@@ -758,15 +758,12 @@ echo   expire: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo ssh_pwauth: True>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo disable_root: False>> "%PROJEKT_PFAD%instances\cidata\user-data"
 :: Define the default Ubuntu packages
-:: qemu-user-static and binfmt-support enable emulated arm64 builds.
 echo packages:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - git>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - curl>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
-echo   - qemu-user-static>> "%PROJEKT_PFAD%instances\cidata\user-data"
-echo   - binfmt-support>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - squashfs-tools>> "%PROJEKT_PFAD%instances\cidata\user-data"
 :: Generate the SDK provisioning script
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
