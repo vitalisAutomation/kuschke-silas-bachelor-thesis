@@ -317,7 +317,7 @@ echo.
 echo %YELLOW%Writing Cloud-Init configuration to %BOOT_PATH%...%RESET%
 
 :: PowerShell writes UTF-8 YAML and escapes arbitrary Wi-Fi credentials safely
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$boot=$env:BOOT_PATH; $user=$env:PI_USERNAME; $password=$env:PI_PASSWORD; $hostname=$env:PI_HOSTNAME; $ssid=$env:WIFI_SSID; $wifiPassword=$env:WIFI_PASSWORD; $publicKeyPath=$env:SSH_KEY_FILE+'.pub'; $quote=[char]39; $yamlQuote={param($value); return ([string]$quote+$value.Replace([string]$quote,([string]$quote+[string]$quote))+[string]$quote)}; $publicKey=(Get-Content -LiteralPath $publicKeyPath -Raw).Trim(); $lines=@('#cloud-config','',('hostname: '+$hostname),'users:','  - name: '+$user,'    gecos: ctrlX SDK user','    groups: sudo,adm','    shell: /bin/bash','    sudo: ALL=(ALL) NOPASSWD:ALL','    lock_passwd: false','    ssh_authorized_keys:','      - '+$publicKey,'chpasswd:','  list: |','    '+$user+':'+$password,'  expire: false','ssh_pwauth: true','disable_root: true','package_update: true','packages:','  - git','  - unzip','  - curl','  - wget','  - make','  - squashfs-tools','  - snapd','  - openssh-server'); if ($env:USE_PROXY -eq 'true') {$lines+=@('apt:','  proxy: '+$env:PROXY_URL,'write_files:','  - path: /etc/profile.d/ctrlx-proxy.sh','    permissions: ''0644''','    content: |','      export http_proxy='+$env:PROXY_URL,'      export https_proxy='+$env:PROXY_URL,'      export HTTP_PROXY='+$env:PROXY_URL,'      export HTTPS_PROXY='+$env:PROXY_URL)}; $lines+=@('runcmd:','  - systemctl enable --now ssh','  - mkdir -p /home/'+$user,'  - chown '+$user+':'+$user+' /home/'+$user,'  - su - '+$user+' -c "wget https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh"','  - su - '+$user+' -c "chmod a+x clone-install-sdk.sh"','  - su - '+$user+' -c "./clone-install-sdk.sh"','  - su - '+$user+' -c "/home/'+$user+'/ctrlx-automation-sdk/scripts/install-required-packages.sh"','  - su - '+$user+' -c "/home/'+$user+'/ctrlx-automation-sdk/scripts/install-snapcraft.sh"'); $network=@('version: 2','wifis:','  wlan0:','    dhcp4: true','    optional: true','    access-points:','      '+$yamlQuote.Invoke($ssid)+':','        password: '+$yamlQuote.Invoke($wifiPassword)); $utf8=New-Object System.Text.UTF8Encoding($false); [IO.File]::WriteAllLines((Join-Path $boot 'meta-data'),@('instance-id: ctrlx-raspberry-pi','local-hostname: '+$hostname),$utf8); [IO.File]::WriteAllLines((Join-Path $boot 'user-data'),$lines,$utf8); [IO.File]::WriteAllLines((Join-Path $boot 'network-config'),$network,$utf8)"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_PATH%configure_cloud_init.ps1"
 if errorlevel 1 goto :CONFIGURATION_ERROR
 if not exist "%BOOT_PATH%user-data" goto :CONFIGURATION_ERROR
 if not exist "%BOOT_PATH%network-config" goto :CONFIGURATION_ERROR
@@ -335,7 +335,6 @@ echo.
 echo %GREEN%Cloud-Init configuration completed successfully.%RESET%
 echo.
 echo SSH username: %PI_USERNAME%
-echo SSH password: %PI_PASSWORD%
 echo Hostname: %PI_HOSTNAME%
 echo Wi-Fi SSID: %WIFI_SSID%
 echo SSH private key: %SSH_KEY_FILE%
