@@ -13,7 +13,7 @@ contact: https://github.com/boschrexroth/ctrlx-automation-sdk
 license: MIT
 
 # The aarch64 wheels are built beforehand by build-snap-arm64.sh in an emulated
-# container, so packing itself runs natively on the amd64 host.
+# ARM64 rootfs, so packing itself runs natively on the amd64 host.
 platforms:
   arm64:
     build-on: [amd64, arm64]
