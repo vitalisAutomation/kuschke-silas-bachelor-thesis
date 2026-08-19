@@ -1,8 +1,9 @@
 #!/bin/sh
 
-# 1. Wir setzen den PYTHONPATH absolut prioritär auf die site-packages Ihres Snaps!
-#    Dadurch sucht Python zwingend zuerst nach der cross-kompilierten NumPy-Version.
+# Put the snap's site-packages first so the bundled arm64 build is used.
 export PYTHONPATH="$SNAP/lib/python3.12/site-packages:$SNAP:$PYTHONPATH"
 
-# 2. Wir starten den Python-Interpreter der Steuerung und übergeben Ihr Skript
+# NumPy links against the staged OpenBLAS/LAPACK, which is not on the default loader path.
+export LD_LIBRARY_PATH="$SNAP/usr/lib/$(uname -m)-linux-gnu:$SNAP/usr/lib:$LD_LIBRARY_PATH"
+
 exec python3 -u "$SNAP/app/main.py"

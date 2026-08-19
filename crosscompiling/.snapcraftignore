@@ -4,4 +4,7 @@ prime/
 stage/
 overlay/
 .craft/
+venv/
+.venv/
+qemu/
 *.snap

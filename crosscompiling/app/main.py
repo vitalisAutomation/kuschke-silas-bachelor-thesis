@@ -8,7 +8,7 @@ import time
 import logging
 import numpy as np
 
-# Konfiguriere das Logging direkt für stdout (Kanal 1)
+# Log to stdout so the ctrlX journal picks the output up.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -22,7 +22,6 @@ def main():
     logger.info("NumPy Console Daemon started...")
     
     while True:
-        # Eine saubere NumPy-Berechnung ohne störende Platzhalter
         matrix = np.array([[1, 2], [3, 4]])
         result = int(np.sum(matrix @ matrix))
         
@@ -30,7 +29,6 @@ def main():
         logger.info("A = [[1, 2], [3, 4]]")
         logger.info(f"sum(A @ A) = {result}")
         
-        # 5 Sekunden warten vor der nächsten Berechnung
         time.sleep(5.0)
 
 if __name__ == "__main__":

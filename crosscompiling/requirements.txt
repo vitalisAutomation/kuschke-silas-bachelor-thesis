@@ -1,8 +1,13 @@
-autopep8==2.3.2
-ctrlx-datalayer==3.5.0
-ctrlx-fbs==2.5.1
-cysystemd==2.0.5
-flatbuffers==24.3.25
+# Reduced to the cross-compiling test case on purpose.
+#
+# Previously included and removed:
+#   ctrlx-datalayer, ctrlx-fbs, flatbuffers -> only needed for Data Layer access.
+#     Re-adding them also requires the 'datalayer' content interface in
+#     snapcraft.yaml and matching code in app/main.py. They are published as
+#     wheels only, so the wheel-only download step can use them directly.
+#   cysystemd -> journal logging instead of stdout. Needs libsystemd-dev in the
+#     wheel container and libsystemd0 as a stage-package.
+#   PyJWT -> token handling for the ctrlX web API.
+#   autopep8, pycodestyle -> development tools. They belong into a separate dev
+#     requirements file, never into the snap payload.
 numpy==2.5.1
-pycodestyle==2.14.0
-PyJWT==2.13.0
