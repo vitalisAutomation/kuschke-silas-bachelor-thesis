@@ -20,12 +20,9 @@ set "RESET=%ESC%[0m"
 
 cd /d "%~dp0"
 set "PROJECT_PATH=%~dp0"
-set "ETCHER_VERSION=1.18.11"
-set "ETCHER_URL=https://github.com/balena-io/etcher/releases/download/v%ETCHER_VERSION%/balenaEtcher-%ETCHER_VERSION%-win.zip"
-set "ETCHER_FILE=%PROJECT_PATH%balenaEtcher-%ETCHER_VERSION%-win.zip"
-set "ETCHER_DIR=%PROJECT_PATH%balenaEtcher-portable"
-set "ETCHER_EXE="
-set "ETCHER_SHA256=3b783f50186a538d1dda2ef7f4651e27e4f94fb221cec937eb387ac3d0612319"
+set "IMAGER_VERSION=1.8.5"
+set "IMAGER_EXE="
+set "IMAGER_CLI="
 set "PI_USERNAME=sdk_pi"
 set "PI_PASSWORD=sdk_pi"
 set "PI_HOSTNAME=sdk_pi"
@@ -46,18 +43,23 @@ if not defined NETWORK_READY exit /b 1
 set "MISSING_DEV_TOOLS="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_REMOTE_SSH_FLAG="
-set "ETCHER_LOCAL_MISSING="
 call :CHECK_DEVELOPMENT_TOOLS
-call :CHECK_ETCHER_LOCAL
-if errorlevel 1 set "ETCHER_LOCAL_MISSING=1"
+call :CHECK_RPI_IMAGER_LOCAL
+if errorlevel 1 goto :RPI_IMAGER_MISSING
 
 if defined MISSING_DEV_TOOLS goto :REQUEST_ADMIN
-if defined ETCHER_LOCAL_MISSING (
-    call :ENSURE_ETCHER_LOCAL
-    if errorlevel 1 exit /b 1
-    set "ETCHER_LOCAL_MISSING="
-)
 goto :MAIN_MENU
+
+:RPI_IMAGER_MISSING
+cls
+echo %BLUE%=======================================================================%RESET%
+echo %RED%             RASPBERRY PI IMAGER IS REQUIRED%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+echo %RED%[ERROR] Raspberry Pi Imager %IMAGER_VERSION% was not found.%RESET%
+echo Please install Raspberry Pi Imager and run this script again.
+pause
+exit /b 1
 
 :REQUEST_ADMIN
 cls
@@ -131,9 +133,6 @@ if not errorlevel 1 (
     echo %GREEN%[Remote-SSH] Extension installation completed successfully.%RESET%
 )
 
-    call :ENSURE_ETCHER_LOCAL
-    if errorlevel 1 exit /b 1
-
 echo.
 echo %GREEN%All required development tools are ready.%RESET%
 echo %YELLOW%The Raspberry Pi preparation menu will now start.%RESET%
@@ -153,15 +152,10 @@ echo %GREEN%                 RASPBERRY PI SD CARD PREPARATION%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 echo This setup downloads an Ubuntu Server image for Raspberry Pi and
-echo opens balenaEtcher to flash the selected image to an SD card.
+echo uses Raspberry Pi Imager to flash the selected image to an SD card.
 echo.
-echo Please make sure that the SD card is connected before starting balenaEtcher.
+echo Please make sure that the SD card is connected before starting Raspberry Pi Imager.
 echo The selected drive will be erased completely.
-if defined ETCHER_LOCAL_MISSING (
-    echo.
-    echo %YELLOW%[balenaEtcher] No valid local portable installation was found.%RESET%
-    echo %YELLOW%[balenaEtcher] It will be downloaded and installed locally when needed.%RESET%
-)
 echo(
 echo %BLUE%Please choose the target software version:%RESET%
 echo.
@@ -210,7 +204,7 @@ if not defined PROXY_READY (
 goto :DOWNLOAD_FILES
 
 :: =======================================================================
-:: Download the Ubuntu image and balenaEtcher
+:: Download and prepare the Ubuntu image
 :: =======================================================================
 
 :DOWNLOAD_FILES
@@ -297,9 +291,9 @@ if errorlevel 1 (
     goto :MAIN_MENU
 )
 
-:: Verify the archive and extract the uncompressed image for balenaEtcher
+:: Verify the archive and extract the uncompressed image for Raspberry Pi Imager
 if not exist "C:\Program Files\7-Zip\7z.exe" if not exist "%ProgramFiles%\7-Zip\7z.exe" (
-    echo %RED%[ERROR] 7-Zip is required to prepare the image for balenaEtcher.%RESET%
+    echo %RED%[ERROR] 7-Zip is required to prepare the image for Raspberry Pi Imager.%RESET%
     echo Please install 7-Zip and run this script again.
     pause
     goto :MAIN_MENU
@@ -308,7 +302,7 @@ if not exist "C:\Program Files\7-Zip\7z.exe" if not exist "%ProgramFiles%\7-Zip\
 set "SEVEN_ZIP_EXE=%ProgramFiles%\7-Zip\7z.exe"
 if not exist "%SEVEN_ZIP_EXE%" set "SEVEN_ZIP_EXE=C:\Program Files\7-Zip\7z.exe"
 
-echo %YELLOW%[Ubuntu] Verifying and extracting the image for balenaEtcher...%RESET%
+echo %YELLOW%[Ubuntu] Verifying and extracting the image for Raspberry Pi Imager...%RESET%
 "%SEVEN_ZIP_EXE%" t "%IMAGE_FILE%" >nul
 if errorlevel 1 (
     echo %RED%[ERROR] The downloaded Ubuntu archive is corrupt.%RESET%
@@ -323,79 +317,46 @@ if not exist "%IMAGE_FLASH_FILE%" (
     goto :MAIN_MENU
 )
 
-:: Check for an existing local portable installation first
-call :CHECK_ETCHER_LOCAL
+call :CHECK_RPI_IMAGER_LOCAL
+if errorlevel 1 goto :RPI_IMAGER_MISSING
 
-if defined ETCHER_EXE (
-    echo %GREEN%[balenaEtcher] Valid local portable installation found.%RESET%
-) else (
-    if exist "%ETCHER_FILE%" (
-        echo %YELLOW%[balenaEtcher] Existing portable archive found. Verifying checksum...%RESET%
-    ) else (
-        echo %YELLOW%[balenaEtcher] Downloading portable balenaEtcher from GitHub...%RESET%
-        if "%USE_PROXY%"=="true" (
-            curl.exe --fail --retry 3 --retry-all-errors -x "%PROXY_URL%" -L -# -o "%ETCHER_FILE%" "%ETCHER_URL%"
-        ) else (
-            curl.exe --fail --retry 3 --retry-all-errors -L -# -o "%ETCHER_FILE%" "%ETCHER_URL%"
-        )
-    )
-    if not exist "%ETCHER_FILE%" (
-        echo %RED%[ERROR] balenaEtcher portable archive download failed.%RESET%
-        pause
-        goto :MAIN_MENU
-    )
+echo %GREEN%[Raspberry Pi Imager] Local executable: %IMAGER_EXE%%RESET%
 
-    call :VERIFY_ETCHER_ZIP
-    if errorlevel 1 (
-        echo %RED%[ERROR] The balenaEtcher ZIP checksum is invalid.%RESET%
-        del "%ETCHER_FILE%" >nul 2>&1
-        pause
-        goto :MAIN_MENU
-    )
-
-    if exist "%ETCHER_DIR%" rmdir /s /q "%ETCHER_DIR%" >nul 2>&1
-    mkdir "%ETCHER_DIR%" >nul 2>&1
-    echo %YELLOW%[balenaEtcher] Extracting the portable installation...%RESET%
-    "%SEVEN_ZIP_EXE%" x -y -o"%ETCHER_DIR%" "%ETCHER_FILE%" >nul
-    for /r "%ETCHER_DIR%" %%F in (balenaEtcher.exe) do if not defined ETCHER_EXE set "ETCHER_EXE=%%~fF"
-    if not defined ETCHER_EXE (
-        echo %RED%[ERROR] balenaEtcher.exe was not found after extraction.%RESET%
-        pause
-        goto :MAIN_MENU
-    )
-)
-
-if not exist "%ETCHER_EXE%" (
-    echo %RED%[ERROR] No usable local balenaEtcher installation was found.%RESET%
+:: Raspberry Pi Imager CLI expects a physical device path, not a drive letter.
+echo.
+echo Enter the drive letter currently assigned to the SD card, for example E:.
+set /p TARGET_DRIVE="%YELLOW%SD card drive letter: %RESET%"
+set "TARGET_DRIVE=%TARGET_DRIVE::=%"
+set "TARGET_DISK="
+set "TARGET_IS_BOOT="
+set "TARGET_IS_SYSTEM="
+set "TARGET_DEVICE="
+for /f "delims=" %%D in ('powershell.exe -NoProfile -Command "$p = Get-Partition -DriveLetter '%TARGET_DRIVE%' -ErrorAction SilentlyContinue; $p.DiskNumber"') do set "TARGET_DISK=%%D"
+if defined TARGET_DISK for /f "delims=" %%D in ('powershell.exe -NoProfile -Command "$d = Get-Disk -Number %TARGET_DISK%; $d.IsBoot"') do set "TARGET_IS_BOOT=%%D"
+if defined TARGET_DISK for /f "delims=" %%D in ('powershell.exe -NoProfile -Command "$d = Get-Disk -Number %TARGET_DISK%; $d.IsSystem"') do set "TARGET_IS_SYSTEM=%%D"
+if defined TARGET_DISK if /i not "%TARGET_IS_BOOT%"=="True" if /i not "%TARGET_IS_SYSTEM%"=="True" set "TARGET_DEVICE=\\.\PhysicalDrive%TARGET_DISK%"
+if not defined TARGET_DEVICE (
+    echo %RED%[ERROR] The drive letter is invalid or belongs to a system disk.%RESET%
     pause
     goto :MAIN_MENU
 )
-
-echo %GREEN%[balenaEtcher] Local executable: %ETCHER_EXE%%RESET%
-
-:: Pass the uncompressed image directly to Etcher. Etcher selects the target
-:: drive and performs the flash verification. Keep this script waiting until
-:: Etcher is closed after the flash has completed successfully.
+echo %YELLOW%[Raspberry Pi Imager] Target device: %TARGET_DEVICE%%RESET%
+echo %RED%[WARNING] The selected device will be erased completely.%RESET%
 echo.
-echo %YELLOW%[balenaEtcher] The image is preselected.%RESET%
-echo %YELLOW%[balenaEtcher] Select the SD card in Etcher, start Flash, wait for verification, and close Etcher.%RESET%
-echo %RED%[balenaEtcher] The selected drive will be erased completely.%RESET%
+set /p FLASH_CONFIRM="Continue with flashing? (Y/N): "
+if /i not "%FLASH_CONFIRM%"=="Y" goto :MAIN_MENU
+pushd "%IMAGER_DIR%"
+call "%IMAGER_CLI%" --quiet "%IMAGE_FLASH_FILE%" "%TARGET_DEVICE%"
+set "IMAGER_RESULT=%errorlevel%"
+popd
 echo.
-start /wait "balenaEtcher" "%ETCHER_EXE%" "%IMAGE_FLASH_FILE%"
-echo.
-if errorlevel 1 (
-    echo %RED%[ERROR] balenaEtcher reported a failure or was closed unexpectedly.%RESET%
+if not "%IMAGER_RESULT%"=="0" (
+    echo %RED%[ERROR] Raspberry Pi Imager reported a flash or verification failure.%RESET%
     pause
     goto :MAIN_MENU
 )
-set "FLASH_SUCCESS="
-set /p FLASH_SUCCESS="Did balenaEtcher report a successful flash and validation? (Y/N): "
-if /i not "%FLASH_SUCCESS%"=="Y" (
-    echo %YELLOW%[balenaEtcher] Flash was not confirmed as successful.%RESET%
-    pause
-    goto :MAIN_MENU
-)
-echo %GREEN%[balenaEtcher] Flash confirmed. Continuing with first-boot configuration...%RESET%
+echo %GREEN%[Raspberry Pi Imager] Flash and verification completed successfully.%RESET%
+echo Continuing with first-boot configuration...
 goto :CONFIGURE_FIRST_BOOT
 
 :: =======================================================================
@@ -522,67 +483,6 @@ echo %RED%[ERROR] Invalid selection.%RESET%
 pause
 exit /b 1
 
-:INSTALL_ETCHER_LOCAL
-cls
-echo %BLUE%=======================================================================%RESET%
-echo %GREEN%             INSTALLING LOCAL balenaEtcher%RESET%
-echo %BLUE%=======================================================================%RESET%
-echo.
-if not exist "%ETCHER_FILE%" (
-    echo %YELLOW%[balenaEtcher] Downloading the official portable ZIP...%RESET%
-    if "%USE_PROXY%"=="true" (
-        curl.exe --fail --retry 3 --retry-all-errors -x "%PROXY_URL%" -L -# -o "%ETCHER_FILE%" "%ETCHER_URL%"
-    ) else (
-        curl.exe --fail --retry 3 --retry-all-errors -L -# -o "%ETCHER_FILE%" "%ETCHER_URL%"
-    )
-)
-if not exist "%ETCHER_FILE%" (
-    echo %RED%[ERROR] balenaEtcher download failed.%RESET%
-    pause
-    exit /b 1
-)
-call :VERIFY_ETCHER_ZIP
-if errorlevel 1 (
-    echo %RED%[ERROR] The balenaEtcher ZIP checksum is invalid.%RESET%
-    del "%ETCHER_FILE%" >nul 2>&1
-    pause
-    exit /b 1
-)
-if exist "%ETCHER_DIR%" rmdir /s /q "%ETCHER_DIR%" >nul 2>&1
-mkdir "%ETCHER_DIR%" >nul 2>&1
-set "SEVEN_ZIP_EXE=%ProgramFiles%\7-Zip\7z.exe"
-if exist "%SEVEN_ZIP_EXE%" (
-    "%SEVEN_ZIP_EXE%" x -y -o"%ETCHER_DIR%" "%ETCHER_FILE%" >nul
-) else (
-    powershell.exe -NoProfile -Command "Expand-Archive -LiteralPath '%ETCHER_FILE%' -DestinationPath '%ETCHER_DIR%' -Force"
-)
-call :CHECK_ETCHER_LOCAL
-if errorlevel 1 (
-    echo %RED%[ERROR] balenaEtcher could not be verified after extraction.%RESET%
-    pause
-    exit /b 1
-)
-echo %GREEN%[balenaEtcher] Local installation completed successfully.%RESET%
-exit /b 0
-
-:ENSURE_ETCHER_LOCAL
-call :CHECK_ETCHER_LOCAL
-if not errorlevel 1 exit /b 0
-if not defined PROXY_READY (
-    set "NETWORK_READY="
-    call :PREPARE_NETWORK
-    if not defined NETWORK_READY exit /b 1
-)
-call :INSTALL_ETCHER_LOCAL
-exit /b %errorlevel%
-
-:VERIFY_ETCHER_ZIP
-set "ETCHER_HASH="
-for /f "tokens=*" %%H in ('certutil -hashfile "%ETCHER_FILE%" SHA256 ^| findstr /r /v /i /c:"hash" /c:"CertUtil"') do if not defined ETCHER_HASH set "ETCHER_HASH=%%H"
-call set "ETCHER_HASH=%%ETCHER_HASH: =%%"
-if /i "%ETCHER_HASH%"=="%ETCHER_SHA256%" exit /b 0
-exit /b 1
-
 :VERIFY_IMAGE_ARCHIVE
 set "IMAGE_HASH="
 for /f "tokens=*" %%H in ('certutil -hashfile "%IMAGE_FILE%" SHA256 ^| findstr /r /v /i /c:"hash" /c:"CertUtil"') do if not defined IMAGE_HASH set "IMAGE_HASH=%%H"
@@ -590,14 +490,20 @@ call set "IMAGE_HASH=%%IMAGE_HASH: =%%"
 if /i "%IMAGE_HASH%"=="%IMAGE_SHA256%" exit /b 0
 exit /b 1
 
-:CHECK_ETCHER_LOCAL
-set "ETCHER_EXE="
-for /r "%ETCHER_DIR%" %%F in (balenaEtcher.exe) do if not defined ETCHER_EXE set "ETCHER_EXE=%%~fF"
-if not defined ETCHER_EXE exit /b 1
-if not exist "%ETCHER_EXE%" exit /b 1
-powershell.exe -NoProfile -Command "$item = Get-Item -LiteralPath '%ETCHER_EXE%'; if ($item.Length -lt 1MB -or $item.VersionInfo.ProductVersion -notlike '%ETCHER_VERSION%*') { exit 1 }"
+:CHECK_RPI_IMAGER_LOCAL
+set "IMAGER_EXE="
+set "IMAGER_CLI="
+if exist "%ProgramFiles(x86)%\Raspberry Pi Imager\rpi-imager.exe" set "IMAGER_EXE=%ProgramFiles(x86)%\Raspberry Pi Imager\rpi-imager.exe"
+if not defined IMAGER_EXE if exist "%ProgramFiles%\Raspberry Pi Imager\rpi-imager.exe" set "IMAGER_EXE=%ProgramFiles%\Raspberry Pi Imager\rpi-imager.exe"
+if not defined IMAGER_EXE exit /b 1
+if not exist "%IMAGER_EXE%" exit /b 1
+for %%F in ("%IMAGER_EXE%") do set "IMAGER_DIR=%%~dpF"
+set "IMAGER_CLI=%IMAGER_DIR%rpi-imager-cli.cmd"
+if not exist "%IMAGER_CLI%" exit /b 1
+powershell.exe -NoProfile -Command "$item = Get-Item -LiteralPath '%IMAGER_EXE%'; if ($item.Length -lt 1MB) { exit 1 }"
 if errorlevel 1 (
-    set "ETCHER_EXE="
+    set "IMAGER_EXE="
+    set "IMAGER_CLI="
     exit /b 1
 )
 exit /b 0
