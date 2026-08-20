@@ -31,6 +31,7 @@ set "PI_PASSWORD=sdk_pi"
 set "PI_HOSTNAME=sdk_pi"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
+set "IMAGE_SHA256="
 
 :: =======================================================================
 :: Check and install VS Code dependencies
@@ -177,6 +178,7 @@ if "%OS_CHOICE%"=="1" (
     set "IMAGE_URL=https://cdimage.ubuntu.com/releases/22.04/release/ubuntu-22.04.5-preinstalled-server-arm64+raspi.img.xz"
     set "IMAGE_FILE=%PROJECT_PATH%ubuntu-22.04.5-preinstalled-server-arm64+raspi.img.xz"
     set "IMAGE_FLASH_FILE=%PROJECT_PATH%ubuntu-22.04.5-preinstalled-server-arm64+raspi.img"
+    set "IMAGE_SHA256=fd7687c5c9422a6c7ba4717c227bf6473fe4e0c954d5a9f664201dcecc63e822"
     goto :NET_PROXY_CHECK
 )
 
@@ -186,6 +188,7 @@ if "%OS_CHOICE%"=="2" (
     set "IMAGE_URL=https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.3-preinstalled-server-arm64+raspi.img.xz"
     set "IMAGE_FILE=%PROJECT_PATH%ubuntu-24.04.3-preinstalled-server-arm64+raspi.img.xz"
     set "IMAGE_FLASH_FILE=%PROJECT_PATH%ubuntu-24.04.3-preinstalled-server-arm64+raspi.img"
+    set "IMAGE_SHA256=9bb1799cee8965e6df0234c1c879dd35be1d87afe39b84951f278b6bd0433e56"
     goto :NET_PROXY_CHECK
 )
 
@@ -286,6 +289,14 @@ if exist "%IMAGE_FILE%" (
     )
 )
 
+call :VERIFY_IMAGE_ARCHIVE
+if errorlevel 1 (
+    echo %RED%[ERROR] The Ubuntu image checksum is invalid.%RESET%
+    echo Please delete the downloaded archive and run the setup again.
+    pause
+    goto :MAIN_MENU
+)
+
 :: Verify the archive and extract the uncompressed image for balenaEtcher
 if not exist "C:\Program Files\7-Zip\7z.exe" if not exist "%ProgramFiles%\7-Zip\7z.exe" (
     echo %RED%[ERROR] 7-Zip is required to prepare the image for balenaEtcher.%RESET%
@@ -375,7 +386,19 @@ echo %RED%[balenaEtcher] The selected drive will be erased completely.%RESET%
 echo.
 start /wait "balenaEtcher" "%ETCHER_EXE%" "%IMAGE_FLASH_FILE%"
 echo.
-echo %GREEN%[balenaEtcher] Etcher was closed. Continuing with first-boot configuration...%RESET%
+if errorlevel 1 (
+    echo %RED%[ERROR] balenaEtcher reported a failure or was closed unexpectedly.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+set "FLASH_SUCCESS="
+set /p FLASH_SUCCESS="Did balenaEtcher report a successful flash and validation? (Y/N): "
+if /i not "%FLASH_SUCCESS%"=="Y" (
+    echo %YELLOW%[balenaEtcher] Flash was not confirmed as successful.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+echo %GREEN%[balenaEtcher] Flash confirmed. Continuing with first-boot configuration...%RESET%
 goto :CONFIGURE_FIRST_BOOT
 
 :: =======================================================================
@@ -561,6 +584,13 @@ set "ETCHER_HASH="
 for /f "tokens=*" %%H in ('certutil -hashfile "%ETCHER_FILE%" SHA256 ^| findstr /r /v /i /c:"hash" /c:"CertUtil"') do if not defined ETCHER_HASH set "ETCHER_HASH=%%H"
 call set "ETCHER_HASH=%%ETCHER_HASH: =%%"
 if /i "%ETCHER_HASH%"=="%ETCHER_SHA256%" exit /b 0
+exit /b 1
+
+:VERIFY_IMAGE_ARCHIVE
+set "IMAGE_HASH="
+for /f "tokens=*" %%H in ('certutil -hashfile "%IMAGE_FILE%" SHA256 ^| findstr /r /v /i /c:"hash" /c:"CertUtil"') do if not defined IMAGE_HASH set "IMAGE_HASH=%%H"
+call set "IMAGE_HASH=%%IMAGE_HASH: =%%"
+if /i "%IMAGE_HASH%"=="%IMAGE_SHA256%" exit /b 0
 exit /b 1
 
 :CHECK_ETCHER_LOCAL
