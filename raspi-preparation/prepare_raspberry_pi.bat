@@ -20,12 +20,12 @@ set "RESET=%ESC%[0m"
 
 cd /d "%~dp0"
 set "PROJECT_PATH=%~dp0"
-set "ETCHER_VERSION=2.1.4"
-set "ETCHER_URL=https://github.com/balena-io/etcher/releases/download/v%ETCHER_VERSION%/balenaEtcher-win32-x64-%ETCHER_VERSION%.zip"
-set "ETCHER_FILE=%PROJECT_PATH%balenaEtcher-%ETCHER_VERSION%-win32-x64.zip"
+set "ETCHER_VERSION=1.18.11"
+set "ETCHER_URL=https://github.com/balena-io/etcher/releases/download/v%ETCHER_VERSION%/balenaEtcher-%ETCHER_VERSION%-win.zip"
+set "ETCHER_FILE=%PROJECT_PATH%balenaEtcher-%ETCHER_VERSION%-win.zip"
 set "ETCHER_DIR=%PROJECT_PATH%balenaEtcher-portable"
 set "ETCHER_EXE="
-set "ETCHER_SHA256=ad0a568f45fcb981173084b4183b684acd6f9dfafbf66b5b04f37627e02c6f91"
+set "ETCHER_SHA256=3b783f50186a538d1dda2ef7f4651e27e4f94fb221cec937eb387ac3d0612319"
 set "PI_USERNAME=sdk_pi"
 set "PI_PASSWORD=sdk_pi"
 set "PI_HOSTNAME=sdk_pi"
@@ -38,6 +38,10 @@ set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 
 if "%~1"=="-install-dependencies" goto :INSTALL_DEPENDENCIES
 
+set "NETWORK_READY="
+call :PREPARE_NETWORK
+if not defined NETWORK_READY exit /b 1
+
 set "MISSING_DEV_TOOLS="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_REMOTE_SSH_FLAG="
@@ -48,9 +52,9 @@ if errorlevel 1 set "ETCHER_LOCAL_MISSING=1"
 
 if defined MISSING_DEV_TOOLS goto :REQUEST_ADMIN
 if defined ETCHER_LOCAL_MISSING (
-    echo %YELLOW%[balenaEtcher] No valid local portable installation was found.%RESET%
-    echo %YELLOW%[balenaEtcher] It will be downloaded and installed locally when needed.%RESET%
-    echo.
+    call :ENSURE_ETCHER_LOCAL
+    if errorlevel 1 exit /b 1
+    set "ETCHER_LOCAL_MISSING="
 )
 goto :MAIN_MENU
 
@@ -126,6 +130,9 @@ if not errorlevel 1 (
     echo %GREEN%[Remote-SSH] Extension installation completed successfully.%RESET%
 )
 
+    call :ENSURE_ETCHER_LOCAL
+    if errorlevel 1 exit /b 1
+
 echo.
 echo %GREEN%All required development tools are ready.%RESET%
 echo %YELLOW%The Raspberry Pi preparation menu will now start.%RESET%
@@ -149,6 +156,11 @@ echo opens balenaEtcher to flash the selected image to an SD card.
 echo.
 echo Please make sure that the SD card is connected before starting balenaEtcher.
 echo The selected drive will be erased completely.
+if defined ETCHER_LOCAL_MISSING (
+    echo.
+    echo %YELLOW%[balenaEtcher] No valid local portable installation was found.%RESET%
+    echo %YELLOW%[balenaEtcher] It will be downloaded and installed locally when needed.%RESET%
+)
 echo(
 echo %BLUE%Please choose the target software version:%RESET%
 echo.
@@ -187,64 +199,11 @@ goto :MAIN_MENU
 
 :NET_PROXY_CHECK
 
-cls
-
-echo %BLUE%=======================================================================%RESET%
-echo %GREEN%                 NETWORK AND PROXY CHECK%RESET%
-echo %BLUE%=======================================================================%RESET%
-echo(
-echo [Network] %YELLOW%Determining environment...%RESET%
-echo Please choose your working environment:
-echo 1) I am a Bosch employee %BLUE%(RB Local Proxy Manager)%RESET%
-echo 2) I am a partner WITH a %BLUE%company proxy%RESET%
-echo 3) I am a partner %BLUE%WITHOUT a proxy (direct connection)%RESET%
-echo(
-
-set /p NET_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
-
-set "USE_PROXY=false"
-if "%NET_CHOICE%"=="1" goto :BOSCH_PROXY
-if "%NET_CHOICE%"=="2" goto :EXT_PROXY
-if "%NET_CHOICE%"=="3" goto :NO_PROXY
-goto :NET_PROXY_CHECK
-
-:BOSCH_PROXY
-
-set "USE_PROXY=true"
-set "PROXY_URL=http://127.0.0.1:3128"
-
-echo.
-echo %BLUE%=======================================================================%RESET%
-echo %RED%IMPORTANT BOSCH PROXY NOTICE BEFORE STARTING:%RESET%
-echo %BLUE%=======================================================================%RESET%
-echo Please open the %GREEN%"RB Local Proxy Manager"%RESET% on your PC.
-echo You must click the green %GREEN%"Execute"%RESET% button there.
-echo The port 3128 will only open for the setup once the Bosch tool is active.
-echo %BLUE%=======================================================================%RESET%
-echo.
-echo %YELLOW%Press Enter when you have started the Bosch tool...%RESET%
-pause >nul
-goto :DOWNLOAD_FILES
-
-:EXT_PROXY
-
-set "USE_PROXY=true"
-if not exist "proxy.env" (
-    echo CUSTOMER_PROXY_URL=http://your-proxy-server.de:8080 > proxy.env
-    echo.
-    echo %RED%[ERROR] Please add your proxy data to the 'proxy.env' file and restart the setup!%RESET%
-    pause
-    goto :MAIN_MENU
+if not defined PROXY_READY (
+    set "NETWORK_READY="
+    call :PREPARE_NETWORK
+    if not defined NETWORK_READY goto :MAIN_MENU
 )
-
-for /f "delims=" %%a in (proxy.env) do set %%a
-set "PROXY_URL=%CUSTOMER_PROXY_URL%"
-goto :DOWNLOAD_FILES
-
-:NO_PROXY
-
-echo.
-echo - %GREEN%Direct internet connection%RESET% active.
 goto :DOWNLOAD_FILES
 
 :: =======================================================================
@@ -378,7 +337,7 @@ if defined ETCHER_EXE (
         goto :MAIN_MENU
     )
 
-    powershell.exe -NoProfile -Command "$hash = (Get-FileHash -Algorithm SHA256 -LiteralPath '%ETCHER_FILE%').Hash; if ($hash -ne '%ETCHER_SHA256%') { exit 1 }"
+    call :VERIFY_ETCHER_ZIP
     if errorlevel 1 (
         echo %RED%[ERROR] The balenaEtcher ZIP checksum is invalid.%RESET%
         del "%ETCHER_FILE%" >nul 2>&1
@@ -406,38 +365,17 @@ if not exist "%ETCHER_EXE%" (
 
 echo %GREEN%[balenaEtcher] Local executable: %ETCHER_EXE%%RESET%
 
-:: Start the portable application without an installer or administrator rights
-start "balenaEtcher" "%ETCHER_EXE%"
-
-:: Continue with the flash instructions
-goto :FLASH_INSTRUCTIONS
-
-:: =======================================================================
-:: Flash instructions
-:: =======================================================================
-
-:FLASH_INSTRUCTIONS
-
-cls
-
-echo %BLUE%=======================================================================%RESET%
-echo %GREEN%                       FLASH THE SD CARD%RESET%
-echo %BLUE%=======================================================================%RESET%
-echo(
-echo In balenaEtcher, complete these steps:
+:: Pass the uncompressed image directly to Etcher. Etcher selects the target
+:: drive and performs the flash verification. Keep this script waiting until
+:: Etcher is closed after the flash has completed successfully.
 echo.
-echo 1) Select the image file:
-echo    %IMAGE_FLASH_FILE%
-echo 2) Select the SD card that will be used in the Raspberry Pi.
-echo 3) Click "Flash" and confirm that the selected drive may be erased.
-echo 4) Wait until the verification has completed successfully.
-echo 5) Leave the SD card connected and close balenaEtcher.
+echo %YELLOW%[balenaEtcher] The image is preselected.%RESET%
+echo %YELLOW%[balenaEtcher] Select the SD card in Etcher, start Flash, wait for verification, and close Etcher.%RESET%
+echo %RED%[balenaEtcher] The selected drive will be erased completely.%RESET%
 echo.
-echo %RED%WARNING: Selecting the wrong drive will permanently erase its data.%RESET%
+start /wait "balenaEtcher" "%ETCHER_EXE%" "%IMAGE_FLASH_FILE%"
 echo.
-echo %GREEN%After the successful flash, press any key to configure the first boot.%RESET%
-echo(
-pause
+echo %GREEN%[balenaEtcher] Etcher was closed. Continuing with first-boot configuration...%RESET%
 goto :CONFIGURE_FIRST_BOOT
 
 :: =======================================================================
@@ -516,6 +454,114 @@ if not defined CODE_EXE (
     )
 )
 goto :EOF
+
+:PREPARE_NETWORK
+set "NETWORK_READY="
+cls
+echo %BLUE%=======================================================================%RESET%
+echo %GREEN%                 NETWORK AND PROXY CHECK%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+echo Please choose your working environment for all downloads:
+echo 1) Bosch employee %BLUE%(RB Local Proxy Manager)%RESET%
+echo 2) Partner with a company proxy
+echo 3) Direct internet connection
+echo.
+set /p NET_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
+set "USE_PROXY=false"
+if "%NET_CHOICE%"=="1" (
+    set "USE_PROXY=true"
+    set "PROXY_URL=http://127.0.0.1:3128"
+    echo.
+    echo %YELLOW%Please start the RB Local Proxy Manager and click Execute.%RESET%
+    pause
+    set "PROXY_READY=true"
+    set "NETWORK_READY=true"
+    exit /b 0
+)
+if "%NET_CHOICE%"=="2" (
+    set "USE_PROXY=true"
+    if not exist "proxy.env" (
+        echo CUSTOMER_PROXY_URL=http://your-proxy-server.de:8080 > proxy.env
+        echo %RED%[ERROR] Please configure proxy.env and restart the setup.%RESET%
+        pause
+        exit /b 1
+    )
+    for /f "delims=" %%A in (proxy.env) do set %%A
+    call set "PROXY_URL=%%CUSTOMER_PROXY_URL%%"
+    set "PROXY_READY=true"
+    set "NETWORK_READY=true"
+    exit /b 0
+)
+if "%NET_CHOICE%"=="3" (
+    set "PROXY_READY=true"
+    set "NETWORK_READY=true"
+    exit /b 0
+)
+echo %RED%[ERROR] Invalid selection.%RESET%
+pause
+exit /b 1
+
+:INSTALL_ETCHER_LOCAL
+cls
+echo %BLUE%=======================================================================%RESET%
+echo %GREEN%             INSTALLING LOCAL balenaEtcher%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+if not exist "%ETCHER_FILE%" (
+    echo %YELLOW%[balenaEtcher] Downloading the official portable ZIP...%RESET%
+    if "%USE_PROXY%"=="true" (
+        curl.exe --fail --retry 3 --retry-all-errors -x "%PROXY_URL%" -L -# -o "%ETCHER_FILE%" "%ETCHER_URL%"
+    ) else (
+        curl.exe --fail --retry 3 --retry-all-errors -L -# -o "%ETCHER_FILE%" "%ETCHER_URL%"
+    )
+)
+if not exist "%ETCHER_FILE%" (
+    echo %RED%[ERROR] balenaEtcher download failed.%RESET%
+    pause
+    exit /b 1
+)
+call :VERIFY_ETCHER_ZIP
+if errorlevel 1 (
+    echo %RED%[ERROR] The balenaEtcher ZIP checksum is invalid.%RESET%
+    del "%ETCHER_FILE%" >nul 2>&1
+    pause
+    exit /b 1
+)
+if exist "%ETCHER_DIR%" rmdir /s /q "%ETCHER_DIR%" >nul 2>&1
+mkdir "%ETCHER_DIR%" >nul 2>&1
+set "SEVEN_ZIP_EXE=%ProgramFiles%\7-Zip\7z.exe"
+if exist "%SEVEN_ZIP_EXE%" (
+    "%SEVEN_ZIP_EXE%" x -y -o"%ETCHER_DIR%" "%ETCHER_FILE%" >nul
+) else (
+    powershell.exe -NoProfile -Command "Expand-Archive -LiteralPath '%ETCHER_FILE%' -DestinationPath '%ETCHER_DIR%' -Force"
+)
+call :CHECK_ETCHER_LOCAL
+if errorlevel 1 (
+    echo %RED%[ERROR] balenaEtcher could not be verified after extraction.%RESET%
+    pause
+    exit /b 1
+)
+echo %GREEN%[balenaEtcher] Local installation completed successfully.%RESET%
+exit /b 0
+
+:ENSURE_ETCHER_LOCAL
+call :CHECK_ETCHER_LOCAL
+if not errorlevel 1 exit /b 0
+if not defined PROXY_READY (
+    set "NETWORK_READY="
+    call :PREPARE_NETWORK
+    if not defined NETWORK_READY exit /b 1
+)
+call :INSTALL_ETCHER_LOCAL
+exit /b %errorlevel%
+
+:VERIFY_ETCHER_ZIP
+set "ETCHER_HASH="
+for /f "tokens=*" %%H in ('certutil -hashfile "%ETCHER_FILE%" SHA256 ^| findstr /r /v /i /c:"hash" /c:"CertUtil"') do if not defined ETCHER_HASH set "ETCHER_HASH=%%H"
+call set "ETCHER_HASH=%%ETCHER_HASH: =%%"
+if /i "%ETCHER_HASH%"=="%ETCHER_SHA256%" exit /b 0
+exit /b 1
 
 :CHECK_ETCHER_LOCAL
 set "ETCHER_EXE="
