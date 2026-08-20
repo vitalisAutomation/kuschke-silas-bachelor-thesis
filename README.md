@@ -1,53 +1,85 @@
 # bachelor-thesis-silas-kuschke
-Implementation of x86 and arm64 build snaps for industrial ctrlX controller from Bosch Rexroth
+Implementation of x86 and arm64 build snaps for industrial ctrlX controllers from Bosch Rexroth.
 
-Hallo Anton,
+The currently working code is located on the `main` branch. The `sdk-vm-automation` directory contains the `install_sdk.bat` batch file. Place this file in a new, otherwise empty directory and run it by double-clicking it. The setup script creates a virtual machine with the ctrlX SDK and automatically installs the required software packages.
 
-schaue Dir bitte den main-branch an. Dort liegt der aktuell funktionierende Code. im Ordner sdk-vm-automation liegt die Batch-Datei install_sdk.bat. Öffne diese Datei in einem neuen Ordner, wo nichts Anderes als diese Datei enthalten ist. Führe die Datei via Doppelclick aus. Das ist das Setup-Skript, was eine VM mit SDK bereitstellt. Das Skript lädt automatisch alle notwendigen Softwarepakete auf die virtuelle Maschine. Du kannst auch zwischen unterschiedlichen Versionen von ctrlX OS auswählen und mehrere virtuelle Maschinen erstellen (ähnlich zu ctrlX Works).
+The script supports selecting different ctrlX OS versions and creating multiple virtual machines, similar to ctrlX Works. Since multiple ctrlX OS versions are handled by the script, it is not necessary to install multiple software versions on the host computer, as would be required with ctrlX Works.
 
-Wichtig: Vor der Ausführung des Skripte, muss der RB Local Proxy Manager aktiviert werden. Des Weiteren muss beim ersten Ausführen des Batch-Skriptes QEMU in den Projektordner installiert werden, den Du neu erstellt hast.
+## Proxy Configuration
 
-Was noch nicht fertig ist:
+The user can choose between three proxy options:
 
-Aktuell muss man sich manuell mit der virtuellen Maschinen über die VS-Code Extension Remote SSH verbinden. Das möchte ich noch in das Skript integrieren. Das Ziel soll am Ende sein: Skript wird geöffnet --> Offenes VS-Code Fenster auf der virtuellen Maschine, sodass man direkt Snaps entwickeln kann.
+- Bosch proxy
+- User-configured proxy
+- No proxy
 
-Cross-Compiling: Die Bibliotheken, die keine fertigen Wheel-Dateien besitzen müssen über einen Emulator auf der virtuellen Maschine kompiliert werden. Das funktioniert erst teilweise. Das möchte ich noch optimieren.
+Status as of 2026-08-20: The Bosch proxy and no-proxy options have been tested successfully. The user-configured proxy has not yet been tested.
 
-Was fertig ist und funktioniert (Skripte in diesem Ordner):
+Before running the script, the RB Local Proxy Manager must be enabled (only for Bosch employees). During the first execution of the batch script, QEMU must also be installed in the newly created project directory.
 
-Im Ordner ctrlx-app-installation-automation kannst Du im Terminal die install.py ausführen, um einen Snap auf einer Core zu installieren. Das habe ich mehrfach erfolgreich getestet.
+After the settings have been entered in the terminal and a virtual machine has been selected, VS Code opens and connects to the virtual machine via SSH. The required VS Code extensions are also installed on the virtual machine, allowing snap development to start immediately.
 
-Vorgehensweise, um dieses Skript verwenden zu können:
-Im VS-Code Terminal: In Ordner ctrlx-app-installation-automation wechseln dann
+## Cross-Compilation for the ARM-Based ctrlX CORE X3
 
-                            python -m venv .venv
-                            .\.venv\Scripts\Activate.ps1
-                            python -m pip install --upgrade pip
-                            pip install -r requirements.txt
-                            python .\install_snap.py
+1. Add the prebuilt wheel files to `snapcraft.yaml`.
 
-Nun kann man die IP-Adresse der Core eingeben. Des Weiteren muss der absolute Dateipfad des Snaps angegeben werden, der installiert werden soll. Ich habe im Ordner ctrlx-app-installation-automation ein C++ Hello World beigefügt, dass in den Logs der Core ein Hello World ausgibt. Mit diesem Snap kannst Du dieses Skript testen.
+2. If wheel files are not available for the required libraries, use one of the following options:
 
-Im Ordner ctrlx-licensing-installation kannst Du mehrere Lizenzdateien auf mehrere Cores installieren. Erstelle hierzu im Ordner ctrlx-licensing-installation einen Unterordner namens licenses und lege dort die Lizenz-Dateien ab. Gehe im VS-Code-Terminal mittels cd in den Ordner ctrlx-licensing-installation und führe folgende Befehle aus:
+    a. Run the LXD-based emulator, which is pre-installed on the virtual machines, to emulate the ARM processor and build the wheel files.
+        - Advantage: No additional hardware is required.
+        - Disadvantage: Snap builds take considerably longer.
+
+    b. Enable SSH access for a ctrlX CORE X3 and build natively on ARM. See the [Bosch Rexroth guide](https://community.boschrexroth.com/ctrlx-automation-how-tos-qmglrz33/post/how-to-activate-ssh-communication-in-a-ctrlx-core-XQrXXMm5aZXTI7f).
+        - Advantage: Shorter build times because no emulation is required.
+        - Disadvantage: For security reasons, the CORE should no longer be used in production.
+
+    c. Use the additional script from the `raspi-automation` branch to flash a Raspberry Pi automatically and access it via SSH. This script is not finished yet.
+        - Advantage: Shorter build times because no emulation is required.
+        - Disadvantage: Additional hardware is required.
+        - This is the recommended way to build snaps using cross-compilation.
+
+## Additional Utility Scripts
+
+The `ctrlx-app-installation-automation` directory contains `install_snap.py`, which installs a snap on a CORE. The script has been tested successfully several times. In addition, it uses the ctrlX OS REST API.
+
+### Installing a Snap
+
+Open a VS Code terminal, change to the `ctrlx-app-installation-automation` directory, and run:
+
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    python .\install_snap.py
+
+The script then prompts for the CORE IP address and the absolute path to the snap file. The `ctrlx-app-installation-automation` directory includes a C++ Hello World snap that writes a Hello World message to the CORE logs and can be used for testing.
+
+### Installing Licenses
+
+The `ctrlx-licensing-installation` directory can install multiple license files on multiple COREs. Create a `licenses` subdirectory there and place the license files in it. In a VS Code terminal, change to the `ctrlx-licensing-installation` directory and run:
 
     .\.venv\Scripts\Activate.ps1
     python .\install_license.py
 
-Nun kann zwischen einer oder mehrerer Cores ausgewählt werden. Des Weiteren können die IP-Adressen automatisch in einer Liste gespeichert werden, sodass man sie nicht immer händisch eingeben muss. Das Skript ermittelt aufgrund der Seriennummern die passende Lizenz-Datei und lädt sie auf die korrespondierende Core. Diese Skript habe ich erfolgreich mehrfach getestet (allerdings nur mit einer Core).
+The script supports selecting one or more COREs. CORE IP addresses can also be stored automatically in a list to avoid entering them manually each time. Based on the serial numbers, the script identifies the corresponding license file and uploads it to the matching CORE. The script has been tested successfully several times, although testing was limited to one CORE.
 
-Der Ordner ctrlx-flask-app-test enthält ein Test-Skript, um den Operating-Mode einer einzelnen Core via REST-API zu ändern. Es diente nur Testzwecken funktioniert aber. Inbetriebnahme: Gehe im VS-Code Terminal via cd in den Ordner ctrlx-flask-app-test und führe folgende Befehle aus:
+### ctrlX CORE Operating Mode Test
+
+The `ctrlx-flask-app-test` directory contains a test script for changing the operating mode of a single CORE through the REST API. It was created for testing purposes but is functional. In a VS Code terminal, change to the `ctrlx-flask-app-test` directory and run:
 
     .\.venv\Scripts\Activate.ps1
     python .\app.py
 
-Der Ordner ctrlx-test-app-for-deployment enthält einen Webserver als Snap verpackt, um den Operating Modus der Core auf der Core zu verändern. Des Weiteren fragt er Speicher- und CPU-Auslastung ab. Der Snap funktioniert aktuell noch nicht und war nur zum Testen gedacht.
+The `ctrlx-test-app-for-deployment` directory contains a web server packaged as a snap. It is intended to change the operating mode of the CORE locally and query memory and CPU usage. The snap is currently not functional and was created for testing purposes only.
 
-Der Ordner docs enthält diverse Dokumentationen zu einzelnen Funktionen. Zum Aufrufen gehe in den Ordner /docs/_build/html und führe folgenden Befehl aus:
+## Documentation
+
+The `docs` directory contains documentation for individual functions. To open the generated documentation, change to `docs/_build/html` and run:
 
     start index.html
 
-Zum Thema KI:
+## AI-Related Work
 
-Ich habe Copilot als Chat mit den Skills aus Deinem Repo in VS-Code zum Laufen gebracht. Ich muss allerdings noch aus meinen Python-Skripten Skills erzeugen.
+GitHub Copilot Chat has been configured in VS Code with skills from this repository. Skills for the Python scripts still need to be created.
 
-Ich werde nach meiner Bachelorarbeit noch How-Tos zu den Skripten und dem Batch-Skript erstellen und sie in Deinem Tool hochladen.
+Additional how-to documentation for the scripts and batch file is planned after completion of the bachelor's thesis.
