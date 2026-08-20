@@ -62,7 +62,31 @@ if ($env:USE_PROXY -eq 'true') {
     $userData += @(
         'apt:'
         "  proxy: $proxy"
-        'write_files:'
+    )
+}
+
+$userData += @(
+    'write_files:'
+    '  - path: /etc/systemd/system/ctrlx-apt-update-upgrade.service'
+    "    permissions: '0644'"
+    '    content: |'
+    '      [Unit]'
+    '      Description=Update and upgrade Ubuntu packages at boot'
+    '      Wants=network-online.target'
+    '      After=network-online.target apt-daily.service apt-daily-upgrade.service'
+    ''
+    '      [Service]'
+    '      Type=oneshot'
+    '      ExecStart=/usr/bin/apt-get update'
+    '      ExecStart=/usr/bin/apt-get -y upgrade'
+    '      Environment=DEBIAN_FRONTEND=noninteractive'
+    ''
+    '      [Install]'
+    '      WantedBy=multi-user.target'
+)
+
+if ($env:USE_PROXY -eq 'true') {
+    $userData += @(
         '  - path: /etc/profile.d/ctrlx-proxy.sh'
         "    permissions: '0644'"
         '    content: |'
@@ -76,6 +100,8 @@ if ($env:USE_PROXY -eq 'true') {
 $userData += @(
     'runcmd:'
     '  - systemctl enable --now ssh'
+    '  - systemctl daemon-reload'
+    '  - systemctl enable --now ctrlx-apt-update-upgrade.service'
     "  - mkdir -p /home/$username"
     "  - chown ${username}:${username} /home/$username"
     "  - su - $username -c `"wget https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh`""
