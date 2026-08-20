@@ -176,6 +176,9 @@ echo(
 echo This setup downloads an Ubuntu Server image for Raspberry Pi and
 echo uses Raspberry Pi Imager to flash the selected image to an SD card.
 echo.
+echo %YELLOW%[NOTICE] Administrator rights are required for flashing the SD card.%RESET%
+echo If Windows asks for permission, confirm the administrator prompt.
+echo.
 echo Please make sure that the SD card is connected before starting Raspberry Pi Imager.
 echo The selected drive will be erased completely.
 echo(
@@ -420,12 +423,15 @@ echo %RED%[WARNING] The selected device will be erased completely.%RESET%
 echo.
 set /p FLASH_CONFIRM="Continue with flashing? (Y/N): "
 if /i not "%FLASH_CONFIRM%"=="Y" goto :MAIN_MENU
+echo.
+echo %YELLOW%The SD card will remain mounted after flashing so Cloud-Init can be written.%RESET%
 pushd "%IMAGER_DIR%"
-call "%IMAGER_CLI%" --quiet "%IMAGE_FLASH_FILE%" "%TARGET_DEVICE%"
-set "IMAGER_RESULT=%errorlevel%"
+call "%IMAGER_CLI%" "%IMAGE_FLASH_FILE%" "%TARGET_DEVICE%"
+set "IMAGER_FAILED="
+if errorlevel 1 set "IMAGER_FAILED=1"
 popd
 echo.
-if not "%IMAGER_RESULT%"=="0" (
+if defined IMAGER_FAILED (
     echo %RED%[ERROR] Raspberry Pi Imager reported a flash or verification failure.%RESET%
     pause
     goto :MAIN_MENU
@@ -454,6 +460,7 @@ echo Do not enter the Linux root partition.
 echo(
 
 set /p BOOT_DRIVE="%YELLOW%Boot partition drive letter: %RESET%"
+if not "%BOOT_DRIVE:~-1%"==":" set "BOOT_DRIVE=%BOOT_DRIVE%:"
 set "BOOT_PATH=%BOOT_DRIVE%\"
 
 if not exist "%BOOT_PATH%" (
@@ -483,17 +490,36 @@ goto :MAIN_MENU
 echo.
 echo %GREEN%Cloud-Init configuration completed successfully.%RESET%
 echo.
+echo %YELLOW%The Cloud-Init files are now on the SD card.%RESET%
+echo %YELLOW%Safely unmounting the SD card...%RESET%
+call :EJECT_SD_CARD
+if errorlevel 1 goto :EJECT_ERROR
+echo %GREEN%SD card was safely unmounted and can now be removed.%RESET%
+echo.
 echo SSH username: %PI_USERNAME%
 echo Hostname: %PI_HOSTNAME%
 echo Wi-Fi SSID: %WIFI_SSID%
 echo SSH private key: %SSH_KEY_FILE%
 echo.
-echo Safely eject the SD card, insert it into the Raspberry Pi, and power it on.
+echo Insert the SD card into the Raspberry Pi and power it on.
 echo The SDK and Snapcraft installation will run automatically on first boot.
 echo The first boot may take several minutes.
 echo.
 pause
 exit
+
+:EJECT_ERROR
+
+echo %RED%[WARNING] Cloud-Init was written, but Windows could not unmount the SD card automatically.%RESET%
+echo Close any Explorer windows or applications using %BOOT_DRIVE% and eject it manually.
+pause
+exit /b 1
+
+:EJECT_SD_CARD
+
+mountvol "%BOOT_DRIVE%" /p >nul 2>&1
+if errorlevel 1 exit /b 1
+exit /b 0
 
 :CHECK_DEVELOPMENT_TOOLS
 set "CODE_EXE="
