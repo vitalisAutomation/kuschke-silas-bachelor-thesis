@@ -41,9 +41,17 @@ if "%~1"=="-install-dependencies" goto :INSTALL_DEPENDENCIES
 set "MISSING_DEV_TOOLS="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_REMOTE_SSH_FLAG="
+set "ETCHER_LOCAL_MISSING="
 call :CHECK_DEVELOPMENT_TOOLS
+call :CHECK_ETCHER_LOCAL
+if errorlevel 1 set "ETCHER_LOCAL_MISSING=1"
 
 if defined MISSING_DEV_TOOLS goto :REQUEST_ADMIN
+if defined ETCHER_LOCAL_MISSING (
+    echo %YELLOW%[balenaEtcher] No valid local portable installation was found.%RESET%
+    echo %YELLOW%[balenaEtcher] It will be downloaded and installed locally when needed.%RESET%
+    echo.
+)
 goto :MAIN_MENU
 
 :REQUEST_ADMIN
@@ -349,11 +357,7 @@ if exist "%IMAGE_FLASH_FILE%" (
 )
 
 :: Check for an existing local portable installation first
-for /r "%ETCHER_DIR%" %%F in (balenaEtcher.exe) do if not defined ETCHER_EXE set "ETCHER_EXE=%%~fF"
-if defined ETCHER_EXE if exist "%ETCHER_EXE%" (
-    powershell.exe -NoProfile -Command "$item = Get-Item -LiteralPath '%ETCHER_EXE%'; if ($item.Length -lt 1MB -or $item.VersionInfo.ProductVersion -notlike '%ETCHER_VERSION%*') { exit 1 }"
-    if errorlevel 1 set "ETCHER_EXE="
-)
+call :CHECK_ETCHER_LOCAL
 
 if defined ETCHER_EXE (
     echo %GREEN%[balenaEtcher] Valid local portable installation found.%RESET%
@@ -513,6 +517,18 @@ if not defined CODE_EXE (
 )
 goto :EOF
 
+:CHECK_ETCHER_LOCAL
+set "ETCHER_EXE="
+for /r "%ETCHER_DIR%" %%F in (balenaEtcher.exe) do if not defined ETCHER_EXE set "ETCHER_EXE=%%~fF"
+if not defined ETCHER_EXE exit /b 1
+if not exist "%ETCHER_EXE%" exit /b 1
+powershell.exe -NoProfile -Command "$item = Get-Item -LiteralPath '%ETCHER_EXE%'; if ($item.Length -lt 1MB -or $item.VersionInfo.ProductVersion -notlike '%ETCHER_VERSION%*') { exit 1 }"
+if errorlevel 1 (
+    set "ETCHER_EXE="
+    exit /b 1
+)
+exit /b 0
+
 :CHECK_VSCODE_PATH
 set "CODE_EXE="
 for /f "tokens=*" %%P in ('where code 2^>nul') do if not defined CODE_EXE set "CODE_EXE=%%P"
@@ -526,7 +542,7 @@ for /d %%U in (C:\Users\*) do (
 goto :EOF
 
 :CHECK_REMOTE_SSH_EXTENSION
-call "%CODE_EXE%" --list-extensions 2>nul | findstr /i /r /b /c:"ms-vscode.remote.remote-ssh$" /c:"ms-vscode.remote.remote-ssh@" >nul
+call "%CODE_EXE%" --list-extensions --show-versions 2>nul | findstr /i /r /b /c:"ms-vscode-remote\.remote-ssh$" /c:"ms-vscode-remote\.remote-ssh@" >nul
 exit /b %errorlevel%
 
 :ADD_MISSING_DEV_TOOL

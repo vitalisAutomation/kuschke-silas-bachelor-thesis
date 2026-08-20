@@ -35,3 +35,7 @@ sdk-vm-automation/manual_start_vm_logs.txt
 
 # QEMU
 */qemu
+
+# Balena Etcher
+*/*exe
+*/*xz
