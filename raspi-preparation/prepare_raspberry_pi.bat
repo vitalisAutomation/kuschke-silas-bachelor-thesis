@@ -425,6 +425,7 @@ set /p FLASH_CONFIRM="Continue with flashing? (Y/N): "
 if /i not "%FLASH_CONFIRM%"=="Y" goto :MAIN_MENU
 echo.
 echo %YELLOW%The SD card will remain mounted after flashing so Cloud-Init can be written.%RESET%
+call :DISABLE_IMAGER_EJECT
 pushd "%IMAGER_DIR%"
 call "%IMAGER_CLI%" "%IMAGE_FLASH_FILE%" "%TARGET_DEVICE%"
 set "IMAGER_FAILED="
@@ -491,10 +492,10 @@ echo.
 echo %GREEN%Cloud-Init configuration completed successfully.%RESET%
 echo.
 echo %YELLOW%The Cloud-Init files are now on the SD card.%RESET%
-echo %YELLOW%Safely unmounting the SD card...%RESET%
+echo %YELLOW%Safely ejecting the SD card and USB reader...%RESET%
 call :EJECT_SD_CARD
 if errorlevel 1 goto :EJECT_ERROR
-echo %GREEN%SD card was safely unmounted and can now be removed.%RESET%
+echo %GREEN%SD card and USB reader were safely ejected and can now be removed.%RESET%
 echo.
 echo SSH username: %PI_USERNAME%
 echo Hostname: %PI_HOSTNAME%
@@ -510,15 +511,21 @@ exit
 
 :EJECT_ERROR
 
-echo %RED%[WARNING] Cloud-Init was written, but Windows could not unmount the SD card automatically.%RESET%
+echo %RED%[WARNING] Cloud-Init was written, but Windows could not eject the SD card and USB reader automatically.%RESET%
 echo Close any Explorer windows or applications using %BOOT_DRIVE% and eject it manually.
 pause
 exit /b 1
 
 :EJECT_SD_CARD
 
-mountvol "%BOOT_DRIVE%" /p >nul 2>&1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$process = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','%PROJECT_PATH%eject_sd_card.ps1','-DriveLetter','%BOOT_DRIVE:~0,1%' -Verb RunAs -Wait -PassThru; exit $process.ExitCode"
 if errorlevel 1 exit /b 1
+exit /b 0
+
+:DISABLE_IMAGER_EJECT
+
+reg add "HKCU\Software\Raspberry Pi\Imager" /v eject /t REG_SZ /d false /f >nul 2>&1
+reg add "HKCU\Software\Raspberry Pi\Raspberry Pi Imager" /v eject /t REG_SZ /d false /f >nul 2>&1
 exit /b 0
 
 :CHECK_DEVELOPMENT_TOOLS
