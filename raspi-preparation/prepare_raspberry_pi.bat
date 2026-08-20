@@ -37,18 +37,13 @@ set "IMAGE_SHA256="
 if "%~1"=="-install-dependencies" goto :INSTALL_DEPENDENCIES
 
 set "NETWORK_READY="
-call :PREPARE_NETWORK
-if not defined NETWORK_READY exit /b 1
-
 set "MISSING_DEV_TOOLS="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_REMOTE_SSH_FLAG="
 call :CHECK_DEVELOPMENT_TOOLS
-call :CHECK_RPI_IMAGER_LOCAL
-if errorlevel 1 goto :RPI_IMAGER_MISSING
 
 if defined MISSING_DEV_TOOLS goto :REQUEST_ADMIN
-goto :MAIN_MENU
+goto :START_MENU
 
 :RPI_IMAGER_MISSING
 cls
@@ -137,18 +132,45 @@ echo.
 echo %GREEN%All required development tools are ready.%RESET%
 echo %YELLOW%The Raspberry Pi preparation menu will now start.%RESET%
 timeout /t 2 /nobreak >nul
-goto :MAIN_MENU
+goto :START_MENU
 
 :: =======================================================================
-:: Main menu
+:: Main mode selection
 :: =======================================================================
 
-:MAIN_MENU
+:START_MENU
 
 cls
 
 echo %BLUE%=======================================================================%RESET%
-echo %GREEN%                 RASPBERRY PI SD CARD PREPARATION%RESET%
+echo %GREEN%                 RASPBERRY PI PREPARATION%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo(
+echo 1) Connect directly to an existing Raspberry Pi via VS Code Remote-SSH
+echo 2) Download Ubuntu and flash an SD card
+echo 3) Exit
+echo.
+
+set /p MODE_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
+
+if "%MODE_CHOICE%"=="1" goto :CONNECT_SSH
+if "%MODE_CHOICE%"=="2" goto :MAIN_MENU
+if "%MODE_CHOICE%"=="3" exit
+goto :START_MENU
+
+:: =======================================================================
+:: Flash mode and Ubuntu version selection
+:: =======================================================================
+
+:MAIN_MENU
+
+call :CHECK_RPI_IMAGER_LOCAL
+if errorlevel 1 goto :RPI_IMAGER_MISSING
+
+cls
+
+echo %BLUE%=======================================================================%RESET%
+echo %GREEN%                 SD CARD PREPARATION%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo(
 echo This setup downloads an Ubuntu Server image for Raspberry Pi and
@@ -161,7 +183,7 @@ echo %BLUE%Please choose the target software version:%RESET%
 echo.
 echo 1) ctrlX OS 1.x / 2.x / 3.x - Ubuntu Server 22.04 LTS (ARM64)
 echo 2) ctrlX OS 4.x             - Ubuntu Server 24.04 LTS (ARM64)
-echo 3) Exit
+echo 3) Back
 echo(
 
 set /p OS_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
@@ -186,9 +208,62 @@ if "%OS_CHOICE%"=="2" (
     goto :NET_PROXY_CHECK
 )
 
-if "%OS_CHOICE%"=="3" exit
+if "%OS_CHOICE%"=="3" goto :START_MENU
 
 goto :MAIN_MENU
+
+:: =======================================================================
+:: Connect to an existing Raspberry Pi via VS Code Remote-SSH
+:: =======================================================================
+
+:CONNECT_SSH
+
+cls
+
+echo %BLUE%=======================================================================%RESET%
+echo %GREEN%                 CONNECT TO RASPBERRY PI%RESET%
+echo %BLUE%=======================================================================%RESET%
+echo.
+echo Enter the Raspberry Pi IP address or hostname.
+echo.
+
+set "SSH_HOST="
+set /p SSH_HOST="%YELLOW%Pi host or IP address: %RESET%"
+if not defined SSH_HOST (
+    echo %RED%[ERROR] A host or IP address is required.%RESET%
+    pause
+    goto :START_MENU
+)
+
+set "SSH_USER=%PI_USERNAME%"
+set /p SSH_USER_INPUT="%YELLOW%SSH username (default %PI_USERNAME%): %RESET%"
+if defined SSH_USER_INPUT set "SSH_USER=%SSH_USER_INPUT%"
+
+call :CHECK_VSCODE_PATH
+if not defined CODE_EXE (
+    echo %RED%[ERROR] Visual Studio Code could not be found.%RESET%
+    pause
+    goto :START_MENU
+)
+
+call :CHECK_REMOTE_SSH_EXTENSION
+if errorlevel 1 (
+    echo %RED%[ERROR] The VS Code Remote-SSH extension is not installed.%RESET%
+    pause
+    goto :START_MENU
+)
+
+echo.
+echo %YELLOW%Opening VS Code Remote-SSH for %SSH_USER%@%SSH_HOST%...%RESET%
+call "%CODE_EXE%" --new-window --remote "ssh-remote+%SSH_USER%@%SSH_HOST%"
+if errorlevel 1 (
+    echo %RED%[ERROR] VS Code could not start the Remote-SSH connection.%RESET%
+    pause
+    goto :START_MENU
+)
+echo %GREEN%VS Code Remote-SSH was started.%RESET%
+pause
+goto :START_MENU
 
 :: =======================================================================
 :: Check the proxy configuration before downloading files
