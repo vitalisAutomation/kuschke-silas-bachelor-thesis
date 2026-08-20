@@ -308,22 +308,19 @@ if not exist "C:\Program Files\7-Zip\7z.exe" if not exist "%ProgramFiles%\7-Zip\
 set "SEVEN_ZIP_EXE=%ProgramFiles%\7-Zip\7z.exe"
 if not exist "%SEVEN_ZIP_EXE%" set "SEVEN_ZIP_EXE=C:\Program Files\7-Zip\7z.exe"
 
-if exist "%IMAGE_FLASH_FILE%" (
-    echo %GREEN%[Ubuntu] Uncompressed image already exists. Skipping extraction.%RESET%
-) else (
-    echo %YELLOW%[Ubuntu] Verifying and extracting the image for balenaEtcher...%RESET%
-    "%SEVEN_ZIP_EXE%" t "%IMAGE_FILE%" >nul
-    if errorlevel 1 (
-        echo %RED%[ERROR] The downloaded Ubuntu archive is corrupt.%RESET%
-        pause
-        goto :MAIN_MENU
-    )
-    "%SEVEN_ZIP_EXE%" e -y -o"%PROJECT_PATH%" "%IMAGE_FILE%" >nul
-    if not exist "%IMAGE_FLASH_FILE%" (
-        echo %RED%[ERROR] Could not extract the Ubuntu image.%RESET%
-        pause
-        goto :MAIN_MENU
-    )
+echo %YELLOW%[Ubuntu] Verifying and extracting the image for balenaEtcher...%RESET%
+"%SEVEN_ZIP_EXE%" t "%IMAGE_FILE%" >nul
+if errorlevel 1 (
+    echo %RED%[ERROR] The downloaded Ubuntu archive is corrupt.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+if exist "%IMAGE_FLASH_FILE%" del /q "%IMAGE_FLASH_FILE%" >nul 2>&1
+"%SEVEN_ZIP_EXE%" e -y -o"%PROJECT_PATH%" "%IMAGE_FILE%" >nul
+if not exist "%IMAGE_FLASH_FILE%" (
+    echo %RED%[ERROR] Could not extract the Ubuntu image.%RESET%
+    pause
+    goto :MAIN_MENU
 )
 
 :: Check for an existing local portable installation first
