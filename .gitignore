@@ -39,3 +39,6 @@ sdk-vm-automation/manual_start_vm_logs.txt
 # Balena Etcher
 */*exe
 */*xz
+*/*img
+*/*zip
+balenaEtcher-portable/
