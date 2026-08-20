@@ -2,7 +2,7 @@
     "theme": "base",
     "themeVariables": {
         "fontFamily": "Segoe UI, Arial, sans-serif",
-        "fontSize": "18px",
+        "fontSize": "14px",
         "primaryColor": "#eef7ff",
         "primaryBorderColor": "#2f80ed",
         "primaryTextColor": "#0f172a",
@@ -14,15 +14,15 @@
         "tertiaryTextColor": "#0f172a",
         "lineColor": "#4b5563",
         "background": "#ffffff",
-        "clusterBkg": "#f8fbff",
-        "clusterBorder": "#9ec5ff"
+        "clusterBkg": "#ffffff",
+        "clusterBorder": "#64748b"
     },
     "flowchart": {
-        "useMaxWidth": false,
+        "useMaxWidth": true,
         "htmlLabels": true,
-        "nodeSpacing": 70,
-        "rankSpacing": 100,
-        "padding": 24,
+        "nodeSpacing": 28,
+        "rankSpacing": 58,
+        "padding": 12,
         "curve": "basis"
     }
 }}%%
@@ -50,6 +50,7 @@ flowchart TD
     QemuInstall --> MainMenu
 
     subgraph Menu["Hauptmenue :MAIN_MENU"]
+        direction TB
         MainMenu["VM-Status anzeigen<br/>Core 22/Core 24 und QEMU"] --> Action{"Aktion waehlen"}
         Action -- "1: Vorhandene VM starten" --> StartChoice
         Action -- "2: Neue VM einrichten" --> VersionChoice
@@ -57,12 +58,14 @@ flowchart TD
     end
 
     subgraph Existing["Option 1: vorhandene VM starten"]
+        direction TB
         StartChoice["Core 22 oder Core 24 waehlen"] --> ExistingCheck{"Passende .qcow2<br/>vorhanden?"}
         ExistingCheck -- Nein --> ExistingError["Fehler anzeigen<br/>zurueck zum Hauptmenue"] --> MainMenu
         ExistingCheck -- Ja --> SetExisting["CORE_VER setzen"]
     end
 
     subgraph NewVm["Option 2: neue VM einrichten"]
+        direction TB
         VersionChoice["ctrlX OS Ziel waehlen:<br/>1.xx -> Core 22 Fallback<br/>2.xx/3.xx -> Core 22<br/>4.xx -> Core 24"] --> SetVersion["CORE_VER und DOWNLOAD_TARGET=VM setzen"]
         SetVersion --> ProxyChoice["Arbeitsumgebung waehlen"]
         ProxyChoice --> ProxyType{"Proxy-Modus?"}
@@ -77,6 +80,7 @@ flowchart TD
     end
 
     subgraph Provision["VM-Download und Provisionierung :DOWNLOAD_VM"]
+        direction TB
         DownloadVm["Ubuntu Minimal Cloud-Image<br/>fuer Core 22 oder Core 24 herunterladen"] --> PrepareSSH["SSH-Schluessel erzeugen oder wiederverwenden<br/>Windows-SSH-Alias ctrlx-sdk-vm konfigurieren"]
         PrepareSSH --> Cidata["instances/cidata erzeugen:<br/>meta-data, user-data, network-config"]
         Cidata --> SetupScript["setup-sdk.sh generieren:<br/>Proxy, serielle Konsole, LXD,<br/>APT-Architekturen und SDK-Installation"]
@@ -94,6 +98,7 @@ flowchart TD
     StartPrompt --> StartQemu
 
     subgraph Runtime["QEMU-Ausfuehrung :START_QEMU_VM"]
+        direction TB
         StartQemu["Startvorbereitung anzeigen<br/>Port 11022 -> VM:22"] --> SeedCheck{"seed.iso<br/>vorhanden?"}
         SeedCheck -- Nein --> CidataCheck{"CIDATA/user-data<br/>vorhanden?"}
         CidataCheck -- Nein --> MissingCidata["Cloud-init fehlt<br/>zurueck zum Hauptmenue"] --> MainMenu
@@ -106,6 +111,7 @@ flowchart TD
     end
 
     subgraph Remote["Bereitschaft und VS-Code-Remote-SSH"]
+        direction TB
         WaitReady["Auf SSH und<br/>cloud-init boot-finished warten"] --> OpenSSH{"OpenSSH vorhanden<br/>und VM bereit?"}
         OpenSSH -- Nein/Timeout --> AutoConnectWarning["Warnung ausgeben<br/>manuelle Verbindung spaeter moeglich"] --> Monitor
         OpenSSH -- Ja --> OpenCode["VS Code Remote-SSH fuer<br/>ctrlx-sdk-vm /home/boschrexroth oeffnen"]
@@ -124,3 +130,10 @@ flowchart TD
     Monitor["VM-Monitor: SSH-Verbindung pruefen"] --> Shutdown{"SSH-Verbindung<br/>geschlossen?"}
     Shutdown -- Nein --> Monitor
     Shutdown -- Ja --> MainMenu
+
+    style Menu fill:#ffe4e4,stroke:#c62828,stroke-width:3px,color:#7f1d1d
+    style Existing fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#0d47a1
+    style NewVm fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#8a3b00
+    style Provision fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
+    style Runtime fill:#e0f7fa,stroke:#00838f,stroke-width:2px,color:#006064
+    style Remote fill:#fff8e1,stroke:#f9a825,stroke-width:2px,color:#6d4c00
