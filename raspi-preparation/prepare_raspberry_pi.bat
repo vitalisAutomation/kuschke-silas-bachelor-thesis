@@ -25,7 +25,7 @@ set "IMAGER_EXE="
 set "IMAGER_CLI="
 set "PI_USERNAME=sdk_pi"
 set "PI_PASSWORD=sdk_pi"
-set "PI_HOSTNAME=sdk_pi"
+set "PI_HOSTNAME=sdk-pi"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
@@ -231,7 +231,8 @@ echo Enter the Raspberry Pi IP address or hostname.
 echo.
 
 set "SSH_HOST="
-set /p SSH_HOST="%YELLOW%Pi host or IP address: %RESET%"
+set /p SSH_HOST="%YELLOW%Pi host or IP address (default sdk-pi.local): %RESET%"
+if not defined SSH_HOST set "SSH_HOST=%PI_HOSTNAME%.local"
 if not defined SSH_HOST (
     echo %RED%[ERROR] A host or IP address is required.%RESET%
     pause
@@ -256,9 +257,16 @@ if errorlevel 1 (
     goto :START_MENU
 )
 
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_PATH%configure_raspberry_pi_ssh.ps1"
+if errorlevel 1 (
+    echo %RED%[ERROR] Could not configure the SSH connection for the Raspberry Pi.%RESET%
+    pause
+    goto :START_MENU
+)
+
 echo.
 echo %YELLOW%Opening VS Code Remote-SSH for %SSH_USER%@%SSH_HOST%...%RESET%
-call "%CODE_EXE%" --new-window --remote "ssh-remote+%SSH_USER%@%SSH_HOST%"
+call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-pi"
 if errorlevel 1 (
     echo %RED%[ERROR] VS Code could not start the Remote-SSH connection.%RESET%
     pause

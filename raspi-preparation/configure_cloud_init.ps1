@@ -55,6 +55,7 @@ $userData = @(
     '  - squashfs-tools'
     '  - snapd'
     '  - openssh-server'
+    '  - avahi-daemon'
 )
 
 if ($env:USE_PROXY -eq 'true') {
@@ -100,6 +101,7 @@ if ($env:USE_PROXY -eq 'true') {
 $userData += @(
     'runcmd:'
     '  - systemctl enable --now ssh'
+    '  - systemctl enable --now avahi-daemon'
     '  - systemctl daemon-reload'
     '  - systemctl enable --now ctrlx-apt-update-upgrade.service'
     "  - mkdir -p /home/$username"
