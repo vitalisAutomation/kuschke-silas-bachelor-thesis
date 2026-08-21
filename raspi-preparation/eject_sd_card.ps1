@@ -17,7 +17,7 @@ if ($disk.IsBoot -or $disk.IsSystem) {
 foreach ($diskPartition in (Get-Partition -DiskNumber $disk.Number)) {
     foreach ($accessPath in @($diskPartition.AccessPaths)) {
         if ($accessPath -match '^[A-Za-z]:\\$') {
-            & "$env:SystemRoot\System32\mountvol.exe" $accessPath /p
+            & "$env:SystemRoot\System32\mountvol.exe" $accessPath /d
             if ($LASTEXITCODE -ne 0) {
                 throw "Could not remove mountpoint $accessPath."
             }
@@ -66,6 +66,11 @@ public static class WindowsDeviceEjector
     }
 }
 "@
+}
+
+& "$env:SystemRoot\System32\mountvol.exe" /e
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not enable automatic volume mounting.'
 }
 
 $ejectResult = [WindowsDeviceEjector]::Eject($deviceId)
