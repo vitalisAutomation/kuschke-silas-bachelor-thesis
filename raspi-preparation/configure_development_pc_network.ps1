@@ -7,8 +7,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if ($LastOctet -eq 100) {
-    throw 'The development computer IP cannot be 192.168.1.100 because that address is reserved for the Raspberry Pi.'
+if ($LastOctet -in @(1, 100)) {
+    throw 'The development computer IP cannot be 192.168.1.1 or 192.168.1.100 because these addresses are reserved.'
 }
 
 $adapter = Get-NetAdapter -Physical | Where-Object {

@@ -554,6 +554,14 @@ echo The development computer must use 192.168.1.x/24.
 echo.
 set /p PC_IP_LAST_OCTET="%YELLOW%Last IP octet for this computer (default 10): %RESET%"
 if not defined PC_IP_LAST_OCTET set "PC_IP_LAST_OCTET=10"
+for /f "delims=0123456789" %%A in ("%PC_IP_LAST_OCTET%") do (
+    echo %RED%[ERROR] Please enter a number between 1 and 254.%RESET%
+    exit /b 1
+)
+if "%PC_IP_LAST_OCTET%"=="1" (
+    echo %RED%[ERROR] The value 1 is reserved for the ctrlX Core.%RESET%
+    exit /b 1
+)
 if "%PC_IP_LAST_OCTET%"=="100" (
     echo %RED%[ERROR] The value 100 is reserved for the Raspberry Pi.%RESET%
     exit /b 1

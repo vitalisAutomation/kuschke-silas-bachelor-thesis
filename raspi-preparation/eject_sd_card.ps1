@@ -14,17 +14,6 @@ if ($disk.IsBoot -or $disk.IsSystem) {
     throw "Refusing to eject boot or system disk $($disk.Number)."
 }
 
-foreach ($diskPartition in (Get-Partition -DiskNumber $disk.Number)) {
-    foreach ($accessPath in @($diskPartition.AccessPaths)) {
-        if ($accessPath -match '^[A-Za-z]:\\$') {
-            & "$env:SystemRoot\System32\mountvol.exe" $accessPath /d
-            if ($LASTEXITCODE -ne 0) {
-                throw "Could not remove mountpoint $accessPath."
-            }
-        }
-    }
-}
-
 $diskDrive = Get-CimInstance Win32_DiskDrive -Filter "Index=$($disk.Number)"
 if (-not $diskDrive.PNPDeviceID) {
     throw "Could not resolve the USB device for disk $($disk.Number)."
