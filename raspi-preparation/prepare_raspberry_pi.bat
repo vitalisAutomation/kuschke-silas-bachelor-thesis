@@ -234,8 +234,8 @@ echo Enter the Raspberry Pi IP address or hostname.
 echo.
 
 set "SSH_HOST="
-set /p SSH_HOST="%YELLOW%Pi host or IP address (default sdk-pi.local): %RESET%"
-if not defined SSH_HOST set "SSH_HOST=%PI_HOSTNAME%.local"
+set /p SSH_HOST="%YELLOW%Pi host or IP address (default %PI_IP_ADDRESS%): %RESET%"
+if not defined SSH_HOST set "SSH_HOST=%PI_IP_ADDRESS%"
 if not defined SSH_HOST (
     echo %RED%[ERROR] A host or IP address is required.%RESET%
     pause

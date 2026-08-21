@@ -21,9 +21,13 @@ if (-not $adapter) {
 }
 
 $ipAddress = "192.168.1.$LastOctet"
+$piIpAddress = '192.168.1.100'
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -Dhcp Disabled
 Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Remove-NetIPAddress -Confirm:$false
 New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $ipAddress -PrefixLength 24
+Get-NetRoute -DestinationPrefix "$piIpAddress/32" -InterfaceIndex $adapter.ifIndex -ErrorAction SilentlyContinue |
+    Remove-NetRoute -Confirm:$false
+New-NetRoute -DestinationPrefix "$piIpAddress/32" -InterfaceIndex $adapter.ifIndex -NextHop '0.0.0.0' -RouteMetric 1 | Out-Null
 
 Write-Output "Configured $($adapter.Name) with $ipAddress/24."
