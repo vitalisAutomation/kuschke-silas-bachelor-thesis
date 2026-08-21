@@ -4,6 +4,7 @@ $bootPath = $env:BOOT_PATH
 $username = $env:PI_USERNAME
 $password = $env:PI_PASSWORD
 $hostname = $env:PI_HOSTNAME
+$ipAddress = $env:PI_IP_ADDRESS
 $ssid = $env:WIFI_SSID
 $wifiPassword = $env:WIFI_PASSWORD
 $publicKeyPath = $env:SSH_KEY_FILE + '.pub'
@@ -116,6 +117,11 @@ $userData += @(
 
 $networkConfig = @(
     'version: 2'
+    'ethernets:'
+    '  eth0:'
+    '    dhcp4: false'
+    '    addresses:'
+    "      - $ipAddress/24"
     'wifis:'
     '  wlan0:'
     '    dhcp4: true'

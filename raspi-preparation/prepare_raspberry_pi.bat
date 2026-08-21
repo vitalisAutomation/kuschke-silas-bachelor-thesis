@@ -23,9 +23,12 @@ set "PROJECT_PATH=%~dp0"
 set "IMAGER_VERSION=1.8.5"
 set "IMAGER_EXE="
 set "IMAGER_CLI="
-set "PI_USERNAME=sdk_pi"
-set "PI_PASSWORD=sdk_pi"
+set "PI_USERNAME=sdk-pi"
+set "PI_PASSWORD=sdk-pi"
 set "PI_HOSTNAME=sdk-pi"
+set "PI_IP_ADDRESS=192.168.1.100"
+set "PC_IP_LAST_OCTET=10"
+set "PC_IP_ADDRESS=192.168.1.10"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
@@ -353,6 +356,9 @@ if not defined WIFI_SSID (
 
 if not defined WIFI_PASSWORD goto :MAIN_MENU
 
+call :CONFIGURE_DEVELOPMENT_PC_NETWORK
+if errorlevel 1 goto :MAIN_MENU
+
 if exist "%IMAGE_FILE%" (
     echo %GREEN%[Ubuntu] Image already exists. Skipping download.%RESET%
 ) else (
@@ -505,8 +511,11 @@ call :EJECT_SD_CARD
 if errorlevel 1 goto :EJECT_ERROR
 echo %GREEN%SD card and USB reader were safely ejected and can now be removed.%RESET%
 echo.
-echo SSH username: %PI_USERNAME%
 echo Hostname: %PI_HOSTNAME%
+echo Host/IP: %PI_IP_ADDRESS%
+echo SSH username: %PI_USERNAME%
+echo SSH password: %PI_PASSWORD%
+echo Development computer IP: %PC_IP_ADDRESS%
 echo Wi-Fi SSID: %WIFI_SSID%
 echo SSH private key: %SSH_KEY_FILE%
 echo.
@@ -534,6 +543,29 @@ exit /b 0
 
 reg add "HKCU\Software\Raspberry Pi\Imager" /v eject /t REG_SZ /d false /f >nul 2>&1
 reg add "HKCU\Software\Raspberry Pi\Raspberry Pi Imager" /v eject /t REG_SZ /d false /f >nul 2>&1
+exit /b 0
+
+:CONFIGURE_DEVELOPMENT_PC_NETWORK
+
+echo.
+echo %BLUE%[Network] Configure the development computer Ethernet address.%RESET%
+echo The Raspberry Pi will use %PI_IP_ADDRESS%/24.
+echo The development computer must use 192.168.1.x/24.
+echo.
+set /p PC_IP_LAST_OCTET="%YELLOW%Last IP octet for this computer (default 10): %RESET%"
+if not defined PC_IP_LAST_OCTET set "PC_IP_LAST_OCTET=10"
+if "%PC_IP_LAST_OCTET%"=="100" (
+    echo %RED%[ERROR] The value 100 is reserved for the Raspberry Pi.%RESET%
+    exit /b 1
+)
+set "PC_IP_ADDRESS=192.168.1.%PC_IP_LAST_OCTET%"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$process = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','%PROJECT_PATH%configure_development_pc_network.ps1','-LastOctet','%PC_IP_LAST_OCTET%' -Verb RunAs -Wait -PassThru; exit $process.ExitCode"
+if errorlevel 1 (
+    echo %RED%[ERROR] Could not configure the development computer Ethernet address.%RESET%
+    exit /b 1
+)
+echo %GREEN%[Network] Development computer: %PC_IP_ADDRESS%/24%RESET%
+echo %GREEN%[Network] Raspberry Pi: %PI_IP_ADDRESS%/24%RESET%
 exit /b 0
 
 :CHECK_DEVELOPMENT_TOOLS
