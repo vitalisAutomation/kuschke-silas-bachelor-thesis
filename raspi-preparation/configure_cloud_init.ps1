@@ -73,6 +73,10 @@ $userData += @(
     '      cloud-init status --long > /boot/firmware/cloud-init-debug/status.txt 2>&1'
     '      cloud-init query ds > /boot/firmware/cloud-init-debug/datasource.txt 2>&1'
     '      cp -f /var/log/syslog /boot/firmware/cloud-init-debug/syslog.log'
+    '      iw reg get > /boot/firmware/cloud-init-debug/iw-reg.txt 2>&1'
+    '      iw dev wlan0 info > /boot/firmware/cloud-init-debug/iw-info.txt 2>&1'
+    '      iw dev wlan0 link > /boot/firmware/cloud-init-debug/iw-link.txt 2>&1'
+    '      dmesg | grep -Ei ''brcmfmac|cfg80211|wlan0|firmware|regulatory'' > /boot/firmware/cloud-init-debug/wlan-kernel.log 2>&1'
 
     '  - path: /etc/systemd/journald.conf.d/99-ctrlx-persistent.conf'
     "    permissions: '0644'"
@@ -158,7 +162,7 @@ $userData += @(
     '      apt-get update'
     '      echo "apt-get update exit code: $?"'
     '      echo "==== package installation ===="'
-    '      DEBIAN_FRONTEND=noninteractive apt-get install -y git unzip curl wget make squashfs-tools snapd openssh-server avahi-daemon'
+    '      DEBIAN_FRONTEND=noninteractive apt-get install -y iw git unzip curl wget make squashfs-tools snapd openssh-server avahi-daemon'
     '      echo "apt-get install exit code: $?"'
     '      systemctl enable --now ssh'
     '      systemctl enable --now avahi-daemon'
