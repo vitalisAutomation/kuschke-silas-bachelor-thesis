@@ -7,11 +7,18 @@ $hostname = $env:PI_HOSTNAME
 $ipAddress = $env:PI_IP_ADDRESS
 $ssid = $env:WIFI_SSID
 $wifiPassword = $env:WIFI_PASSWORD
+$wifiCountry = $env:WIFI_COUNTRY
 $publicKeyPath = $env:SSH_KEY_FILE + '.pub'
 
 if ([string]::IsNullOrWhiteSpace($bootPath) -or -not (Test-Path -LiteralPath $bootPath)) {
     throw 'The boot partition path is missing or does not exist.'
 }
+
+if ($wifiCountry -notmatch '^[A-Za-z]{2}$') {
+    throw 'The Wi-Fi regulatory country must be a two-letter country code.'
+}
+
+$wifiCountry = $wifiCountry.ToUpperInvariant()
 
 if (-not (Test-Path -LiteralPath $publicKeyPath)) {
     throw 'The SSH public key does not exist.'
@@ -222,11 +229,10 @@ $networkConfig = @(
     '    addresses:'
     "      - $ipAddress/24"
     'wifis:'
-    '  wireless:'
-    '    match:'
-    '      name: "wl*"'
+    '  wlan0:'
     '    dhcp4: true'
     '    optional: true'
+    "    regulatory-domain: $wifiCountry"
     '    access-points:'
     "      ${ssidYaml}:"
     "        password: ${wifiPasswordYaml}"

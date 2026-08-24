@@ -26,11 +26,13 @@ set "IMAGER_CLI="
 set "PI_USERNAME=sdk-pi"
 set "PI_PASSWORD=sdk-pi"
 set "PI_HOSTNAME=sdk-pi"
+set "PI_MDNS_HOSTNAME=%PI_HOSTNAME%.local"
 set "PI_IP_ADDRESS=192.168.1.100"
 set "PC_IP_LAST_OCTET=10"
 set "PC_IP_ADDRESS=192.168.1.10"
 set "PI_USE_PROXY=false"
 set "PI_PROXY_URL="
+set "WIFI_COUNTRY=DE"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
@@ -233,6 +235,7 @@ echo %GREEN%                 CONNECT TO RASPBERRY PI%RESET%
 echo %BLUE%=======================================================================%RESET%
 echo.
 echo Enter the Raspberry Pi IP address or hostname.
+echo Use %PI_MDNS_HOSTNAME% only when mDNS is available on this computer.
 echo.
 
 set "SSH_HOST="
@@ -357,6 +360,17 @@ if not defined WIFI_SSID (
 )
 
 if not defined WIFI_PASSWORD goto :MAIN_MENU
+
+echo.
+echo %BLUE%[Wi-Fi] Select the regulatory country for the Raspberry Pi.%RESET%
+set /p WIFI_COUNTRY_INPUT="%YELLOW%Country code (default DE): %RESET%"
+if defined WIFI_COUNTRY_INPUT set "WIFI_COUNTRY=%WIFI_COUNTRY_INPUT%"
+echo %WIFI_COUNTRY%| findstr /r /x "[A-Za-z][A-Za-z]" >nul
+if errorlevel 1 (
+    echo %RED%[ERROR] Please enter a two-letter country code, for example DE.%RESET%
+    pause
+    goto :MAIN_MENU
+)
 
 echo.
 echo %BLUE%[Raspberry Pi] Configure an HTTP/HTTPS proxy for the Pi?%RESET%
