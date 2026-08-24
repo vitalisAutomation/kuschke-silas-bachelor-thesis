@@ -12,10 +12,9 @@ if ($LastOctet -in @(1, 100)) {
 }
 
 $adapter = Get-NetAdapter -Physical | Where-Object {
-    $_.Status -eq 'Up' -and
     $_.PhysicalMediaType -eq '802.3' -and
     $_.InterfaceDescription -notmatch 'Virtual|VPN|Cisco|AnyConnect|Wireless|Wi-Fi|Bluetooth'
-} | Select-Object -First 1
+} | Sort-Object @{ Expression = { if ($_.Status -eq 'Up') { 0 } else { 1 } } } | Select-Object -First 1
 
 if (-not $adapter) {
     throw 'No physical Ethernet adapter could be identified.'
