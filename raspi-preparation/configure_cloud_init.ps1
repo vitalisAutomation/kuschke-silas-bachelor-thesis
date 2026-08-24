@@ -163,7 +163,7 @@ if (Test-Path -LiteralPath $cmdlinePath) {
     $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.show_status=true', '$1')
     $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.log_level=debug', '$1')
     $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.log_target=console', '$1')
-    $cmdline = "$cmdline ds=nocloud;s=file:///boot/firmware/ systemd.show_status=true systemd.log_level=debug systemd.log_target=console"
+    $cmdline = "$cmdline ds=nocloud;s=file:///boot/firmware/"
     [System.IO.File]::WriteAllText($cmdlinePath, "$cmdline`n", $encoding)
 }
 
