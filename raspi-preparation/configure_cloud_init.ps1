@@ -46,6 +46,8 @@ $userData = @(
     '  expire: false'
     'ssh_pwauth: true'
     'disable_root: true'
+    'output:'
+    '  all: "| tee -a /var/log/cloud-init-output.log /var/log/ctrlx-provisioning.log"'
     'package_update: true'
     'packages:'
     '  - git'
@@ -61,7 +63,7 @@ $userData = @(
 
 $userData += @(
     'bootcmd:'
-    '  - [ bash, -c, "DEBUG_DIR=/boot/firmware/cloud-init-debug; mkdir -p $DEBUG_DIR; date -Is > $DEBUG_DIR/bootcmd-start.txt; mountpoint /boot/firmware > $DEBUG_DIR/boot-mount.txt 2>&1; cp -f /var/log/cloud-init.log $DEBUG_DIR/cloud-init-bootcmd.log 2>&1 || true; sync" ]'
+    '  - [ bash, -c, "DEBUG_DIR=/boot/firmware/cloud-init-debug; mkdir -p $DEBUG_DIR; date -Is > $DEBUG_DIR/bootcmd-start.txt; mountpoint /boot/firmware > $DEBUG_DIR/boot-mount.txt 2>&1; { echo ==== bootcmd ====; date -Is; cat /proc/cmdline; ip -br addr; ip route; resolvectl status; } >> /var/log/ctrlx-provisioning.log 2>&1; cp -f /var/log/cloud-init.log $DEBUG_DIR/cloud-init-bootcmd.log 2>&1 || true; sync" ]'
     'write_files:'
     '  - path: /usr/local/sbin/ctrlx-cloud-init-debug.sh'
     "    permissions: '0755'"
@@ -158,7 +160,10 @@ $cmdlinePath = Join-Path $bootPath 'cmdline.txt'
 if (Test-Path -LiteralPath $cmdlinePath) {
     $cmdline = (Get-Content -LiteralPath $cmdlinePath -Raw).Trim()
     $cmdline = [regex]::Replace($cmdline, '(^|\s)ds=nocloud(?:-net)?;[^\s]*', '$1')
-    $cmdline = "$cmdline ds=nocloud;s=file:///boot/firmware/"
+    $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.show_status=true', '$1')
+    $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.log_level=debug', '$1')
+    $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.log_target=console', '$1')
+    $cmdline = "$cmdline ds=nocloud;s=file:///boot/firmware/ systemd.show_status=true systemd.log_level=debug systemd.log_target=console"
     [System.IO.File]::WriteAllText($cmdlinePath, "$cmdline`n", $encoding)
 }
 
