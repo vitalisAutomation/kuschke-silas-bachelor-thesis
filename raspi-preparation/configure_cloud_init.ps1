@@ -200,6 +200,7 @@ $userData += @(
     'runcmd:'
     '  - /usr/local/sbin/ctrlx-cloud-init-debug.sh'
     '  - systemctl daemon-reload'
+    '  - systemctl enable ctrlx-apt-update-upgrade.service'
     '  - mkdir -p /mnt/ctrlx-logs'
     '  - mountpoint -q /mnt/ctrlx-logs || mount -L CTRLXLOG -t vfat /mnt/ctrlx-logs'
     '  - mountpoint -q /mnt/ctrlx-logs || echo "USB mount failed" >> /boot/firmware/cloud-init-debug/usb-mount.txt'
