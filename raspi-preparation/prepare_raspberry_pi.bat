@@ -33,6 +33,8 @@ set "PC_IP_ADDRESS=192.168.1.10"
 set "PI_USE_PROXY=false"
 set "PI_PROXY_URL="
 set "WIFI_COUNTRY=DE"
+set "KEYBOARD_LAYOUT=de"
+set "TIMEZONE=Europe/Berlin"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
@@ -401,6 +403,28 @@ if not defined WIFI_COUNTRY (
     goto :MAIN_MENU
 )
 
+set "KEYBOARD_LAYOUT_INPUT="
+set /p KEYBOARD_LAYOUT_INPUT="%YELLOW%Keyboard layout (default DE): %RESET%"
+if not defined KEYBOARD_LAYOUT_INPUT set "KEYBOARD_LAYOUT_INPUT=DE"
+set "KEYBOARD_LAYOUT="
+for /f "delims=" %%K in ('powershell.exe -NoProfile -Command "$k=$env:KEYBOARD_LAYOUT_INPUT.Trim().ToLowerInvariant(); if ($k -match '^[a-z]{2,3}$') { $k }"') do set "KEYBOARD_LAYOUT=%%K"
+if not defined KEYBOARD_LAYOUT (
+    echo %RED%Please enter a valid keyboard layout, for example DE or US.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+
+set "TIMEZONE_INPUT="
+set /p TIMEZONE_INPUT="%YELLOW%Time zone (default Europe/Berlin): %RESET%"
+if not defined TIMEZONE_INPUT set "TIMEZONE_INPUT=Europe/Berlin"
+set "TIMEZONE="
+for /f "delims=" %%T in ('powershell.exe -NoProfile -Command "$t=$env:TIMEZONE_INPUT.Trim(); if ($t -match '^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)+$') { $t }"') do set "TIMEZONE=%%T"
+if not defined TIMEZONE (
+    echo %RED%Please enter a valid time zone, for example Europe/Berlin.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+
 echo.
 echo %BLUE%[Raspberry Pi] Configure an HTTP/HTTPS proxy for the Pi?%RESET%
 echo The download proxy configured earlier is only used by this Windows PC.
@@ -643,12 +667,8 @@ if "%PC_IP_LAST_OCTET%"=="1" (
     echo %RED%[ERROR] The value 1 is reserved for the ctrlX Core.%RESET%
     exit /b 1
 )
-if "%PC_IP_LAST_OCTET%"=="100" (
-    echo %RED%[ERROR] The value 100 is reserved for the Raspberry Pi.%RESET%
-    exit /b 1
-)
 set "PC_IP_ADDRESS=192.168.1.%PC_IP_LAST_OCTET%"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$process = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','%PROJECT_PATH%configure_development_pc_network.ps1','-LastOctet','%PC_IP_LAST_OCTET%' -Verb RunAs -Wait -PassThru; exit $process.ExitCode"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$process = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','%PROJECT_PATH%configure_development_pc_network.ps1','-LastOctet','%PC_IP_LAST_OCTET%','-PiIpAddress','%PI_IP_ADDRESS%' -Verb RunAs -Wait -PassThru; exit $process.ExitCode"
 if errorlevel 1 (
     echo %RED%[ERROR] Could not configure the development computer Ethernet address.%RESET%
     exit /b 1

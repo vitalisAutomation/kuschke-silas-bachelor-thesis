@@ -8,6 +8,8 @@ $ipAddress = $env:PI_IP_ADDRESS
 $ssid = $env:WIFI_SSID
 $wifiPassword = $env:WIFI_PASSWORD
 $wifiCountry = $env:WIFI_COUNTRY
+$keyboardLayout = $env:KEYBOARD_LAYOUT
+$timezone = $env:TIMEZONE
 $publicKeyPath = $env:SSH_KEY_FILE + '.pub'
 
 if ([string]::IsNullOrWhiteSpace($bootPath) -or -not (Test-Path -LiteralPath $bootPath)) {
@@ -19,6 +21,16 @@ if ($wifiCountry -notmatch '^[A-Za-z]{2}$') {
 }
 
 $wifiCountry = $wifiCountry.ToUpperInvariant()
+
+if ($keyboardLayout -notmatch '^[A-Za-z]{2,3}$') {
+    throw 'The keyboard layout must contain two or three letters.'
+}
+
+if ($timezone -notmatch '^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)+$') {
+    throw 'The time zone must be a valid zone name such as Europe/Berlin.'
+}
+
+$keyboardLayout = $keyboardLayout.ToLowerInvariant()
 
 if (-not (Test-Path -LiteralPath $publicKeyPath)) {
     throw 'The SSH public key does not exist.'
@@ -56,6 +68,10 @@ $userData = @(
     'output:'
     '  all: "| tee -a /var/log/cloud-init-output.log /var/log/ctrlx-provisioning.log"'
     'package_update: false'
+    "timezone: $timezone"
+    'keyboard:'
+    "  layout: $keyboardLayout"
+    '  model: pc105'
 )
 
 $userData += @(
@@ -152,12 +168,20 @@ $userData += @(
     '      ip -br addr'
     '      ip route'
     '      resolvectl status'
+    '      echo "==== dpkg architectures ===="'
+    '      dpkg --print-architecture'
+    '      dpkg --print-foreign-architectures'
     '      echo "==== waiting for network ===="'
     '      for attempt in $(seq 1 30); do'
     '        if curl --connect-timeout 3 -fsS https://archive.ubuntu.com/ >/dev/null; then break; fi'
     '        echo "network attempt $attempt failed"'
     '        sleep 2'
     '      done'
+    '      if [ "$(dpkg --print-architecture)" = "arm64" ]; then'
+    '        for architecture in $(dpkg --print-foreign-architectures); do'
+    '          case "$architecture" in amd64|i386) dpkg --remove-architecture "$architecture" ;; esac'
+    '        done'
+    '      fi'
     '      echo "==== apt update ===="'
     '      apt-get update'
     '      echo "apt-get update exit code: $?"'
@@ -250,9 +274,7 @@ $networkConfig = @(
     'version: 2'
     'renderer: networkd'
     'ethernets:'
-    '  wired:'
-    '    match:'
-    '      name: "eth*"'
+    '  end0:'
     '    dhcp4: false'
     '    optional: true'
     '    addresses:'

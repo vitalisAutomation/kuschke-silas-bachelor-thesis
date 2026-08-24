@@ -2,13 +2,22 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateRange(1, 254)]
-    [int]$LastOctet
+    [int]$LastOctet,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$')]
+    [string]$PiIpAddress
 )
 
 $ErrorActionPreference = 'Stop'
 
-if ($LastOctet -in @(1, 100)) {
-    throw 'The development computer IP cannot be 192.168.1.1 or 192.168.1.100 because these addresses are reserved.'
+if ($LastOctet -eq 1) {
+    throw 'The development computer IP cannot be 192.168.1.1 because this address is reserved.'
+}
+
+$piLastOctet = [int]$PiIpAddress.Split('.')[-1]
+if ($LastOctet -eq $piLastOctet) {
+    throw "The development computer IP cannot use the Raspberry Pi address $PiIpAddress."
 }
 
 $adapter = Get-NetAdapter -Physical | Where-Object {
@@ -21,7 +30,6 @@ if (-not $adapter) {
 }
 
 $ipAddress = "192.168.1.$LastOctet"
-$piIpAddress = '192.168.1.100'
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -Dhcp Disabled
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -InterfaceMetric 1
 Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
