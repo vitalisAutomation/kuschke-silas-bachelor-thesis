@@ -47,6 +47,7 @@ set "NETWORK_READY="
 set "MISSING_DEV_TOOLS="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_REMOTE_SSH_FLAG="
+set "INSTALL_EXTENSIONS_FLAG="
 call :CHECK_DEVELOPMENT_TOOLS
 
 if defined MISSING_DEV_TOOLS goto :REQUEST_ADMIN
@@ -83,6 +84,7 @@ pause >nul
 set "INSTALL_ARGS=-install-dependencies"
 if defined INSTALL_VSCODE_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-vscode"
 if defined INSTALL_REMOTE_SSH_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-remote-ssh"
+if defined INSTALL_EXTENSIONS_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-extensions"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '%INSTALL_ARGS%' -Verb RunAs"
 exit
 
@@ -117,7 +119,7 @@ if not errorlevel 1 (
     echo %GREEN%[VS Code] Installation completed successfully.%RESET%
 )
 
-echo %ARG_STRING% | findstr /i /c:"-install-remote-ssh" >nul
+echo %ARG_STRING% | findstr /i /r /c:"-install-remote-ssh" /c:"-install-extensions" >nul
 if not errorlevel 1 (
     call :CHECK_VSCODE_PATH
     if not defined CODE_EXE (
@@ -125,14 +127,20 @@ if not errorlevel 1 (
         pause
         exit /b 1
     )
-    echo %YELLOW%[Remote-SSH] Installing the Microsoft Remote-SSH extension...%RESET%
-    call "%CODE_EXE%" --install-extension ms-vscode-remote.remote-ssh --force
-    if errorlevel 1 (
-        echo %RED%[ERROR] Remote-SSH extension installation failed.%RESET%
-        pause
-        exit /b 1
+    echo %YELLOW%[VS Code] Installing missing extensions...%RESET%
+    for %%e in (golang.go ms-dotnettools.csharp ms-python.python ms-vscode-remote.remote-ssh ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake) do (
+        "%CODE_EXE%" --list-extensions 2>nul | findstr /i /r /b /e /c:"%%e" >nul
+        if errorlevel 1 (
+            echo %BLUE%  * Installing %%e...%RESET%
+            "%CODE_EXE%" --install-extension %%e --force >> "install_debug.log" 2>&1
+            if errorlevel 1 (
+                echo %RED%[ERROR] Extension %%e installation failed.%RESET%
+                pause
+                exit /b 1
+            )
+        )
     )
-    echo %GREEN%[Remote-SSH] Extension installation completed successfully.%RESET%
+    echo %GREEN%[VS Code] Extension installation completed successfully.%RESET%
 )
 
 echo.
@@ -265,12 +273,29 @@ if errorlevel 1 (
     goto :START_MENU
 )
 
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_PATH%configure_vscode_remote_ssh.ps1"
+if errorlevel 1 (
+    echo %RED%[ERROR] Could not configure local Remote-SSH server download.%RESET%
+    pause
+    goto :START_MENU
+)
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_PATH%configure_raspberry_pi_ssh.ps1"
 if errorlevel 1 (
     echo %RED%[ERROR] Could not configure the SSH connection for the Raspberry Pi.%RESET%
     pause
     goto :START_MENU
 )
+
+echo.
+echo %YELLOW%Updating Raspberry Pi packages. Enter the Pi sudo password when prompted.%RESET%
+ssh.exe -t ctrlx-pi "sudo apt update && sudo env DEBIAN_FRONTEND=noninteractive apt upgrade -y"
+if errorlevel 1 (
+    echo %RED%[ERROR] Raspberry Pi package update or upgrade failed.%RESET%
+    pause
+    goto :START_MENU
+)
+echo %GREEN%Raspberry Pi packages are up to date.%RESET%
 
 echo.
 echo %YELLOW%Opening VS Code Remote-SSH for %SSH_USER%@%SSH_HOST%...%RESET%
@@ -280,6 +305,7 @@ if errorlevel 1 (
     pause
     goto :START_MENU
 )
+call :INSTALL_PI_EXTENSIONS
 echo %GREEN%VS Code Remote-SSH was started.%RESET%
 pause
 goto :START_MENU
@@ -344,6 +370,8 @@ goto :MAIN_MENU
 if not defined WIFI_SSID (
     echo.
     echo %BLUE%[Wi-Fi] Enter the wireless network for the Raspberry Pi.%RESET%
+    echo %YELLOW%IMPORTANT: The Pi must connect to a hotspot with Internet access.%RESET%
+    echo %YELLOW%It needs this connection to download Ubuntu packages, the SDK and VS Code extensions.%RESET%
     set /p WIFI_SSID="%YELLOW%Wi-Fi SSID: %RESET%"
     echo %YELLOW%Wi-Fi password input is hidden.%RESET%
     for /f "delims=" %%a in ('powershell.exe -NoProfile -Command "$p=Read-Host -AsSecureString; $b=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($p); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)}"') do set "WIFI_PASSWORD=%%a"
@@ -635,11 +663,13 @@ if not defined CODE_EXE (
     call :ADD_MISSING_DEV_TOOL "Visual Studio Code"
     set "INSTALL_VSCODE_FLAG=1"
     set "INSTALL_REMOTE_SSH_FLAG=1"
+    set "INSTALL_EXTENSIONS_FLAG=1"
 ) else (
-    call :CHECK_REMOTE_SSH_EXTENSION
+    call :CHECK_EXTENSIONS
     if errorlevel 1 (
-        call :ADD_MISSING_DEV_TOOL "VS Code Remote-SSH extension"
+        call :ADD_MISSING_DEV_TOOL "one or more VS Code extensions"
         set "INSTALL_REMOTE_SSH_FLAG=1"
+        set "INSTALL_EXTENSIONS_FLAG=1"
     )
 )
 goto :EOF
@@ -731,6 +761,39 @@ goto :EOF
 :CHECK_REMOTE_SSH_EXTENSION
 call "%CODE_EXE%" --list-extensions --show-versions 2>nul | findstr /i /r /b /c:"ms-vscode-remote\.remote-ssh$" /c:"ms-vscode-remote\.remote-ssh@" >nul
 exit /b %errorlevel%
+
+:CHECK_EXTENSIONS
+set "EXTENSIONS_OK=Yes"
+for %%e in (golang.go ms-dotnettools.csharp ms-python.python ms-vscode-remote.remote-ssh ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake) do (
+    "%CODE_EXE%" --list-extensions --show-versions 2>nul | findstr /i /r /b /c:"%%e$" /c:"%%e@" >nul
+    if errorlevel 1 set "EXTENSIONS_OK=No"
+)
+if /i "%EXTENSIONS_OK%"=="Yes" exit /b 0
+exit /b 1
+
+:INSTALL_PI_EXTENSIONS
+echo %BLUE%[Pi Extensions]%RESET% Waiting for the VS Code Server to initialize...
+set /a PI_EXTENSION_WAIT_COUNT=0
+:WAIT_FOR_PI_CODE_SERVER
+set /a PI_EXTENSION_WAIT_COUNT+=1
+ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ctrlx-pi "test -n $(find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit)" >nul 2>&1
+if not errorlevel 1 goto :PI_CODE_SERVER_READY
+if %PI_EXTENSION_WAIT_COUNT% GEQ 60 (
+    echo %YELLOW%[Pi Extensions] VS Code Server not ready. Extensions were not installed.%RESET%
+    exit /b 0
+)
+timeout /t 5 /nobreak >nul
+goto :WAIT_FOR_PI_CODE_SERVER
+
+:PI_CODE_SERVER_READY
+echo %BLUE%[Pi Extensions]%RESET% Installing extensions in the Raspberry Pi...
+ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "set -e; code_server=$(find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --force; done; echo Installed Pi extensions:; $code_server --list-extensions"
+if errorlevel 1 (
+    echo %YELLOW%[Pi Extensions] Installation failed. Check the Remote-SSH output for details.%RESET%
+    exit /b 0
+)
+echo %GREEN%[Pi Extensions] Remote extensions installed and verified.%RESET%
+exit /b 0
 
 :ADD_MISSING_DEV_TOOL
 if defined MISSING_DEV_TOOLS (
