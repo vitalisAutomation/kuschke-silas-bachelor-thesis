@@ -391,10 +391,12 @@ if not defined WIFI_PASSWORD goto :MAIN_MENU
 
 echo.
 echo %BLUE%[Wi-Fi] Select the regulatory country for the Raspberry Pi.%RESET%
+set "WIFI_COUNTRY_INPUT="
 set /p WIFI_COUNTRY_INPUT="%YELLOW%Country code (default DE): %RESET%"
-if defined WIFI_COUNTRY_INPUT set "WIFI_COUNTRY=%WIFI_COUNTRY_INPUT%"
-echo %WIFI_COUNTRY%| findstr /r /x "[A-Za-z][A-Za-z]" >nul
-if errorlevel 1 (
+if not defined WIFI_COUNTRY_INPUT set "WIFI_COUNTRY_INPUT=DE"
+set "WIFI_COUNTRY="
+for /f "delims=" %%C in ('powershell.exe -NoProfile -Command "$c=$env:WIFI_COUNTRY_INPUT.Trim().ToUpperInvariant(); if ($c -match '^[A-Z]{2}$') { $c }"') do set "WIFI_COUNTRY=%%C"
+if not defined WIFI_COUNTRY (
     echo %RED%[ERROR] Please enter a two-letter country code, for example DE.%RESET%
     pause
     goto :MAIN_MENU
