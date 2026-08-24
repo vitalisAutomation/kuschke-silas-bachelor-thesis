@@ -29,6 +29,8 @@ set "PI_HOSTNAME=sdk-pi"
 set "PI_IP_ADDRESS=192.168.1.100"
 set "PC_IP_LAST_OCTET=10"
 set "PC_IP_ADDRESS=192.168.1.10"
+set "PI_USE_PROXY=false"
+set "PI_PROXY_URL="
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
@@ -356,6 +358,24 @@ if not defined WIFI_SSID (
 
 if not defined WIFI_PASSWORD goto :MAIN_MENU
 
+echo.
+echo %BLUE%[Raspberry Pi] Configure an HTTP/HTTPS proxy for the Pi?%RESET%
+echo The download proxy configured earlier is only used by this Windows PC.
+choice /c YN /n /m "%YELLOW%Use a proxy on the Raspberry Pi? (Y/N): %RESET%"
+if errorlevel 2 goto :PI_PROXY_READY
+if errorlevel 1 goto :PI_PROXY_SET
+
+:PI_PROXY_SET
+set "PI_USE_PROXY=true"
+set /p PI_PROXY_URL="%YELLOW%Raspberry Pi proxy URL (for example http://192.168.1.10:3128): %RESET%"
+if not defined PI_PROXY_URL (
+    echo %RED%[ERROR] The Raspberry Pi proxy URL must not be empty.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+
+:PI_PROXY_READY
+
 call :CONFIGURE_DEVELOPMENT_PC_NETWORK
 if errorlevel 1 goto :MAIN_MENU
 
@@ -403,8 +423,20 @@ if errorlevel 1 (
 )
 if exist "%IMAGE_FLASH_FILE%" del /q "%IMAGE_FLASH_FILE%" >nul 2>&1
 "%SEVEN_ZIP_EXE%" e -y -o"%PROJECT_PATH%" "%IMAGE_FILE%" >nul
+if errorlevel 1 (
+    echo %RED%[ERROR] Could not fully extract the Ubuntu image.%RESET%
+    if exist "%IMAGE_FLASH_FILE%" del /q "%IMAGE_FLASH_FILE%" >nul 2>&1
+    pause
+    goto :MAIN_MENU
+)
 if not exist "%IMAGE_FLASH_FILE%" (
     echo %RED%[ERROR] Could not extract the Ubuntu image.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+for %%F in ("%IMAGE_FLASH_FILE%") do if %%~zF LSS 1000000000 (
+    echo %RED%[ERROR] The extracted Ubuntu image is unexpectedly small.%RESET%
+    del /q "%IMAGE_FLASH_FILE%" >nul 2>&1
     pause
     goto :MAIN_MENU
 )
@@ -492,11 +524,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_PATH%configure
 if errorlevel 1 goto :CONFIGURATION_ERROR
 if not exist "%BOOT_PATH%user-data" goto :CONFIGURATION_ERROR
 if not exist "%BOOT_PATH%network-config" goto :CONFIGURATION_ERROR
+if not exist "%BOOT_PATH%meta-data" goto :CONFIGURATION_ERROR
+if not exist "%BOOT_PATH%cmdline.txt" goto :CONFIGURATION_ERROR
+findstr /i /c:"ds=nocloud;s=file:///boot/firmware/" "%BOOT_PATH%cmdline.txt" >nul
+if errorlevel 1 goto :CONFIGURATION_ERROR
 goto :CONFIGURATION_READY
 
 :CONFIGURATION_ERROR
 
 echo %RED%[ERROR] Could not write all Cloud-Init files to the selected boot partition.%RESET%
+echo Required files: meta-data, user-data, network-config, cmdline.txt
+echo cmdline.txt must contain: ds=nocloud;s=file:///boot/firmware/
 pause
 goto :MAIN_MENU
 

@@ -59,16 +59,22 @@ $userData = @(
     '  - avahi-daemon'
 )
 
-if ($env:USE_PROXY -eq 'true') {
-    $proxy = $env:PROXY_URL
-    $userData += @(
-        'apt:'
-        "  proxy: $proxy"
-    )
-}
-
 $userData += @(
+    'bootcmd:'
+    '  - [ bash, -c, "DEBUG_DIR=/boot/firmware/cloud-init-debug; mkdir -p $DEBUG_DIR; date -Is > $DEBUG_DIR/bootcmd-start.txt; mountpoint /boot/firmware > $DEBUG_DIR/boot-mount.txt 2>&1; cp -f /var/log/cloud-init.log $DEBUG_DIR/cloud-init-bootcmd.log 2>&1 || true; sync" ]'
     'write_files:'
+    '  - path: /usr/local/sbin/ctrlx-cloud-init-debug.sh'
+    "    permissions: '0755'"
+    '    content: |'
+    '      #!/bin/bash'
+    '      set +e'
+    '      mkdir -p /boot/firmware/cloud-init-debug'
+    '      cp -f /var/log/cloud-init.log /boot/firmware/cloud-init-debug/cloud-init.log'
+    '      cp -f /var/log/cloud-init-output.log /boot/firmware/cloud-init-debug/cloud-init-output.log'
+    '      cloud-init status --long > /boot/firmware/cloud-init-debug/status.txt 2>&1'
+    '      cloud-init query ds > /boot/firmware/cloud-init-debug/datasource.txt 2>&1'
+    '      cp -f /var/log/syslog /boot/firmware/cloud-init-debug/syslog.log'
+
     '  - path: /etc/systemd/system/ctrlx-apt-update-upgrade.service'
     "    permissions: '0644'"
     '    content: |'
@@ -87,20 +93,23 @@ $userData += @(
     '      WantedBy=multi-user.target'
 )
 
-if ($env:USE_PROXY -eq 'true') {
+if ($env:PI_USE_PROXY -eq 'true') {
+    $piProxy = $env:PI_PROXY_URL
+    if ([string]::IsNullOrWhiteSpace($piProxy)) {
+        throw 'The Raspberry Pi proxy URL is missing.'
+    }
     $userData += @(
-        '  - path: /etc/profile.d/ctrlx-proxy.sh'
-        "    permissions: '0644'"
-        '    content: |'
-        "      export http_proxy=$proxy"
-        "      export https_proxy=$proxy"
-        "      export HTTP_PROXY=$proxy"
-        "      export HTTPS_PROXY=$proxy"
+        'apt:'
+        "  proxy: $piProxy"
+        '  conf:'
+        "    Acquire::http::Proxy: $piProxy"
+        "    Acquire::https::Proxy: $piProxy"
     )
 }
 
 $userData += @(
     'runcmd:'
+    '  - /usr/local/sbin/ctrlx-cloud-init-debug.sh'
     '  - systemctl enable --now ssh'
     '  - systemctl enable --now avahi-daemon'
     '  - systemctl daemon-reload'
@@ -112,11 +121,12 @@ $userData += @(
     "  - su - $username -c `"./clone-install-sdk.sh`""
     "  - su - $username -c `"/home/$username/ctrlx-automation-sdk/scripts/install-required-packages.sh`""
     "  - su - $username -c `"/home/$username/ctrlx-automation-sdk/scripts/install-snapcraft.sh`""
-    '  - rm -f /boot/firmware/user-data /boot/firmware/network-config /boot/firmware/meta-data'
+    '  - /usr/local/sbin/ctrlx-cloud-init-debug.sh'
 )
 
 $networkConfig = @(
     'version: 2'
+    'renderer: networkd'
     'ethernets:'
     '  wired:'
     '    match:'
@@ -143,6 +153,14 @@ $encoding = New-Object System.Text.UTF8Encoding($false)
 ), $encoding)
 [System.IO.File]::WriteAllLines((Join-Path $bootPath 'user-data'), $userData, $encoding)
 [System.IO.File]::WriteAllLines((Join-Path $bootPath 'network-config'), $networkConfig, $encoding)
+
+$cmdlinePath = Join-Path $bootPath 'cmdline.txt'
+if (Test-Path -LiteralPath $cmdlinePath) {
+    $cmdline = (Get-Content -LiteralPath $cmdlinePath -Raw).Trim()
+    $cmdline = [regex]::Replace($cmdline, '(^|\s)ds=nocloud(?:-net)?;[^\s]*', '$1')
+    $cmdline = "$cmdline ds=nocloud;s=file:///boot/firmware/"
+    [System.IO.File]::WriteAllText($cmdlinePath, "$cmdline`n", $encoding)
+}
 
 $writtenFiles = @('meta-data', 'user-data', 'network-config') | ForEach-Object {
     Join-Path $bootPath $_
