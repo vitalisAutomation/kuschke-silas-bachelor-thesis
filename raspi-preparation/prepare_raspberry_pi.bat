@@ -290,15 +290,6 @@ if errorlevel 1 (
 )
 
 echo.
-echo %YELLOW%Updating Raspberry Pi packages. Enter the Pi sudo password when prompted.%RESET%
-ssh.exe -t ctrlx-pi "sudo apt update && sudo env DEBIAN_FRONTEND=noninteractive apt upgrade -y"
-if errorlevel 1 (
-    echo %YELLOW%[WARNING] Raspberry Pi package update or upgrade failed.%RESET%
-    echo %YELLOW%SSH and VS Code will still be started. Check the APT 404 output above.%RESET%
-)
-if not errorlevel 1 echo %GREEN%Raspberry Pi packages are up to date.%RESET%
-
-echo.
 echo %YELLOW%Opening VS Code Remote-SSH for %SSH_USER%@%SSH_HOST%...%RESET%
 call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-pi"
 if errorlevel 1 (
