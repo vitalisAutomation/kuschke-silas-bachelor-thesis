@@ -180,6 +180,27 @@ $userData += @(
     ''
     '      [Install]'
     '      WantedBy=multi-user.target'
+
+    '  - path: /etc/systemd/system/serial-getty@ttyAMA10.service.d/autologin.conf'
+    "    permissions: '0644'"
+    '    content: |'
+    '      [Service]'
+    '      ExecStart='
+    ('      ExecStart=-/sbin/agetty --autologin ' + $username + ' --noclear %I $TERM')
+
+    '  - path: /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf'
+    "    permissions: '0644'"
+    '    content: |'
+    '      [Service]'
+    '      ExecStart='
+    ('      ExecStart=-/sbin/agetty --autologin ' + $username + ' --noclear %I $TERM')
+
+    '  - path: /etc/systemd/system/getty@tty1.service.d/autologin.conf'
+    "    permissions: '0644'"
+    '    content: |'
+    '      [Service]'
+    '      ExecStart='
+    ('      ExecStart=-/sbin/agetty --autologin ' + $username + ' --noclear %I $TERM')
 )
 
 if ($env:PI_USE_PROXY -eq 'true') {
@@ -200,6 +221,9 @@ $userData += @(
     'runcmd:'
     '  - /usr/local/sbin/ctrlx-cloud-init-debug.sh'
     '  - systemctl daemon-reload'
+    '  - systemctl enable --now getty@tty1.service'
+    '  - if [ -e /dev/ttyAMA10 ]; then systemctl enable --now serial-getty@ttyAMA10.service; fi'
+    '  - if [ -e /dev/ttyS0 ]; then systemctl enable --now serial-getty@ttyS0.service; fi'
     '  - systemctl enable ctrlx-apt-update-upgrade.service'
     '  - mkdir -p /mnt/ctrlx-logs'
     '  - mountpoint -q /mnt/ctrlx-logs || mount -L CTRLXLOG -t vfat /mnt/ctrlx-logs'
