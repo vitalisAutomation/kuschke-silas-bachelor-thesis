@@ -278,7 +278,8 @@ if (Test-Path -LiteralPath $cmdlinePath) {
     $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.show_status=true', '$1')
     $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.log_level=debug', '$1')
     $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.log_target=console', '$1')
-    $cmdline = "$cmdline ds=nocloud;s=file:///boot/firmware/"
+    $cmdline = [regex]::Replace($cmdline, '(^|\s)cfg80211\.ieee80211_regdom=[^\s]*', '$1')
+    $cmdline = "$cmdline cfg80211.ieee80211_regdom=$wifiCountry ds=nocloud;s=file:///boot/firmware/"
     [System.IO.File]::WriteAllText($cmdlinePath, "$cmdline`n", $encoding)
 }
 
