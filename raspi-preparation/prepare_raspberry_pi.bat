@@ -326,18 +326,37 @@ if errorlevel 1 (
 
 echo.
 echo %YELLOW%Testing the SSH connection to %SSH_USER%@%SSH_HOST%...%RESET%
-ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "true"
+set "SSH_TEST_LOG=%TEMP%\ctrlx-ssh-test.log"
+ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "true" > "%SSH_TEST_LOG%" 2>&1
 if errorlevel 1 (
+    type "%SSH_TEST_LOG%"
+    findstr /i /c:"REMOTE HOST IDENTIFICATION HAS CHANGED" /c:"Host key verification failed." "%SSH_TEST_LOG%" >nul
+    if not errorlevel 1 (
+        echo.
+        echo %YELLOW%The Pi was probably reflashed and has a new SSH host key.%RESET%
+        echo Only continue if you recognize and expect this host-key change.
+        choice /c YN /n /m "%YELLOW%Remove the old known_hosts entry for %SSH_HOST% and retry? (Y/N): %RESET%"
+        if errorlevel 2 goto :SSH_CONNECTION_ERROR
+        ssh-keygen.exe -R "%SSH_HOST%"
+        if errorlevel 1 goto :SSH_CONNECTION_ERROR
+        ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "true" > "%SSH_TEST_LOG%" 2>&1
+        if not errorlevel 1 goto :SSH_CONNECTION_VERIFIED
+        type "%SSH_TEST_LOG%"
+    )
+:SSH_CONNECTION_ERROR
     echo %RED%[ERROR] The Raspberry Pi is not reachable via SSH.%RESET%
     echo Check that the Pi has the configured IP address and that sshd is running.
+    del /q "%SSH_TEST_LOG%" >nul 2>&1
     pause
     goto :START_MENU
 )
+:SSH_CONNECTION_VERIFIED
+del /q "%SSH_TEST_LOG%" >nul 2>&1
 echo %GREEN%SSH connection verified.%RESET%
 
 echo.
 echo %YELLOW%Opening VS Code Remote-SSH for %SSH_USER%@%SSH_HOST%...%RESET%
-call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-pi"
+call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-pi" "/home/%SSH_USER%"
 if errorlevel 1 (
     echo %RED%[ERROR] VS Code could not start the Remote-SSH connection.%RESET%
     pause
@@ -822,7 +841,7 @@ echo %BLUE%[Pi Extensions]%RESET% Waiting for the VS Code Server to initialize..
 set /a PI_EXTENSION_WAIT_COUNT=0
 :WAIT_FOR_PI_CODE_SERVER
 set /a PI_EXTENSION_WAIT_COUNT+=1
-ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "code_server=$(find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); test -n $code_server" >nul 2>&1
+ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit | grep -q ." >nul 2>&1
 if not errorlevel 1 goto :PI_CODE_SERVER_READY
 if %PI_EXTENSION_WAIT_COUNT% GEQ 60 (
     echo %YELLOW%[Pi Extensions] VS Code Server not ready. Extensions were not installed.%RESET%
