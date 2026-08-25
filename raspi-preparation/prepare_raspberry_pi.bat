@@ -40,6 +40,40 @@ set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
 
+:: Create the SSH key before any Pi or SSH configuration is generated
+if not exist "%SSH_DIR%" mkdir "%SSH_DIR%" >nul 2>&1
+if not exist "%SSH_KEY_FILE%" (
+    echo %YELLOW%[SSH] Generating an RSA key for Raspberry Pi access...%RESET%
+    ssh-keygen.exe -t rsa -b 4096 -N "" -f "%SSH_KEY_FILE%"
+    if errorlevel 1 (
+        echo %RED%[ERROR] Could not generate the Raspberry Pi SSH key.%RESET%
+        pause
+        exit /b 1
+    )
+) else (
+    echo %GREEN%[SSH] Existing Raspberry Pi key will be reused.%RESET%
+)
+
+if not exist "%SSH_KEY_FILE%.pub" (
+    ssh-keygen.exe -y -f "%SSH_KEY_FILE%" > "%SSH_KEY_FILE%.pub"
+    if errorlevel 1 (
+        echo %RED%[ERROR] Could not create the Raspberry Pi public SSH key.%RESET%
+        pause
+        exit /b 1
+    )
+)
+
+if not exist "%SSH_KEY_FILE%" (
+    echo %RED%[ERROR] The SSH private key is missing.%RESET%
+    pause
+    exit /b 1
+)
+if not exist "%SSH_KEY_FILE%.pub" (
+    echo %RED%[ERROR] The SSH key pair is incomplete or invalid.%RESET%
+    pause
+    exit /b 1
+)
+
 :: =======================================================================
 :: Check and install VS Code dependencies
 :: =======================================================================
@@ -343,30 +377,7 @@ echo Target: %CTRLX_TARGET%
 echo Ubuntu image: Ubuntu Server %UBUNTU_VERSION% LTS for Raspberry Pi (ARM64)
 echo.
 
-:: Generate the SSH key that will be installed on the Raspberry Pi
-if not exist "%SSH_DIR%" mkdir "%SSH_DIR%" >nul 2>&1
-if not exist "%SSH_KEY_FILE%" (
-    echo %YELLOW%[SSH] Generating an RSA key for Raspberry Pi access...%RESET%
-    ssh-keygen.exe -t rsa -b 4096 -N "" -f "%SSH_KEY_FILE%"
-) else (
-    echo %GREEN%[SSH] Existing Raspberry Pi key will be reused.%RESET%
-)
-
-:: Recreate a missing public key from the existing private key
-if exist "%SSH_KEY_FILE%" if not exist "%SSH_KEY_FILE%.pub" (
-    ssh-keygen.exe -y -f "%SSH_KEY_FILE%" > "%SSH_KEY_FILE%.pub"
-)
-
-if not exist "%SSH_KEY_FILE%" goto :SSH_KEY_ERROR
-if not exist "%SSH_KEY_FILE%.pub" goto :SSH_KEY_ERROR
-
 goto :CREDENTIALS_READY
-
-:SSH_KEY_ERROR
-
-echo %RED%[ERROR] The SSH key pair is incomplete or invalid.%RESET%
-pause
-goto :MAIN_MENU
 
 :CREDENTIALS_READY
 
