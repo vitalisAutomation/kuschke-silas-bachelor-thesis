@@ -9,6 +9,7 @@ $ssid = $env:WIFI_SSID
 $wifiPassword = $env:WIFI_PASSWORD
 $wifiCountry = $env:WIFI_COUNTRY
 $keyboardLayout = $env:KEYBOARD_LAYOUT
+$locale = $env:LOCALE
 $timezone = $env:TIMEZONE
 $publicKeyPath = $env:SSH_KEY_FILE + '.pub'
 
@@ -26,11 +27,19 @@ if ($keyboardLayout -notmatch '^[A-Za-z]{2,3}$') {
     throw 'The keyboard layout must contain two or three letters.'
 }
 
+if ($locale -notmatch '^[A-Za-z]{2,3}_[A-Za-z]{2}(?:\.UTF-8)?$') {
+    throw 'The locale must use a format such as de_DE.UTF-8.'
+}
+
 if ($timezone -notmatch '^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)+$') {
     throw 'The time zone must be a valid zone name such as Europe/Berlin.'
 }
 
 $keyboardLayout = $keyboardLayout.ToLowerInvariant()
+$locale = $locale -replace '\.utf-8$', '.UTF-8'
+if ($locale -notmatch '\.UTF-8$') {
+    $locale += '.UTF-8'
+}
 
 if (-not (Test-Path -LiteralPath $publicKeyPath)) {
     throw 'The SSH public key does not exist.'
@@ -68,6 +77,7 @@ $userData = @(
     'output:'
     '  all: "| tee -a /var/log/cloud-init-output.log /var/log/ctrlx-provisioning.log"'
     'package_update: false'
+    "locale: $locale"
     "timezone: $timezone"
     'keyboard:'
     "  layout: $keyboardLayout"

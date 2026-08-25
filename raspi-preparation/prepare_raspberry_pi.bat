@@ -34,6 +34,7 @@ set "PI_USE_PROXY=false"
 set "PI_PROXY_URL="
 set "WIFI_COUNTRY=DE"
 set "KEYBOARD_LAYOUT=de"
+set "LOCALE=de_DE.UTF-8"
 set "TIMEZONE=Europe/Berlin"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
@@ -412,6 +413,17 @@ set "KEYBOARD_LAYOUT="
 for /f "delims=" %%K in ('powershell.exe -NoProfile -Command "$k=$env:KEYBOARD_LAYOUT_INPUT.Trim().ToLowerInvariant(); if ($k -match '^[a-z]{2,3}$') { $k }"') do set "KEYBOARD_LAYOUT=%%K"
 if not defined KEYBOARD_LAYOUT (
     echo %RED%Please enter a valid keyboard layout, for example DE or US.%RESET%
+    pause
+    goto :MAIN_MENU
+)
+
+set "LOCALE_INPUT="
+set /p LOCALE_INPUT="%YELLOW%System locale (default de_DE.UTF-8): %RESET%"
+if not defined LOCALE_INPUT set "LOCALE_INPUT=de_DE.UTF-8"
+set "LOCALE="
+for /f "delims=" %%L in ('powershell.exe -NoProfile -Command "$l=$env:LOCALE_INPUT.Trim(); if ($l -match '^[A-Za-z]{2,3}_[A-Za-z]{2}(?:\.UTF-8)?$') { if ($l -notmatch '\.UTF-8$') { $l += '.UTF-8' }; $l }"') do set "LOCALE=%%L"
+if not defined LOCALE (
+    echo %RED%Please enter a valid locale, for example de_DE.UTF-8 or en_US.UTF-8.%RESET%
     pause
     goto :MAIN_MENU
 )
