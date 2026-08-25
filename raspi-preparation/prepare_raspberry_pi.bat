@@ -6,7 +6,7 @@
 
 chcp 65001 >nul
 
-:: Generate the ESC character for reliable ANSI color output
+:: Generate the escape character for reliable ANSI color output
 
 for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "ESC=%%b"
 
@@ -40,7 +40,7 @@ set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
 
-:: Create the SSH key before any Pi or SSH configuration is generated
+:: Create the SSH key before generating any Pi or SSH configuration
 if not exist "%SSH_DIR%" mkdir "%SSH_DIR%" >nul 2>&1
 if not exist "%SSH_KEY_FILE%" (
     echo %YELLOW%[SSH] Generating an RSA key for Raspberry Pi access...%RESET%
@@ -75,7 +75,7 @@ if not exist "%SSH_KEY_FILE%.pub" (
 )
 
 :: =======================================================================
-:: Check and install VS Code dependencies
+:: Check and install the required VS Code dependencies
 :: =======================================================================
 
 if "%~1"=="-install-dependencies" goto :INSTALL_DEPENDENCIES
@@ -193,7 +193,7 @@ timeout /t 2 /nobreak >nul
 goto :START_MENU
 
 :: =======================================================================
-:: Main mode selection
+:: Main menu and workflow selection
 :: =======================================================================
 
 :START_MENU
@@ -218,7 +218,7 @@ if "%MODE_CHOICE%"=="3" exit
 goto :START_MENU
 
 :: =======================================================================
-:: Flash mode and Ubuntu version selection
+:: SD card flashing and Ubuntu version selection
 :: =======================================================================
 
 :MAIN_MENU
@@ -276,7 +276,7 @@ if "%OS_CHOICE%"=="3" goto :START_MENU
 goto :MAIN_MENU
 
 :: =======================================================================
-:: Connect to an existing Raspberry Pi via VS Code Remote-SSH
+:: Connect to an existing Raspberry Pi through VS Code Remote-SSH
 :: =======================================================================
 
 :CONNECT_SSH
@@ -378,7 +378,7 @@ pause
 goto :START_MENU
 
 :: =======================================================================
-:: Check the proxy configuration before downloading files
+:: Check the proxy configuration before downloading the image
 :: =======================================================================
 
 :NET_PROXY_CHECK
@@ -391,7 +391,7 @@ if not defined PROXY_READY (
 goto :DOWNLOAD_FILES
 
 :: =======================================================================
-:: Download and prepare the Ubuntu image
+:: Download and prepare the Ubuntu image for flashing
 :: =======================================================================
 
 :DOWNLOAD_FILES
@@ -410,7 +410,7 @@ goto :CREDENTIALS_READY
 
 :CREDENTIALS_READY
 
-:: Collect the Wi-Fi credentials for the first boot
+:: Collect the Wi-Fi credentials required during first boot
 if not defined WIFI_SSID (
     echo.
     echo %BLUE%[Wi-Fi] Enter the wireless network for the Raspberry Pi.%RESET%
@@ -530,7 +530,7 @@ if errorlevel 1 (
     goto :MAIN_MENU
 )
 
-:: Verify the archive and extract the uncompressed image for Raspberry Pi Imager
+:: Verify the archive and extract the image for Raspberry Pi Imager
 if not exist "C:\Program Files\7-Zip\7z.exe" if not exist "%ProgramFiles%\7-Zip\7z.exe" (
     echo %RED%[ERROR] 7-Zip is required to prepare the image for Raspberry Pi Imager.%RESET%
     echo Please install 7-Zip and run this script again.
@@ -573,7 +573,7 @@ if errorlevel 1 goto :RPI_IMAGER_MISSING
 
 echo %GREEN%[Raspberry Pi Imager] Local executable: %IMAGER_EXE%%RESET%
 
-:: Raspberry Pi Imager CLI expects a physical device path, not a drive letter.
+:: Raspberry Pi Imager CLI expects a physical device path rather than a drive letter.
 echo.
 echo Enter the drive letter currently assigned to the SD card, for example E:.
 set "TARGET_DRIVE="
@@ -665,7 +665,7 @@ if not exist "%BOOT_PATH%" (
 echo.
 echo %YELLOW%Writing Cloud-Init configuration to %BOOT_PATH%...%RESET%
 
-:: PowerShell writes UTF-8 YAML and escapes arbitrary Wi-Fi credentials safely
+:: PowerShell writes UTF-8 YAML and safely escapes Wi-Fi credentials
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_PATH%configure_cloud_init.ps1"
 if errorlevel 1 goto :CONFIGURATION_ERROR
 if not exist "%BOOT_PATH%user-data" goto :CONFIGURATION_ERROR

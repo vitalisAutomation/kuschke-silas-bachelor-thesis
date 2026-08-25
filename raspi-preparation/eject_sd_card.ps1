@@ -6,6 +6,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Resolve the selected volume and refuse to eject a Windows system disk.
 $drive = $DriveLetter.ToUpperInvariant()
 $partition = Get-Partition -DriveLetter $drive
 $disk = Get-Disk -Number $partition.DiskNumber
@@ -25,6 +27,7 @@ if (-not $deviceId) {
     $deviceId = $diskDrive.PNPDeviceID
 }
 
+# Add the minimal Configuration Manager interop required for safe device eject.
 if (-not ('WindowsDeviceEjector' -as [type])) {
     Add-Type @"
 using System;
@@ -57,6 +60,7 @@ public static class WindowsDeviceEjector
 "@
 }
 
+# Re-enable automatic volume mounting before requesting device removal.
 & "$env:SystemRoot\System32\mountvol.exe" /e
 if ($LASTEXITCODE -ne 0) {
     throw 'Could not enable automatic volume mounting.'

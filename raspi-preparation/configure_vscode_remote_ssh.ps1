@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
+# Store the Remote-SSH setting in the current user's VS Code configuration.
 $settingsDirectory = Join-Path $env:APPDATA 'Code\User'
 $settingsPath = Join-Path $settingsDirectory 'settings.json'
 New-Item -ItemType Directory -Path $settingsDirectory -Force | Out-Null

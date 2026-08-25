@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
+# Read provisioning values supplied by the batch workflow.
 $bootPath = $env:BOOT_PATH
 $username = $env:PI_USERNAME
 $password = $env:PI_PASSWORD
@@ -51,6 +52,7 @@ function ConvertTo-YamlSingleQuoted {
     return "'" + $Value.Replace("'", "''") + "'"
 }
 
+# Quote user-provided values before embedding them in Cloud-Init YAML.
 $publicKey = (Get-Content -LiteralPath $publicKeyPath -Raw).Trim()
 $ssidYaml = ConvertTo-YamlSingleQuoted $ssid
 $wifiPasswordYaml = ConvertTo-YamlSingleQuoted $wifiPassword
@@ -286,6 +288,7 @@ $networkConfig = @(
     "        password: ${wifiPasswordYaml}"
 )
 
+# Write NoCloud seed files as UTF-8 without a byte-order mark.
 $encoding = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines((Join-Path $bootPath 'meta-data'), @(
     'instance-id: ctrlx-raspberry-pi'
@@ -296,6 +299,7 @@ $encoding = New-Object System.Text.UTF8Encoding($false)
 
 $cmdlinePath = Join-Path $bootPath 'cmdline.txt'
 if (Test-Path -LiteralPath $cmdlinePath) {
+    # Replace stale provisioning parameters before adding the current settings.
     $cmdline = (Get-Content -LiteralPath $cmdlinePath -Raw).Trim()
     $cmdline = [regex]::Replace($cmdline, '(^|\s)ds=nocloud(?:-net)?;[^\s]*', '$1')
     $cmdline = [regex]::Replace($cmdline, '(^|\s)systemd\.show_status=true', '$1')

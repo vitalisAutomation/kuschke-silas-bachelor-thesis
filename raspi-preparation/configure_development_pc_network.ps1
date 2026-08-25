@@ -11,6 +11,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Reserve the ctrlX Core address and avoid reusing the Raspberry Pi address.
 if ($LastOctet -eq 1) {
     throw 'The development computer IP cannot be 192.168.1.1 because this address is reserved.'
 }
@@ -20,6 +21,7 @@ if ($LastOctet -eq $piLastOctet) {
     throw "The development computer IP cannot use the Raspberry Pi address $PiIpAddress."
 }
 
+# Select the first physical Ethernet adapter, preferring an adapter that is up.
 $adapter = Get-NetAdapter -Physical | Where-Object {
     $_.PhysicalMediaType -eq '802.3' -and
     $_.InterfaceDescription -notmatch 'Virtual|VPN|Cisco|AnyConnect|Wireless|Wi-Fi|Bluetooth'
