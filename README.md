@@ -1,5 +1,5 @@
 # bachelor-thesis-silas-kuschke
-Implementation of x86 and arm64 build snaps for industrial ctrlX controllers from Bosch Rexroth.
+Implementation of x86/AMD64 and ARM64 build snaps for industrial ctrlX controllers from Bosch Rexroth.
 
 The currently working code is located on the `main` branch. The `sdk-vm-automation` directory contains the `install_sdk.bat` batch file. It creates and starts Ubuntu-based ctrlX SDK build environments in QEMU on a Windows development computer. The virtual machines are provisioned automatically with Cloud-Init and include the software required for ctrlX app development and snap builds.
 
@@ -19,7 +19,7 @@ After the prerequisites are available, the main menu provides two workflows:
 
     The generated Cloud-Init configuration creates the build user, installs the required packages, configures SSH and runs the SDK setup inside the VM. It also creates a NoCloud ISO used during the first boot. After validation, the VM can be started directly from the setup script. Multiple VM versions can be kept in the same project directory and selected from the main menu, so separate host installations are not required.
 
-Once the VM is running, VS Code can connect to it through Remote-SSH. The script waits for the VM and its VS Code Server to become available, then installs the configured extensions in the remote environment. This provides a ready-to-use ctrlX SDK build environment without installing the different SDK versions directly on the Windows host.
+Once the VM is running, VS Code can connect to it through Remote-SSH. The script waits for the VM and its VS Code Server to become available, then installs the configured extensions in the remote environment. This provides a ready-to-use ctrlX SDK build environment without installing the different ctrlX Works versions directly on the Windows host.
 
 ## Proxy Configuration
 
@@ -33,7 +33,7 @@ Status as of 2026-08-20: The Bosch proxy and no-proxy options have been tested s
 
 Before running the script, the RB Local Proxy Manager must be enabled (only for Bosch employees). During the first execution of the batch script, QEMU must also be installed in the newly created project directory.
 
-After the settings have been entered in the terminal and a virtual machine has been selected, VS Code opens and connects to the virtual machine via SSH. The required VS Code extensions are also installed on the virtual machine, allowing snap development to start immediately.
+After the settings have been entered in the terminal and a virtual machine has been selected, VS Code opens and connects to the virtual machine via SSH automatically. The required VS Code extensions are also installed on the virtual machine, allowing snap development to start immediately. So you start `install_sdk.bat` and are guided to VS-Code on the chosen virtual machine automatically.
 
 ## Cross-Compilation for the ARM-Based ctrlX CORE X3
 
@@ -51,7 +51,7 @@ After the settings have been entered in the terminal and a virtual machine has b
         - Advantage: Shorter build times because no emulation is required.
         - Disadvantage: For security reasons, the CORE should no longer be used in production.
 
-    c. Use the `raspi-preparation/prepare_raspberry_pi.bat` workflow described above to flash and provision a Raspberry Pi automatically.
+    c. Use the `raspi-preparation/prepare_raspberry_pi.bat` workflow described beneath to flash and provision a Raspberry Pi automatically.
         - Advantage: Shorter build times because no emulation is required.
         - Disadvantage: Additional hardware is required.
         - This is the recommended way to build snaps using cross-compilation.
@@ -81,7 +81,7 @@ Start the script by double-clicking `raspi-preparation/prepare_raspberry_pi.bat`
 
     After flashing, enter the drive letter of the Ubuntu boot partition. The script writes the Cloud-Init files `meta-data`, `user-data` and `network-config`, configures the NoCloud data source and safely ejects the SD card. On first boot, Ubuntu automatically creates the `sdk-pi` user, enables SSH, configures Ethernet and Wi-Fi, installs the ctrlX SDK and Snapcraft, and prepares USB logging through the `CTRLXLOG` volume mounted at `/mnt/ctrlx-logs`.
 
-Insert the prepared SD card into the Raspberry Pi and power it on. After the first boot has completed, use option 1 or connect with the configured SSH alias `ctrlx-pi`. The Pi can then be used to build ARM64 snaps natively without emulation.
+Insert the prepared SD card into the Raspberry Pi and power it on. After the first boot has completed, use option 1 or connect with the configured SSH alias `ctrlx-pi`. The first boot can take about 15 minutes. The Pi can then be used to build ARM64 snaps natively without emulation.
 
 
 ## Additional Utility Scripts
