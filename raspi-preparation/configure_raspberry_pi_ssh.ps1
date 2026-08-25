@@ -1,5 +1,15 @@
 $ErrorActionPreference = 'Stop'
 
+foreach ($variable in @('SSH_HOST', 'SSH_USER', 'SSH_KEY_FILE')) {
+    if ([string]::IsNullOrWhiteSpace((Get-Item -Path "Env:$variable" -ErrorAction SilentlyContinue).Value)) {
+        throw "The environment variable $variable is missing."
+    }
+}
+
+if (-not (Test-Path -LiteralPath $env:SSH_KEY_FILE -PathType Leaf)) {
+    throw "The SSH private key does not exist: $env:SSH_KEY_FILE"
+}
+
 $configPath = Join-Path $env:USERPROFILE '.ssh\config'
 $configDirectory = Split-Path -Parent $configPath
 New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null

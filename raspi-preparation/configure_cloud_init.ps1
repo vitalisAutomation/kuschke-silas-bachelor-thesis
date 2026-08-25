@@ -252,7 +252,7 @@ $userData += @(
     '  - systemctl enable --now getty@tty1.service'
     '  - if [ -e /dev/ttyAMA10 ]; then systemctl enable --now serial-getty@ttyAMA10.service; fi'
     '  - if [ -e /dev/ttyS0 ]; then systemctl enable --now serial-getty@ttyS0.service; fi'
-    '  - systemctl enable ctrlx-apt-update-upgrade.service'
+    '  - systemctl enable --now ctrlx-apt-update-upgrade.service'
     '  - mkdir -p /mnt/ctrlx-logs'
     '  - mountpoint -q /mnt/ctrlx-logs || mount -L CTRLXLOG -t vfat /mnt/ctrlx-logs'
     '  - mountpoint -q /mnt/ctrlx-logs || echo "USB mount failed" >> /boot/firmware/cloud-init-debug/usb-mount.txt'

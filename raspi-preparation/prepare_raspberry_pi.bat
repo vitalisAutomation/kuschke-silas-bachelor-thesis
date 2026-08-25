@@ -290,6 +290,17 @@ if errorlevel 1 (
 )
 
 echo.
+echo %YELLOW%Testing the SSH connection to %SSH_USER%@%SSH_HOST%...%RESET%
+ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "true"
+if errorlevel 1 (
+    echo %RED%[ERROR] The Raspberry Pi is not reachable via SSH.%RESET%
+    echo Check that the Pi has the configured IP address and that sshd is running.
+    pause
+    goto :START_MENU
+)
+echo %GREEN%SSH connection verified.%RESET%
+
+echo.
 echo %YELLOW%Opening VS Code Remote-SSH for %SSH_USER%@%SSH_HOST%...%RESET%
 call "%CODE_EXE%" --new-window --remote "ssh-remote+ctrlx-pi"
 if errorlevel 1 (
@@ -788,7 +799,7 @@ echo %BLUE%[Pi Extensions]%RESET% Waiting for the VS Code Server to initialize..
 set /a PI_EXTENSION_WAIT_COUNT=0
 :WAIT_FOR_PI_CODE_SERVER
 set /a PI_EXTENSION_WAIT_COUNT+=1
-ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ctrlx-pi "test -n $(find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit)" >nul 2>&1
+ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "code_server=$(find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); test -n $code_server" >nul 2>&1
 if not errorlevel 1 goto :PI_CODE_SERVER_READY
 if %PI_EXTENSION_WAIT_COUNT% GEQ 60 (
     echo %YELLOW%[Pi Extensions] VS Code Server not ready. Extensions were not installed.%RESET%
@@ -799,7 +810,7 @@ goto :WAIT_FOR_PI_CODE_SERVER
 
 :PI_CODE_SERVER_READY
 echo %BLUE%[Pi Extensions]%RESET% Installing extensions in the Raspberry Pi...
-ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "set -e; code_server=$(find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --force; done; echo Installed Pi extensions:; $code_server --list-extensions"
+ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-pi "set -e; code_server=$(find /home/%SSH_USER%/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); test -n $code_server; for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --force; done; echo Installed Pi extensions:; $code_server --list-extensions"
 if errorlevel 1 (
     echo %YELLOW%[Pi Extensions] Installation failed. Check the Remote-SSH output for details.%RESET%
     exit /b 0
