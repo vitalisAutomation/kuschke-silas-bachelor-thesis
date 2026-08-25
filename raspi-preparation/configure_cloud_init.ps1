@@ -92,7 +92,7 @@ $userData += @(
     "    permissions: '0755'"
     '    content: |'
     '      #!/bin/bash'
-    '      set +e'
+    '      set -e'
     '      mkdir -p /boot/firmware/cloud-init-debug'
     '      cp -f /var/log/cloud-init.log /boot/firmware/cloud-init-debug/cloud-init.log'
     '      cp -f /var/log/cloud-init-output.log /boot/firmware/cloud-init-debug/cloud-init-output.log'
@@ -193,31 +193,17 @@ $userData += @(
     '        done'
     '      fi'
     '      echo "==== apt update ===="'
-    '      apt-get update'
+    '      apt-get -o DPkg::Lock::Timeout=600 update'
     '      echo "apt-get update exit code: $?"'
+    '      echo "==== apt upgrade ===="'
+    '      DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -y upgrade'
+    '      echo "apt-get upgrade exit code: $?"'
     '      echo "==== package installation ===="'
-    '      DEBIAN_FRONTEND=noninteractive apt-get install -y iw git unzip curl wget make squashfs-tools snapd openssh-server avahi-daemon'
+    '      DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y iw git unzip curl wget make squashfs-tools snapd openssh-server avahi-daemon'
     '      echo "apt-get install exit code: $?"'
     '      systemctl enable --now ssh'
     '      systemctl enable --now avahi-daemon'
     '      echo "==== ctrlX provisioning finished $(date -Is) ===="'
-
-    '  - path: /etc/systemd/system/ctrlx-apt-update-upgrade.service'
-    "    permissions: '0644'"
-    '    content: |'
-    '      [Unit]'
-    '      Description=Update and upgrade Ubuntu packages at boot'
-    '      Wants=network-online.target'
-    '      After=network-online.target apt-daily.service apt-daily-upgrade.service'
-    ''
-    '      [Service]'
-    '      Type=oneshot'
-    '      ExecStart=/usr/bin/apt-get update'
-    '      ExecStart=/usr/bin/apt-get -y upgrade'
-    '      Environment=DEBIAN_FRONTEND=noninteractive'
-    ''
-    '      [Install]'
-    '      WantedBy=multi-user.target'
 
     '  - path: /etc/systemd/system/serial-getty@ttyAMA10.service.d/autologin.conf'
     "    permissions: '0644'"
@@ -262,7 +248,6 @@ $userData += @(
     '  - systemctl enable --now getty@tty1.service'
     '  - if [ -e /dev/ttyAMA10 ]; then systemctl enable --now serial-getty@ttyAMA10.service; fi'
     '  - if [ -e /dev/ttyS0 ]; then systemctl enable --now serial-getty@ttyS0.service; fi'
-    '  - systemctl enable --now ctrlx-apt-update-upgrade.service'
     '  - mkdir -p /mnt/ctrlx-logs'
     '  - mountpoint -q /mnt/ctrlx-logs || mount -L CTRLXLOG -t vfat /mnt/ctrlx-logs'
     '  - mountpoint -q /mnt/ctrlx-logs || echo "USB mount failed" >> /boot/firmware/cloud-init-debug/usb-mount.txt'
@@ -295,7 +280,6 @@ $networkConfig = @(
     '  wlan0:'
     '    dhcp4: true'
     '    optional: true'
-    "    regulatory-domain: $wifiCountry"
     '    access-points:'
     "      ${ssidYaml}:"
     "        password: ${wifiPasswordYaml}"

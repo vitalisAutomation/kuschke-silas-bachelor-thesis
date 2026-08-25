@@ -281,6 +281,7 @@ echo %BLUE%=====================================================================
 echo.
 echo Enter the Raspberry Pi IP address or hostname.
 echo Use %PI_MDNS_HOSTNAME% only when mDNS is available on this computer.
+echo Press Enter to accept each displayed default value.
 echo.
 
 set "SSH_HOST="
@@ -425,6 +426,7 @@ if not defined WIFI_PASSWORD goto :MAIN_MENU
 
 echo.
 echo %BLUE%[Wi-Fi] Select the regulatory country for the Raspberry Pi.%RESET%
+echo Press Enter to keep the default country code DE.
 set "WIFI_COUNTRY_INPUT="
 set /p WIFI_COUNTRY_INPUT="%YELLOW%Country code (default DE): %RESET%"
 if not defined WIFI_COUNTRY_INPUT set "WIFI_COUNTRY_INPUT=DE"
@@ -436,6 +438,7 @@ if not defined WIFI_COUNTRY (
     goto :MAIN_MENU
 )
 
+echo Press Enter to keep the default keyboard layout DE.
 set "KEYBOARD_LAYOUT_INPUT="
 set /p KEYBOARD_LAYOUT_INPUT="%YELLOW%Keyboard layout (default DE): %RESET%"
 if not defined KEYBOARD_LAYOUT_INPUT set "KEYBOARD_LAYOUT_INPUT=DE"
@@ -447,6 +450,7 @@ if not defined KEYBOARD_LAYOUT (
     goto :MAIN_MENU
 )
 
+echo Press Enter to keep the default system locale de_DE.UTF-8.
 set "LOCALE_INPUT="
 set /p LOCALE_INPUT="%YELLOW%System locale (default de_DE.UTF-8): %RESET%"
 if not defined LOCALE_INPUT set "LOCALE_INPUT=de_DE.UTF-8"
@@ -458,6 +462,7 @@ if not defined LOCALE (
     goto :MAIN_MENU
 )
 
+echo Press Enter to keep the default time zone Europe/Berlin.
 set "TIMEZONE_INPUT="
 set /p TIMEZONE_INPUT="%YELLOW%Time zone (default Europe/Berlin): %RESET%"
 if not defined TIMEZONE_INPUT set "TIMEZONE_INPUT=Europe/Berlin"
