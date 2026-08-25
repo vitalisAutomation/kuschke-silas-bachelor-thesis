@@ -7,6 +7,10 @@
     "nodeSpacing": 28,
     "rankSpacing": 58,
     "padding": 12,
+    "subGraphTitleMargin": {
+      "top": 12,
+      "bottom": 18
+    },
     "curve": "basis"
   }
 }
