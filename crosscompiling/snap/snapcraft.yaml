@@ -12,8 +12,10 @@ grade: stable
 contact: https://github.com/boschrexroth/ctrlx-automation-sdk
 license: MIT
 
-# The aarch64 wheels are downloaded beforehand by build-snap-arm64.sh, so the
-# snap is assembled only from precompiled wheels.
+# Wheel mode: build-snap.sh mode 1 downloads ARM64 wheels on an AMD64 host.
+# The wheelhouse is intentionally not committed to the repository.
+# Native mode: build-snap.sh modes 2 and 3 install dependencies for the native
+# build architecture inside Snapcraft's build environment.
 platforms:
   amd64:
     build-on: [amd64]
@@ -66,15 +68,17 @@ parts:
     override-build: |
       craftctl default
 
-      if [ ! -d wheelhouse ]; then
-        echo "wheelhouse/ is missing - run build-snap-arm64.sh instead of snapcraft directly." >&2
-        exit 1
-      fi
+      BUILD_MODE="${SNAP_BUILD_MODE:-$(cat "$CRAFT_PART_SRC/.snap-build-mode" 2>/dev/null || echo native)}"
+      rm -f "$CRAFT_PART_SRC/.snap-build-mode"
 
-      # Install only the prebuilt aarch64 wheels; source builds and network
-      # dependency resolution are deliberately disabled here.
-      # --break-system-packages: Ubuntu 24.04 marks the build env as externally managed.
-      if [ "$CRAFT_ARCH_BUILD_FOR" = "arm64" ]; then
+      if [ "$BUILD_MODE" = "wheels" ]; then
+        if [ ! -d wheelhouse ]; then
+          echo "Wheel mode was selected, but wheelhouse/ is missing. Run build-snap.sh and choose mode 1." >&2
+          exit 1
+        fi
+
+        # Install only prebuilt ARM64 wheels; no source build or network lookup.
+        # --break-system-packages is needed on Ubuntu 24.04 build environments.
         pip3 install \
           --break-system-packages \
           --no-index \
@@ -90,11 +94,9 @@ parts:
           --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
           -r requirements.txt
       else
+        # Native mode resolves dependencies for the local build architecture.
         pip3 install \
           --break-system-packages \
-          --no-index \
-          --find-links wheelhouse \
-          --only-binary :all: \
           --target "$CRAFT_PART_INSTALL/lib/python3.12/site-packages" \
           -r requirements.txt
       fi
