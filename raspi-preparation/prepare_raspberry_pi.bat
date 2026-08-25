@@ -146,6 +146,12 @@ if not errorlevel 1 (
     )
     echo %YELLOW%[VS Code] Installing Visual Studio Code for the current user...%RESET%
     start /wait "" "%PROJECT_PATH%vscode_setup.exe" /VERYSILENT /NORESTART
+    if errorlevel 1 (
+        echo %RED%[ERROR] VS Code installer failed.%RESET%
+        del "%PROJECT_PATH%vscode_setup.exe" >nul 2>&1
+        pause
+        exit /b 1
+    )
     del "%PROJECT_PATH%vscode_setup.exe" >nul 2>&1
     call :CHECK_VSCODE_PATH
     if not defined CODE_EXE (
@@ -203,6 +209,7 @@ echo 2) Download Ubuntu and flash an SD card
 echo 3) Exit
 echo.
 
+set "MODE_CHOICE="
 set /p MODE_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
 
 if "%MODE_CHOICE%"=="1" goto :CONNECT_SSH
@@ -241,6 +248,7 @@ echo 2) ctrlX OS 4.x             - Ubuntu Server 24.04 LTS (ARM64)
 echo 3) Back
 echo(
 
+set "OS_CHOICE="
 set /p OS_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
 
 if "%OS_CHOICE%"=="1" (
@@ -294,6 +302,7 @@ if not defined SSH_HOST (
 )
 
 set "SSH_USER=%PI_USERNAME%"
+set "SSH_USER_INPUT="
 set /p SSH_USER_INPUT="%YELLOW%SSH username (default %PI_USERNAME%): %RESET%"
 if defined SSH_USER_INPUT set "SSH_USER=%SSH_USER_INPUT%"
 
@@ -477,6 +486,8 @@ if not defined TIMEZONE (
 echo.
 echo %BLUE%[Raspberry Pi] Configure an HTTP/HTTPS proxy for the Pi?%RESET%
 echo The download proxy configured earlier is only used by this Windows PC.
+set "PI_USE_PROXY=false"
+set "PI_PROXY_URL="
 choice /c YN /n /m "%YELLOW%Use a proxy on the Raspberry Pi? (Y/N): %RESET%"
 if errorlevel 2 goto :PI_PROXY_READY
 if errorlevel 1 goto :PI_PROXY_SET
@@ -565,8 +576,16 @@ echo %GREEN%[Raspberry Pi Imager] Local executable: %IMAGER_EXE%%RESET%
 :: Raspberry Pi Imager CLI expects a physical device path, not a drive letter.
 echo.
 echo Enter the drive letter currently assigned to the SD card, for example E:.
+set "TARGET_DRIVE="
 set /p TARGET_DRIVE="%YELLOW%SD card drive letter: %RESET%"
 set "TARGET_DRIVE=%TARGET_DRIVE::=%"
+set "TARGET_DRIVE=%TARGET_DRIVE: =%"
+echo(%TARGET_DRIVE%| findstr /r /x /i "[A-Z]" >nul
+if errorlevel 1 (
+    echo %RED%[ERROR] Enter exactly one SD card drive letter, for example E:.%RESET%
+    pause
+    goto :MAIN_MENU
+)
 set "TARGET_DISK="
 set "TARGET_IS_BOOT="
 set "TARGET_IS_SYSTEM="
@@ -583,6 +602,7 @@ if not defined TARGET_DEVICE (
 echo %YELLOW%[Raspberry Pi Imager] Target device: %TARGET_DEVICE%%RESET%
 echo %RED%[WARNING] The selected device will be erased completely.%RESET%
 echo.
+set "FLASH_CONFIRM="
 set /p FLASH_CONFIRM="Continue with flashing? (Y/N): "
 if /i not "%FLASH_CONFIRM%"=="Y" goto :MAIN_MENU
 echo.
@@ -622,7 +642,17 @@ echo Enter only the drive letter, for example E:
 echo Do not enter the Linux root partition.
 echo(
 
+set "BOOT_DRIVE="
 set /p BOOT_DRIVE="%YELLOW%Boot partition drive letter: %RESET%"
+set "BOOT_DRIVE=%BOOT_DRIVE::=%"
+set "BOOT_DRIVE=%BOOT_DRIVE: =%"
+echo(%BOOT_DRIVE%| findstr /r /x /i "[A-Z]" >nul
+if errorlevel 1 (
+    echo %RED%[ERROR] Enter exactly one boot partition drive letter, for example E:.%RESET%
+    pause
+    goto :CONFIGURE_FIRST_BOOT
+)
+set "BOOT_DRIVE=%BOOT_DRIVE%:"
 if not "%BOOT_DRIVE:~-1%"==":" set "BOOT_DRIVE=%BOOT_DRIVE%:"
 set "BOOT_PATH=%BOOT_DRIVE%\"
 
@@ -706,9 +736,15 @@ echo %BLUE%[Network] Configure the development computer Ethernet address.%RESET%
 echo The Raspberry Pi will use %PI_IP_ADDRESS%/24.
 echo The development computer must use 192.168.1.x/24.
 echo.
+set "PC_IP_LAST_OCTET="
 set /p PC_IP_LAST_OCTET="%YELLOW%Last IP octet for this computer (default 10): %RESET%"
 if not defined PC_IP_LAST_OCTET set "PC_IP_LAST_OCTET=10"
 for /f "delims=0123456789" %%A in ("%PC_IP_LAST_OCTET%") do (
+    echo %RED%[ERROR] Please enter a number between 1 and 254.%RESET%
+    exit /b 1
+)
+ powershell.exe -NoProfile -Command "$n=0; if (-not [int]::TryParse($env:PC_IP_LAST_OCTET,[ref]$n) -or $n -lt 1 -or $n -gt 254) { exit 1 }"
+if errorlevel 1 (
     echo %RED%[ERROR] Please enter a number between 1 and 254.%RESET%
     exit /b 1
 )
@@ -818,6 +854,8 @@ exit /b 0
 
 :CHECK_VSCODE_PATH
 set "CODE_EXE="
+if exist "%USERPROFILE%\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd" set "CODE_EXE=%USERPROFILE%\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd"
+if defined CODE_EXE goto :EOF
 for /f "tokens=*" %%P in ('where code 2^>nul') do if not defined CODE_EXE set "CODE_EXE=%%P"
 if defined CODE_EXE goto :EOF
 for /d %%U in (C:\Users\*) do (
