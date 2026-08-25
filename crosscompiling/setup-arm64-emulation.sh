@@ -23,4 +23,5 @@ if [[ -n "$PROXY" ]]; then
 fi
 
 echo
-echo "Done. Log in again (or run 'newgrp lxd'), then start: ./build-snap-arm64.sh"
+echo "Done. Log in again (or run 'newgrp lxd'), then start: ./build-snap.sh"
+echo "Choose mode 1 to build the ARM64 snap from prebuilt ARM64 wheels."

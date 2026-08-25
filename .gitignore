@@ -14,9 +14,6 @@
 .DS_Store
 Thumbs.db
 
-# VS-Code settings
-.vscode
-
 # Snap
 prime
 parts
@@ -35,3 +32,10 @@ sdk-vm-automation/manual_start_vm_logs.txt
 
 # QEMU
 */qemu
+
+# Balena Etcher
+*/*exe
+*/*xz
+*/*img
+*/*zip
+balenaEtcher-portable/
