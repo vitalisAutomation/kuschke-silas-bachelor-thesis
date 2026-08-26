@@ -56,10 +56,14 @@ function ConvertTo-Sha512Crypt {
     param([string]$Value)
 
     $opensslCandidates = @(
+        (Join-Path $env:PROJECT_PATH 'openssl\openssl.exe')
+        (Join-Path $env:PROJECT_PATH 'openssl\bin\openssl.exe')
         (Get-Command 'openssl.exe' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1)
         (Join-Path $env:ProgramFiles 'Git\usr\bin\openssl.exe')
         (Join-Path ${env:ProgramFiles(x86)} 'Git\usr\bin\openssl.exe')
         (Join-Path $env:ProgramFiles 'OpenSSL-Win64\bin\openssl.exe')
+        (Join-Path $env:ProgramFiles 'FireDaemon OpenSSL\bin\openssl.exe')
+        (Join-Path ${env:ProgramFiles(x86)} 'FireDaemon OpenSSL\bin\openssl.exe')
     )
     $openssl = $opensslCandidates |
         Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
