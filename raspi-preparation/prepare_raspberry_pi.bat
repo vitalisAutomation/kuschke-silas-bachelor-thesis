@@ -39,6 +39,7 @@ set "TIMEZONE=Europe/Berlin"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
+set "WIFI_PASSWORD_FILE=%TEMP%\ctrlx-wifi-password-%RANDOM%.tmp"
 
 :: Create the SSH key before generating any Pi or SSH configuration
 if not exist "%SSH_DIR%" mkdir "%SSH_DIR%" >nul 2>&1
@@ -458,10 +459,11 @@ if not defined WIFI_SSID (
     echo %YELLOW%IMPORTANT: The Pi must connect to a hotspot with Internet access.%RESET%
     echo %YELLOW%It needs this connection to download Ubuntu packages, the SDK and VS Code extensions.%RESET%
     set /p WIFI_SSID="%YELLOW%Wi-Fi SSID: %RESET%"
-    echo %YELLOW%Wi-Fi password input is hidden and will not display characters.%RESET%
     set "WIFI_PASSWORD="
     set "WIFI_PASSWORD_CONFIRM="
-    for /f "delims=" %%a in ('powershell.exe -NoProfile -Command "$read = { param(`$prompt); Write-Host `$prompt -NoNewline; `$b = New-Object Text.StringBuilder; while (`$true) { `$key = [Console]::ReadKey(`$true); if (`$key.Key -eq 'Enter') { break }; if (`$key.Key -eq 'Backspace') { if (`$b.Length -gt 0) { `$b.Length-- }; continue }; [void]`$b.Append(`$key.KeyChar) }; Write-Host ''; `$b.ToString() }; `$first = &`$read 'Wi-Fi password: '; `$second = &`$read 'Confirm Wi-Fi password: '; if (`$first -cne `$second) { Write-Output '__PASSWORD_MISMATCH__'; exit 2 }; Write-Output `$first"') do set "WIFI_PASSWORD=%%a"
+    powershell.exe -NoProfile -Command "$read = { param($prompt); $secure = Read-Host -Prompt $prompt -AsSecureString; $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) } }; $first = &$read 'Wi-Fi password'; $second = &$read 'Confirm Wi-Fi password'; $encoding = New-Object Text.UTF8Encoding($false); if ($first -cne $second) { [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, '__PASSWORD_MISMATCH__', $encoding); exit 2 }; [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, $first, $encoding)"
+    if exist "%WIFI_PASSWORD_FILE%" set /p WIFI_PASSWORD=<"%WIFI_PASSWORD_FILE%"
+    del "%WIFI_PASSWORD_FILE%" >nul 2>&1
     if not defined WIFI_SSID (
         echo %RED%[ERROR] The Wi-Fi SSID must not be empty.%RESET%
         pause
