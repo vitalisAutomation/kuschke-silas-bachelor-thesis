@@ -75,7 +75,7 @@ if not exist "%SSH_KEY_FILE%.pub" (
 )
 
 :: =======================================================================
-:: Check and install the required VS Code dependencies
+:: Check and install the required development tools
 :: =======================================================================
 
 if "%~1"=="-install-dependencies" goto :INSTALL_DEPENDENCIES
@@ -85,9 +85,14 @@ set "MISSING_DEV_TOOLS="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_REMOTE_SSH_FLAG="
 set "INSTALL_EXTENSIONS_FLAG="
+set "INSTALL_OPENSSL_FLAG="
 call :CHECK_DEVELOPMENT_TOOLS
 
-if defined MISSING_DEV_TOOLS goto :REQUEST_ADMIN
+if defined MISSING_DEV_TOOLS (
+    call :PREPARE_NETWORK
+    if errorlevel 1 exit /b 1
+    goto :REQUEST_ADMIN
+)
 goto :START_MENU
 
 :RPI_IMAGER_MISSING
@@ -122,6 +127,7 @@ set "INSTALL_ARGS=-install-dependencies"
 if defined INSTALL_VSCODE_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-vscode"
 if defined INSTALL_REMOTE_SSH_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-remote-ssh"
 if defined INSTALL_EXTENSIONS_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-extensions"
+if defined INSTALL_OPENSSL_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-openssl"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '%INSTALL_ARGS%' -Verb RunAs"
 exit
 
@@ -134,11 +140,20 @@ echo.
 
 set "ARG_STRING=%*"
 
+set "CURL_PROXY_ARGS="
+set "WINGET_PROXY_ARGS="
+if "%USE_PROXY%"=="true" (
+    set "CURL_PROXY_ARGS=-x "%PROXY_URL%""
+    set "WINGET_PROXY_ARGS=--proxy "%PROXY_URL%""
+    set "HTTP_PROXY=%PROXY_URL%"
+    set "HTTPS_PROXY=%PROXY_URL%"
+)
+
 echo %ARG_STRING% | findstr /i /c:"-install-vscode" >nul
 if not errorlevel 1 (
     echo %YELLOW%[VS Code] Visual Studio Code is missing.%RESET%
     echo %YELLOW%[VS Code] Downloading the official installer...%RESET%
-    curl.exe --fail --retry 3 --retry-all-errors -L -# -o "%PROJECT_PATH%vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
+    curl.exe --fail --retry 3 --retry-all-errors %CURL_PROXY_ARGS% -L -# -o "%PROJECT_PATH%vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
     if not exist "%PROJECT_PATH%vscode_setup.exe" (
         echo %RED%[ERROR] VS Code download failed.%RESET%
         pause
@@ -184,6 +199,32 @@ if not errorlevel 1 (
         )
     )
     echo %GREEN%[VS Code] Extension installation completed successfully.%RESET%
+)
+
+echo %ARG_STRING% | findstr /i /c:"-install-openssl" >nul
+if not errorlevel 1 (
+    echo %YELLOW%[OpenSSL] Installing OpenSSL for password hashing...%RESET%
+    set "OPENSSL_LOCAL_DIR=%PROJECT_PATH%openssl"
+    where winget.exe >nul 2>&1
+    if errorlevel 1 (
+        echo %RED%[ERROR] WinGet is required to install OpenSSL automatically.%RESET%
+        echo Install App Installer from the Microsoft Store and run this script again.
+        pause
+        exit /b 1
+    )
+    winget.exe install --id FireDaemon.OpenSSL --exact --source winget --scope machine --location "%OPENSSL_LOCAL_DIR%" --silent --accept-source-agreements --accept-package-agreements %WINGET_PROXY_ARGS%
+    if errorlevel 1 (
+        echo %RED%[ERROR] OpenSSL installation failed.%RESET%
+        pause
+        exit /b 1
+    )
+    call :CHECK_OPENSSL
+    if not defined OPENSSL_EXE (
+        echo %RED%[ERROR] OpenSSL was installed but could not be found.%RESET%
+        pause
+        exit /b 1
+    )
+    echo %GREEN%[OpenSSL] Installation completed successfully.%RESET%
 )
 
 echo.
@@ -417,10 +458,17 @@ if not defined WIFI_SSID (
     echo %YELLOW%IMPORTANT: The Pi must connect to a hotspot with Internet access.%RESET%
     echo %YELLOW%It needs this connection to download Ubuntu packages, the SDK and VS Code extensions.%RESET%
     set /p WIFI_SSID="%YELLOW%Wi-Fi SSID: %RESET%"
-    echo %YELLOW%Wi-Fi password input is hidden.%RESET%
-    for /f "delims=" %%a in ('powershell.exe -NoProfile -Command "$p=Read-Host -AsSecureString; $b=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($p); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)}"') do set "WIFI_PASSWORD=%%a"
+    echo %YELLOW%Wi-Fi password input is hidden and will not display characters.%RESET%
+    set "WIFI_PASSWORD="
+    set "WIFI_PASSWORD_CONFIRM="
+    for /f "delims=" %%a in ('powershell.exe -NoProfile -Command "$read = { param(`$prompt); Write-Host `$prompt -NoNewline; `$b = New-Object Text.StringBuilder; while (`$true) { `$key = [Console]::ReadKey(`$true); if (`$key.Key -eq 'Enter') { break }; if (`$key.Key -eq 'Backspace') { if (`$b.Length -gt 0) { `$b.Length-- }; continue }; [void]`$b.Append(`$key.KeyChar) }; Write-Host ''; `$b.ToString() }; `$first = &`$read 'Wi-Fi password: '; `$second = &`$read 'Confirm Wi-Fi password: '; if (`$first -cne `$second) { Write-Output '__PASSWORD_MISMATCH__'; exit 2 }; Write-Output `$first"') do set "WIFI_PASSWORD=%%a"
     if not defined WIFI_SSID (
         echo %RED%[ERROR] The Wi-Fi SSID must not be empty.%RESET%
+        pause
+        goto :MAIN_MENU
+    )
+    if "%WIFI_PASSWORD%"=="__PASSWORD_MISMATCH__" (
+        echo %RED%[ERROR] The Wi-Fi passwords do not match.%RESET%
         pause
         goto :MAIN_MENU
     )
@@ -763,6 +811,7 @@ exit /b 0
 
 :CHECK_DEVELOPMENT_TOOLS
 set "CODE_EXE="
+set "OPENSSL_EXE="
 call :CHECK_VSCODE_PATH
 if not defined CODE_EXE (
     call :ADD_MISSING_DEV_TOOL "Visual Studio Code"
@@ -776,6 +825,11 @@ if not defined CODE_EXE (
         set "INSTALL_REMOTE_SSH_FLAG=1"
         set "INSTALL_EXTENSIONS_FLAG=1"
     )
+)
+call :CHECK_OPENSSL
+if not defined OPENSSL_EXE (
+    call :ADD_MISSING_DEV_TOOL "OpenSSL"
+    set "INSTALL_OPENSSL_FLAG=1"
 )
 goto :EOF
 
@@ -850,6 +904,27 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
+
+:CHECK_OPENSSL
+set "OPENSSL_EXE="
+if exist "%PROJECT_PATH%openssl\openssl.exe" set "OPENSSL_EXE=%PROJECT_PATH%openssl\openssl.exe"
+if defined OPENSSL_EXE goto :EOF
+if exist "%PROJECT_PATH%openssl\bin\openssl.exe" set "OPENSSL_EXE=%PROJECT_PATH%openssl\bin\openssl.exe"
+if defined OPENSSL_EXE goto :EOF
+for /f "tokens=*" %%P in ('where openssl 2^>nul') do if not defined OPENSSL_EXE set "OPENSSL_EXE=%%P"
+if defined OPENSSL_EXE goto :EOF
+if exist "%ProgramFiles%\Git\usr\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles%\Git\usr\bin\openssl.exe"
+if defined OPENSSL_EXE goto :EOF
+if exist "%ProgramFiles(x86)%\Git\usr\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles(x86)%\Git\usr\bin\openssl.exe"
+if defined OPENSSL_EXE goto :EOF
+if exist "%ProgramFiles%\OpenSSL-Win64\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles%\OpenSSL-Win64\bin\openssl.exe"
+if defined OPENSSL_EXE goto :EOF
+if exist "%ProgramFiles(x86)%\OpenSSL-Win64\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles(x86)%\OpenSSL-Win64\bin\openssl.exe"
+if defined OPENSSL_EXE goto :EOF
+if exist "%ProgramFiles%\FireDaemon OpenSSL\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles%\FireDaemon OpenSSL\bin\openssl.exe"
+if defined OPENSSL_EXE goto :EOF
+if exist "%ProgramFiles(x86)%\FireDaemon OpenSSL\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles(x86)%\FireDaemon OpenSSL\bin\openssl.exe"
+goto :EOF
 
 :CHECK_VSCODE_PATH
 set "CODE_EXE="
