@@ -431,28 +431,31 @@ if not defined WIFI_SSID (
     echo %YELLOW%IMPORTANT: The Pi must connect to a hotspot with Internet access.%RESET%
     echo %YELLOW%It needs this connection to download Ubuntu packages, the SDK and VS Code extensions.%RESET%
     set /p WIFI_SSID="%YELLOW%Wi-Fi SSID: %RESET%"
-    set "WIFI_PASSWORD="
-    set "WIFI_PASSWORD_CONFIRM="
-    powershell.exe -NoProfile -Command "$read = { param($prompt); $secure = Read-Host -Prompt $prompt -AsSecureString; $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) } }; $first = &$read 'Wi-Fi password'; $second = &$read 'Confirm Wi-Fi password'; $encoding = New-Object Text.UTF8Encoding($false); if ($first -cne $second) { [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, '__PASSWORD_MISMATCH__', $encoding); exit 2 }; [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, $first, $encoding)"
-    if exist "%WIFI_PASSWORD_FILE%" set /p WIFI_PASSWORD=<"%WIFI_PASSWORD_FILE%"
-    del "%WIFI_PASSWORD_FILE%" >nul 2>&1
     if not defined WIFI_SSID (
         echo %RED%[ERROR] The Wi-Fi SSID must not be empty.%RESET%
         pause
         goto :MAIN_MENU
     )
-    if not defined WIFI_PASSWORD (
-        echo %RED%[ERROR] The Wi-Fi password must not be empty.%RESET%
-        pause
-        goto :MAIN_MENU
-    )
 )
 
+:WIFI_PASSWORD_INPUT
+echo %YELLOW%Wi-Fi password input is hidden and will not display characters.%RESET%
+set "WIFI_PASSWORD="
+set "WIFI_PASSWORD_CONFIRM="
+powershell.exe -NoProfile -Command "$read = { param($prompt); $secure = Read-Host -Prompt $prompt -AsSecureString; $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) } }; $first = &$read 'Wi-Fi password'; $second = &$read 'Confirm Wi-Fi password'; $encoding = New-Object Text.UTF8Encoding($false); if ($first -cne $second) { [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, '__PASSWORD_MISMATCH__', $encoding); exit 2 }; [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, $first, $encoding)"
+if exist "%WIFI_PASSWORD_FILE%" set /p WIFI_PASSWORD=<"%WIFI_PASSWORD_FILE%"
+del "%WIFI_PASSWORD_FILE%" >nul 2>&1
 if "%WIFI_PASSWORD%"=="__PASSWORD_MISMATCH__" (
-    echo %RED%[ERROR] The Wi-Fi passwords do not match.%RESET%
+    echo %RED%[ERROR] The Wi-Fi passwords do not match. Please enter them again.%RESET%
     pause
-    goto :MAIN_MENU
+    goto :WIFI_PASSWORD_INPUT
 )
+if not defined WIFI_PASSWORD (
+    echo %RED%[ERROR] The Wi-Fi password must not be empty.%RESET%
+    pause
+    goto :WIFI_PASSWORD_INPUT
+)
+
 if not defined WIFI_PASSWORD goto :MAIN_MENU
 
 echo.
@@ -488,7 +491,7 @@ if not defined LOCALE_INPUT set "LOCALE_INPUT=de_DE.UTF-8"
 set "LOCALE="
 for /f "delims=" %%L in ('powershell.exe -NoProfile -Command "$l=$env:LOCALE_INPUT.Trim(); if ($l -match '^[A-Za-z]{2,3}_[A-Za-z]{2}(?:\.UTF-8)?$') { if ($l -notmatch '\.UTF-8$') { $l += '.UTF-8' }; $l }"') do set "LOCALE=%%L"
 if not defined LOCALE (
-    echo %RED%Please enter a valid locale, for example de_DE.UTF-8 or en_US.UTF-8.%RESET%
+    echo %RED%Please enter a valid locale, for example de_DE.UTF-8.%RESET%
     pause
     goto :MAIN_MENU
 )
@@ -498,13 +501,14 @@ set "TIMEZONE_INPUT="
 set /p TIMEZONE_INPUT="%YELLOW%Time zone (default Europe/Berlin): %RESET%"
 if not defined TIMEZONE_INPUT set "TIMEZONE_INPUT=Europe/Berlin"
 set "TIMEZONE="
-for /f "delims=" %%T in ('powershell.exe -NoProfile -Command "$t=$env:TIMEZONE_INPUT.Trim(); if ($t -match '^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)+$') { $t }"') do set "TIMEZONE=%%T"
+for /f "delims=" %%T in ('powershell.exe -NoProfile -Command "$t=$env:TIMEZONE_INPUT.Trim(); if ($t -match '^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)+$') { $t }"') do set "TIMEZONE=%%T"
 if not defined TIMEZONE (
     echo %RED%Please enter a valid time zone, for example Europe/Berlin.%RESET%
     pause
     goto :MAIN_MENU
 )
 
+:PI_PROXY_CONFIGURATION
 echo.
 echo %BLUE%[Raspberry Pi] Configure an HTTP/HTTPS proxy for the Pi?%RESET%
 echo The download proxy configured earlier is only used by this Windows PC.
