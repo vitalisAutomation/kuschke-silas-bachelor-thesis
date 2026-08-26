@@ -196,7 +196,7 @@ $userData += @(
     '      set +e'
     '      LOG=/mnt/ctrlx-logs/ctrlx-provisioning.log'
     '      if ! mountpoint -q /mnt/ctrlx-logs; then LOG=/var/log/ctrlx-provisioning.log; fi'
-    '      exec >> "$LOG" 2>&1'
+    '      exec > >(tee -a "$LOG") 2>&1'
     '      echo "==== ctrlX provisioning started $(date -Is) ===="'
     '      echo "==== kernel ===="'
     '      cat /proc/cmdline'
