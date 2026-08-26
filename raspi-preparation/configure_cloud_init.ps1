@@ -56,6 +56,7 @@ function ConvertTo-YamlSingleQuoted {
 $publicKey = (Get-Content -LiteralPath $publicKeyPath -Raw).Trim()
 $ssidYaml = ConvertTo-YamlSingleQuoted $ssid
 $wifiPasswordYaml = ConvertTo-YamlSingleQuoted $wifiPassword
+$passwordYaml = ConvertTo-YamlSingleQuoted $password
 
 $userData = @(
     '#cloud-config'
@@ -68,16 +69,11 @@ $userData = @(
     '    shell: /bin/bash'
     '    sudo: ALL=(ALL) NOPASSWD:ALL'
     '    lock_passwd: false'
+    "    plain_text_passwd: $passwordYaml"
     '    ssh_authorized_keys:'
     "      - $publicKey"
-    'chpasswd:'
-    '  list: |'
-    "    ${username}:${password}"
-    '  expire: false'
     'ssh_pwauth: true'
     'disable_root: true'
-    'output:'
-    '  all: "| tee -a /var/log/cloud-init-output.log /var/log/ctrlx-provisioning.log"'
     'package_update: false'
     "locale: $locale"
     "timezone: $timezone"
