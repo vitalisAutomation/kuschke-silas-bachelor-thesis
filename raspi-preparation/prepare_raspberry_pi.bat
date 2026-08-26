@@ -441,11 +441,6 @@ if not defined WIFI_SSID (
         pause
         goto :MAIN_MENU
     )
-    if "%WIFI_PASSWORD%"=="__PASSWORD_MISMATCH__" (
-        echo %RED%[ERROR] The Wi-Fi passwords do not match.%RESET%
-        pause
-        goto :MAIN_MENU
-    )
     if not defined WIFI_PASSWORD (
         echo %RED%[ERROR] The Wi-Fi password must not be empty.%RESET%
         pause
@@ -453,6 +448,11 @@ if not defined WIFI_SSID (
     )
 )
 
+if "%WIFI_PASSWORD%"=="__PASSWORD_MISMATCH__" (
+    echo %RED%[ERROR] The Wi-Fi passwords do not match.%RESET%
+    pause
+    goto :MAIN_MENU
+)
 if not defined WIFI_PASSWORD goto :MAIN_MENU
 
 echo.
