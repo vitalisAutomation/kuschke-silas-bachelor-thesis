@@ -39,6 +39,7 @@ set "TIMEZONE=Europe/Berlin"
 set "SSH_DIR=%USERPROFILE%\.ssh"
 set "SSH_KEY_FILE=%SSH_DIR%\id_rsa_ctrlx_pi"
 set "IMAGE_SHA256="
+set "WIFI_PASSWORD_FILE=%TEMP%\ctrlx-wifi-password-%RANDOM%.tmp"
 
 :: Create the SSH key before generating any Pi or SSH configuration
 if not exist "%SSH_DIR%" mkdir "%SSH_DIR%" >nul 2>&1
@@ -75,7 +76,7 @@ if not exist "%SSH_KEY_FILE%.pub" (
 )
 
 :: =======================================================================
-:: Check and install the required VS Code dependencies
+:: Check and install the required development tools
 :: =======================================================================
 
 if "%~1"=="-install-dependencies" goto :INSTALL_DEPENDENCIES
@@ -87,7 +88,11 @@ set "INSTALL_REMOTE_SSH_FLAG="
 set "INSTALL_EXTENSIONS_FLAG="
 call :CHECK_DEVELOPMENT_TOOLS
 
-if defined MISSING_DEV_TOOLS goto :REQUEST_ADMIN
+if defined MISSING_DEV_TOOLS (
+    call :PREPARE_NETWORK
+    if errorlevel 1 exit /b 1
+    goto :REQUEST_ADMIN
+)
 goto :START_MENU
 
 :RPI_IMAGER_MISSING
@@ -134,11 +139,20 @@ echo.
 
 set "ARG_STRING=%*"
 
+set "CURL_PROXY_ARGS="
+set "WINGET_PROXY_ARGS="
+if "%USE_PROXY%"=="true" (
+    set "CURL_PROXY_ARGS=-x "%PROXY_URL%""
+    set "WINGET_PROXY_ARGS=--proxy "%PROXY_URL%""
+    set "HTTP_PROXY=%PROXY_URL%"
+    set "HTTPS_PROXY=%PROXY_URL%"
+)
+
 echo %ARG_STRING% | findstr /i /c:"-install-vscode" >nul
 if not errorlevel 1 (
     echo %YELLOW%[VS Code] Visual Studio Code is missing.%RESET%
     echo %YELLOW%[VS Code] Downloading the official installer...%RESET%
-    curl.exe --fail --retry 3 --retry-all-errors -L -# -o "%PROJECT_PATH%vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
+    curl.exe --fail --retry 3 --retry-all-errors %CURL_PROXY_ARGS% -L -# -o "%PROJECT_PATH%vscode_setup.exe" "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64-user"
     if not exist "%PROJECT_PATH%vscode_setup.exe" (
         echo %RED%[ERROR] VS Code download failed.%RESET%
         pause
@@ -417,18 +431,29 @@ if not defined WIFI_SSID (
     echo %YELLOW%IMPORTANT: The Pi must connect to a hotspot with Internet access.%RESET%
     echo %YELLOW%It needs this connection to download Ubuntu packages, the SDK and VS Code extensions.%RESET%
     set /p WIFI_SSID="%YELLOW%Wi-Fi SSID: %RESET%"
-    echo %YELLOW%Wi-Fi password input is hidden.%RESET%
-    for /f "delims=" %%a in ('powershell.exe -NoProfile -Command "$p=Read-Host -AsSecureString; $b=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($p); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)}"') do set "WIFI_PASSWORD=%%a"
     if not defined WIFI_SSID (
         echo %RED%[ERROR] The Wi-Fi SSID must not be empty.%RESET%
         pause
         goto :MAIN_MENU
     )
-    if not defined WIFI_PASSWORD (
-        echo %RED%[ERROR] The Wi-Fi password must not be empty.%RESET%
-        pause
-        goto :MAIN_MENU
-    )
+)
+
+:WIFI_PASSWORD_INPUT
+echo %YELLOW%Wi-Fi password input is hidden and will not display characters.%RESET%
+set "WIFI_PASSWORD="
+set "WIFI_PASSWORD_CONFIRM="
+powershell.exe -NoProfile -Command "$read = { param($prompt); $secure = Read-Host -Prompt $prompt -AsSecureString; $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) } }; $first = &$read 'Wi-Fi password'; $second = &$read 'Confirm Wi-Fi password'; $encoding = New-Object Text.UTF8Encoding($false); if ($first -cne $second) { [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, '__PASSWORD_MISMATCH__', $encoding); exit 2 }; [IO.File]::WriteAllText($env:WIFI_PASSWORD_FILE, $first, $encoding)"
+if exist "%WIFI_PASSWORD_FILE%" set /p WIFI_PASSWORD=<"%WIFI_PASSWORD_FILE%"
+del "%WIFI_PASSWORD_FILE%" >nul 2>&1
+if "%WIFI_PASSWORD%"=="__PASSWORD_MISMATCH__" (
+    echo %RED%[ERROR] The Wi-Fi passwords do not match. Please enter them again.%RESET%
+    pause
+    goto :WIFI_PASSWORD_INPUT
+)
+if not defined WIFI_PASSWORD (
+    echo %RED%[ERROR] The Wi-Fi password must not be empty.%RESET%
+    pause
+    goto :WIFI_PASSWORD_INPUT
 )
 
 if not defined WIFI_PASSWORD goto :MAIN_MENU
@@ -466,7 +491,7 @@ if not defined LOCALE_INPUT set "LOCALE_INPUT=de_DE.UTF-8"
 set "LOCALE="
 for /f "delims=" %%L in ('powershell.exe -NoProfile -Command "$l=$env:LOCALE_INPUT.Trim(); if ($l -match '^[A-Za-z]{2,3}_[A-Za-z]{2}(?:\.UTF-8)?$') { if ($l -notmatch '\.UTF-8$') { $l += '.UTF-8' }; $l }"') do set "LOCALE=%%L"
 if not defined LOCALE (
-    echo %RED%Please enter a valid locale, for example de_DE.UTF-8 or en_US.UTF-8.%RESET%
+    echo %RED%Please enter a valid locale, for example de_DE.UTF-8.%RESET%
     pause
     goto :MAIN_MENU
 )
@@ -476,13 +501,14 @@ set "TIMEZONE_INPUT="
 set /p TIMEZONE_INPUT="%YELLOW%Time zone (default Europe/Berlin): %RESET%"
 if not defined TIMEZONE_INPUT set "TIMEZONE_INPUT=Europe/Berlin"
 set "TIMEZONE="
-for /f "delims=" %%T in ('powershell.exe -NoProfile -Command "$t=$env:TIMEZONE_INPUT.Trim(); if ($t -match '^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)+$') { $t }"') do set "TIMEZONE=%%T"
+for /f "delims=" %%T in ('powershell.exe -NoProfile -Command "$t=$env:TIMEZONE_INPUT.Trim(); if ($t -match '^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)+$') { $t }"') do set "TIMEZONE=%%T"
 if not defined TIMEZONE (
     echo %RED%Please enter a valid time zone, for example Europe/Berlin.%RESET%
     pause
     goto :MAIN_MENU
 )
 
+:PI_PROXY_CONFIGURATION
 echo.
 echo %BLUE%[Raspberry Pi] Configure an HTTP/HTTPS proxy for the Pi?%RESET%
 echo The download proxy configured earlier is only used by this Windows PC.
@@ -698,7 +724,6 @@ echo.
 echo Hostname: %PI_HOSTNAME%
 echo Host/IP: %PI_IP_ADDRESS%
 echo SSH username: %PI_USERNAME%
-echo SSH password: %PI_PASSWORD%
 echo Development computer IP: %PC_IP_ADDRESS%
 echo Wi-Fi SSID: %WIFI_SSID%
 echo SSH private key: %SSH_KEY_FILE%

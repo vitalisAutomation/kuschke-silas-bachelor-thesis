@@ -70,20 +70,18 @@ $userData = @(
     '    lock_passwd: false'
     '    ssh_authorized_keys:'
     "      - $publicKey"
-    'chpasswd:'
-    '  list: |'
-    "    ${username}:${password}"
-    '  expire: false'
     'ssh_pwauth: true'
     'disable_root: true'
-    'output:'
-    '  all: "| tee -a /var/log/cloud-init-output.log /var/log/ctrlx-provisioning.log"'
     'package_update: false'
     "locale: $locale"
     "timezone: $timezone"
     'keyboard:'
     "  layout: $keyboardLayout"
     '  model: pc105'
+    'chpasswd:'
+    '  expire: false'
+    '  list: |'
+    "    ${username}:$password"
 )
 
 $userData += @(
@@ -172,7 +170,7 @@ $userData += @(
     '      set +e'
     '      LOG=/mnt/ctrlx-logs/ctrlx-provisioning.log'
     '      if ! mountpoint -q /mnt/ctrlx-logs; then LOG=/var/log/ctrlx-provisioning.log; fi'
-    '      exec >> "$LOG" 2>&1'
+    '      exec > >(tee -a "$LOG") 2>&1'
     '      echo "==== ctrlX provisioning started $(date -Is) ===="'
     '      echo "==== kernel ===="'
     '      cat /proc/cmdline'

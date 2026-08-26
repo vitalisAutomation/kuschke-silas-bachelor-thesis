@@ -1,0 +1,127 @@
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Segoe UI, Arial, sans-serif",
+        "fontSize": "14px",
+        "primaryColor": "#eef7ff",
+        "primaryBorderColor": "#2f80ed",
+        "primaryTextColor": "#0f172a",
+        "secondaryColor": "#f3fbf6",
+        "secondaryBorderColor": "#2d9d78",
+        "secondaryTextColor": "#0f172a",
+        "tertiaryColor": "#fff8e8",
+        "tertiaryBorderColor": "#d58a00",
+        "tertiaryTextColor": "#0f172a",
+        "lineColor": "#4b5563",
+        "background": "#ffffff",
+        "htmlLabels": false,
+        "clusterBkg": "#ffffff",
+        "clusterBorder": "#64748b"
+    },
+    "flowchart": {
+        "useMaxWidth": true,
+        "htmlLabels": false,
+        "nodeSpacing": 28,
+        "rankSpacing": 58,
+        "padding": 12,
+        "subGraphTitleMargin": {
+            "top": 12,
+            "bottom": 18
+        },
+        "curve": "basis"
+    }
+}}%%
+flowchart TD
+    Start([Start prepare_raspberry_pi.bat]) --> Init["UTF-8, ANSI-Farben und Projektpfad setzen<br>Ubuntu-Version, Netzwerk und SSH-Defaults laden"]
+    Init --> SSHKey["SSH-Schluessel erzeugen<br>oder wiederverwenden<br>%USERPROFILE%\\.ssh\\<br>id_rsa_ctrlx_pi"]
+    SSHKey --> DependencyCheck[":CHECK_DEVELOPMENT_TOOLS<br>Raspberry Pi Imager, VS Code<br>und Extensions pruefen"]
+    DependencyCheck --> MissingDeps{"Fehlende<br>Entwicklungs-<br>tools?"}
+    MissingDeps -- Ja --> Admin[":REQUEST_ADMIN<br>PowerShell startet das Skript<br>mit Administratorrechten"]
+    Admin --> InstallDeps[":INSTALL_DEPENDENCIES<br>VS Code und benoetigte<br>Extensions installieren"]
+    InstallDeps --> MainMenu
+    MissingDeps -- Nein --> MainMenu
+
+    subgraph Menu["Hauptmenue :START_MENU"]
+        direction TB
+        MainMenu["Raspberry-Pi-Vorbereitung"] --> Choice{"Aktion waehlen"}
+        Choice -- "1: Bestehenden Pi verbinden" --> ConnectSSH
+        Choice -- "2: Ubuntu herunterladen und SD-Karte flashen" --> OSChoice
+        Choice -- "3: Beenden" --> Exit([Skript beendet])
+    end
+
+    subgraph Existing["Option 1: Bestehenden Raspberry Pi verbinden"]
+        direction TB
+        ConnectSSH["Pi-Host oder IP abfragen<br>Standard: 192.168.1.100<br>oder sdk-pi.local"] --> SSHConfig["configure_vscode_remote_ssh.ps1<br>localServerDownload = never"]
+        SSHConfig --> Alias["configure_raspberry_pi_ssh.ps1<br>SSH-Alias ctrlx-pi<br>konfigurieren"]
+        Alias --> SSHTest{"SSH-Verbindung<br>erreichbar?"}
+        SSHTest -- Nein --> HostKey{"Host-Key geaendert?"}
+        HostKey -- Ja --> RemoveKey["Bekannten Host-Key nach<br>Bestaetigung entfernen<br>Verbindung mit accept-new wiederholen"] --> SSHTest
+        HostKey -- Nein --> SSHError["Fehler anzeigen<br>zurueck zum Hauptmenue"] --> MainMenu
+        SSHTest -- Ja --> OpenCode["VS Code Remote-SSH oeffnen<br>/home/sdk-pi"]
+        OpenCode --> PiExtensions["Auf code-server warten<br>Remote-Extensions installieren"]
+        PiExtensions --> MainMenu
+    end
+
+    subgraph Flash["Option 2: SD-Karte vorbereiten<br>und Raspberry Pi provisionieren"]
+        direction TB
+        OSChoice["Ubuntu-Ziel<br>waehlen"] --> Version{"Ubuntu-<br>Version?"}
+        Version -- "22.04.5" --> Image22["Ubuntu Server 22.04.5 LTS ARM64<br>ctrlX OS 1.x / 2.x / 3.x"]
+        Version -- "24.04.3" --> Image24["Ubuntu Server 24.04.3 LTS ARM64<br>ctrlX OS 4.x"]
+        Image22 --> ProxyCheck
+        Image24 --> ProxyCheck
+        ProxyCheck[":PREPARE_NETWORK<br>Proxy-Modus und<br>PC-Netzwerk pruefen"] --> ProxyMode{"Proxy aktiviert?"}
+        ProxyMode -- Ja --> ProxyConfig["Proxy-URL pruefen<br>Windows und Raspberry Pi<br>vorbereiten"]
+        ProxyMode -- Nein --> DirectNetwork["Direkte Internetverbindung"]
+        ProxyConfig --> Download
+        DirectNetwork --> Download
+        Download["Ubuntu-Image und SHA256-<br>Pruefsumme herunterladen"] --> Verify["Archiv pruefen und<br>IMG-Datei extrahieren"]
+        Verify --> Imager["Raspberry Pi Imager CLI starten<br>Physisches Geraet statt<br>Laufwerksbuchstabe verwenden"]
+        Imager --> DriveChoice["SD-Karte auswaehlen<br>Alle Daten auf dem Ziel<br>werden geloescht"]
+        DriveChoice --> WiFi
+        WiFi["Wi-Fi-SSID und Passwort abfragen<br>Hotspot muss Internetzugriff<br>bereitstellen"] --> CloudInit
+    end
+
+    subgraph Provision["Cloud-Init-Konfiguration<br>:CONFIGURE_FIRST_BOOT"]
+        direction TB
+        CloudInit["configure_cloud_init.ps1<br>ausfuehren"] --> SeedFiles["NoCloud-Dateien auf der<br>Boot-Partition schreiben<br>meta-data, user-data,<br>network-config"]
+        SeedFiles --> UserConfig["Benutzer sdk-pi anlegen<br>Sudo ohne Passwort<br>und SSH-Public-Key"]
+        UserConfig --> NetworkConfig["Netzwerk konfigurieren<br>eth0: 192.168.1.100/24 statisch<br>wlan0: DHCP ueber Wi-Fi-Hotspot"]
+        NetworkConfig --> SystemConfig["Locale de_DE.UTF-8<br>Zeitzone Europe/Berlin<br>Wi-Fi-Land DE und SSH aktivieren"]
+        SystemConfig --> SDKConfig["ctrlX SDK, Snapcraft<br>und benoetigte Pakete<br>ueber runcmd installieren"]
+        SDKConfig --> LoggingConfig["USB-Logging einrichten<br>Label CTRLXLOG -> /mnt/ctrlx-logs"]
+        LoggingConfig --> ConsoleConfig["TTY1 und serielle Gettys konfigurieren<br>Autologin fuer sdk-pi"]
+        ConsoleConfig --> Cmdline["cmdline.txt bereinigen<br>und ergaenzen<br>ds=nocloud und regulatory domain DE"]
+    end
+
+    Cmdline --> Eject[":EJECT_SD_CARD<br>SD-Karte sicher auswerfen"]
+    Eject --> Boot["SD-Karte einsetzen<br>und Raspberry Pi starten"]
+    Boot --> FirstBoot{"Cloud-Init und<br>Netzwerk bereit?"}
+    FirstBoot -- Nein --> BootError["Diagnoseprotokolle pruefen<br>Boot-Partition oder USB-Log<br>CTRLXLOG"] --> MainMenu
+    FirstBoot -- Ja --> Ready["Raspberry Pi ist bereit<br>Ethernet: 192.168.1.100<br>SSH-Alias: ctrlx-pi"]
+    Ready --> MainMenu
+
+    style Menu fill:#ffe4e4,stroke:#c62828,stroke-width:3px,color:#7f1d1d
+    style Existing fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style ConnectSSH fill:#eef7ff,stroke:#1976d2,stroke-width:1px,color:#0f172a
+    style SSHTest fill:#eef7ff,stroke:#1976d2,stroke-width:1px,color:#0f172a
+    style HostKey fill:#eef7ff,stroke:#1976d2,stroke-width:1px,color:#0f172a
+    style SSHError fill:#eef7ff,stroke:#1976d2,stroke-width:1px,color:#0f172a
+    style Flash fill:#fce4ec,stroke:#ad1457,stroke-width:2px,color:#880e4f
+    style Version fill:#fce4ec,stroke:#ad1457,stroke-width:1px,color:#880e4f
+    style ProxyCheck fill:#fce4ec,stroke:#ad1457,stroke-width:1px,color:#880e4f
+    style Download fill:#fce4ec,stroke:#ad1457,stroke-width:1px,color:#880e4f
+    style Imager fill:#fce4ec,stroke:#ad1457,stroke-width:1px,color:#880e4f
+    style Provision fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
+    style SSHKey fill:#eef7ff,stroke:#2f80ed,stroke-width:1px,color:#0f172a
+    style MissingDeps fill:#eef7ff,stroke:#2f80ed,stroke-width:1px,color:#0f172a
+    style CloudInit fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#1b5e20
+    style CloudInit fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#1b5e20
+    style NetworkConfig fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#1b5e20
+    style SDKConfig fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#1b5e20
+    style Cmdline fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#1b5e20
+    style MainMenu fill:#fff8e1,stroke:#f9a825,stroke-width:1px,color:#6d4c00
+    style Choice fill:#fff8e1,stroke:#f9a825,stroke-width:1px,color:#6d4c00
+    style OSChoice fill:#fff8e1,stroke:#f9a825,stroke-width:1px,color:#6d4c00
+    style Version fill:#fff8e1,stroke:#f9a825,stroke-width:1px,color:#6d4c00
+    style ProxyMode fill:#eef7ff,stroke:#2f80ed,stroke-width:1px,color:#0f172a
+    style FirstBoot fill:#eef7ff,stroke:#2f80ed,stroke-width:1px,color:#0f172a
