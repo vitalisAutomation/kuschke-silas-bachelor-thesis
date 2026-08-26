@@ -698,7 +698,6 @@ echo.
 echo Hostname: %PI_HOSTNAME%
 echo Host/IP: %PI_IP_ADDRESS%
 echo SSH username: %PI_USERNAME%
-echo SSH password: %PI_PASSWORD%
 echo Development computer IP: %PC_IP_ADDRESS%
 echo Wi-Fi SSID: %WIFI_SSID%
 echo SSH private key: %SSH_KEY_FILE%
