@@ -86,7 +86,6 @@ set "MISSING_DEV_TOOLS="
 set "INSTALL_VSCODE_FLAG="
 set "INSTALL_REMOTE_SSH_FLAG="
 set "INSTALL_EXTENSIONS_FLAG="
-set "INSTALL_OPENSSL_FLAG="
 call :CHECK_DEVELOPMENT_TOOLS
 
 if defined MISSING_DEV_TOOLS (
@@ -128,7 +127,6 @@ set "INSTALL_ARGS=-install-dependencies"
 if defined INSTALL_VSCODE_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-vscode"
 if defined INSTALL_REMOTE_SSH_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-remote-ssh"
 if defined INSTALL_EXTENSIONS_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-extensions"
-if defined INSTALL_OPENSSL_FLAG set "INSTALL_ARGS=%INSTALL_ARGS% -install-openssl"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -ArgumentList '%INSTALL_ARGS%' -Verb RunAs"
 exit
 
@@ -200,32 +198,6 @@ if not errorlevel 1 (
         )
     )
     echo %GREEN%[VS Code] Extension installation completed successfully.%RESET%
-)
-
-echo %ARG_STRING% | findstr /i /c:"-install-openssl" >nul
-if not errorlevel 1 (
-    echo %YELLOW%[OpenSSL] Installing OpenSSL for password hashing...%RESET%
-    set "OPENSSL_LOCAL_DIR=%PROJECT_PATH%openssl"
-    where winget.exe >nul 2>&1
-    if errorlevel 1 (
-        echo %RED%[ERROR] WinGet is required to install OpenSSL automatically.%RESET%
-        echo Install App Installer from the Microsoft Store and run this script again.
-        pause
-        exit /b 1
-    )
-    winget.exe install --id FireDaemon.OpenSSL --exact --source winget --scope machine --location "%OPENSSL_LOCAL_DIR%" --silent --accept-source-agreements --accept-package-agreements %WINGET_PROXY_ARGS%
-    if errorlevel 1 (
-        echo %RED%[ERROR] OpenSSL installation failed.%RESET%
-        pause
-        exit /b 1
-    )
-    call :CHECK_OPENSSL
-    if not defined OPENSSL_EXE (
-        echo %RED%[ERROR] OpenSSL was installed but could not be found.%RESET%
-        pause
-        exit /b 1
-    )
-    echo %GREEN%[OpenSSL] Installation completed successfully.%RESET%
 )
 
 echo.
@@ -813,7 +785,6 @@ exit /b 0
 
 :CHECK_DEVELOPMENT_TOOLS
 set "CODE_EXE="
-set "OPENSSL_EXE="
 call :CHECK_VSCODE_PATH
 if not defined CODE_EXE (
     call :ADD_MISSING_DEV_TOOL "Visual Studio Code"
@@ -827,11 +798,6 @@ if not defined CODE_EXE (
         set "INSTALL_REMOTE_SSH_FLAG=1"
         set "INSTALL_EXTENSIONS_FLAG=1"
     )
-)
-call :CHECK_OPENSSL
-if not defined OPENSSL_EXE (
-    call :ADD_MISSING_DEV_TOOL "OpenSSL"
-    set "INSTALL_OPENSSL_FLAG=1"
 )
 goto :EOF
 
@@ -906,27 +872,6 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
-
-:CHECK_OPENSSL
-set "OPENSSL_EXE="
-if exist "%PROJECT_PATH%openssl\openssl.exe" set "OPENSSL_EXE=%PROJECT_PATH%openssl\openssl.exe"
-if defined OPENSSL_EXE goto :EOF
-if exist "%PROJECT_PATH%openssl\bin\openssl.exe" set "OPENSSL_EXE=%PROJECT_PATH%openssl\bin\openssl.exe"
-if defined OPENSSL_EXE goto :EOF
-for /f "tokens=*" %%P in ('where openssl 2^>nul') do if not defined OPENSSL_EXE set "OPENSSL_EXE=%%P"
-if defined OPENSSL_EXE goto :EOF
-if exist "%ProgramFiles%\Git\usr\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles%\Git\usr\bin\openssl.exe"
-if defined OPENSSL_EXE goto :EOF
-if exist "%ProgramFiles(x86)%\Git\usr\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles(x86)%\Git\usr\bin\openssl.exe"
-if defined OPENSSL_EXE goto :EOF
-if exist "%ProgramFiles%\OpenSSL-Win64\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles%\OpenSSL-Win64\bin\openssl.exe"
-if defined OPENSSL_EXE goto :EOF
-if exist "%ProgramFiles(x86)%\OpenSSL-Win64\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles(x86)%\OpenSSL-Win64\bin\openssl.exe"
-if defined OPENSSL_EXE goto :EOF
-if exist "%ProgramFiles%\FireDaemon OpenSSL\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles%\FireDaemon OpenSSL\bin\openssl.exe"
-if defined OPENSSL_EXE goto :EOF
-if exist "%ProgramFiles(x86)%\FireDaemon OpenSSL\bin\openssl.exe" set "OPENSSL_EXE=%ProgramFiles(x86)%\FireDaemon OpenSSL\bin\openssl.exe"
-goto :EOF
 
 :CHECK_VSCODE_PATH
 set "CODE_EXE="

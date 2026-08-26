@@ -52,39 +52,10 @@ function ConvertTo-YamlSingleQuoted {
     return "'" + $Value.Replace("'", "''") + "'"
 }
 
-function ConvertTo-Sha512Crypt {
-    param([string]$Value)
-
-    $opensslCandidates = @(
-        (Join-Path $env:PROJECT_PATH 'openssl\openssl.exe')
-        (Join-Path $env:PROJECT_PATH 'openssl\bin\openssl.exe')
-        (Get-Command 'openssl.exe' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1)
-        (Join-Path $env:ProgramFiles 'Git\usr\bin\openssl.exe')
-        (Join-Path ${env:ProgramFiles(x86)} 'Git\usr\bin\openssl.exe')
-        (Join-Path $env:ProgramFiles 'OpenSSL-Win64\bin\openssl.exe')
-        (Join-Path $env:ProgramFiles 'FireDaemon OpenSSL\bin\openssl.exe')
-        (Join-Path ${env:ProgramFiles(x86)} 'FireDaemon OpenSSL\bin\openssl.exe')
-    )
-    $openssl = $opensslCandidates |
-        Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
-        Select-Object -First 1
-    if (-not $openssl) {
-        throw 'OpenSSL is required to create the Cloud-Init password hash.'
-    }
-
-    $hash = ($Value | & $openssl passwd -6 -stdin 2>$null | Select-Object -First 1).Trim()
-    if ($LASTEXITCODE -ne 0 -or $hash -notmatch '^\$6\$[^$]+\$.+') {
-        throw 'OpenSSL could not create a valid SHA-512-crypt password hash.'
-    }
-
-    return $hash
-}
-
 # Quote user-provided values before embedding them in Cloud-Init YAML.
 $publicKey = (Get-Content -LiteralPath $publicKeyPath -Raw).Trim()
 $ssidYaml = ConvertTo-YamlSingleQuoted $ssid
 $wifiPasswordYaml = ConvertTo-YamlSingleQuoted $wifiPassword
-$passwordHashYaml = ConvertTo-YamlSingleQuoted (ConvertTo-Sha512Crypt $password)
 
 $userData = @(
     '#cloud-config'
@@ -97,7 +68,6 @@ $userData = @(
     '    shell: /bin/bash'
     '    sudo: ALL=(ALL) NOPASSWD:ALL'
     '    lock_passwd: false'
-    "    passwd: $passwordHashYaml"
     '    ssh_authorized_keys:'
     "      - $publicKey"
     'ssh_pwauth: true'
@@ -108,6 +78,10 @@ $userData = @(
     'keyboard:'
     "  layout: $keyboardLayout"
     '  model: pc105'
+    'chpasswd:'
+    '  expire: false'
+    '  list: |'
+    "    ${username}:$password"
 )
 
 $userData += @(
