@@ -1300,7 +1300,7 @@ goto :EOF
     set /a EXTENSION_WAIT_COUNT=0
 :WAIT_FOR_CODE_SERVER
     set /a EXTENSION_WAIT_COUNT+=1
-    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "test -n $(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit)" >nul 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "test -n $(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit 2>/dev/null)" >nul 2>&1
     if %errorlevel%==0 goto :CODE_SERVER_READY
     if %EXTENSION_WAIT_COUNT% GEQ 60 (
         echo %YELLOW%[VM Extensions] The VS Code Server did not become ready in time. Open the VM in VS Code once and run the script again.%RESET%
@@ -1323,7 +1323,7 @@ goto :EOF
     ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo resize2fs /dev/vda1 >/dev/null 2>&1"
     if errorlevel 1 echo %YELLOW%[Storage] Filesystem resize could not be completed.%RESET%
     echo %BLUE%[VM Extensions]%RESET% Installing extensions in the VM sequentially...
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "set -e; code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --force; done; echo Installed VM extensions:; $code_server --list-extensions" >> "install_debug.log" 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "set -e; code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit 2>/dev/null); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --force; done; echo Installed VM extensions:; $code_server --list-extensions" >> "install_debug.log" 2>&1
     if errorlevel 1 (
         echo %YELLOW%[VM Extensions] Installation failed. See install_debug.log for details.%RESET%
         exit /b 1
