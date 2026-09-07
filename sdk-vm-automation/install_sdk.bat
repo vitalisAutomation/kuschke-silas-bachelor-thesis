@@ -438,6 +438,8 @@ echo(
 set /p NET_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
 
 set USE_PROXY=false
+set "BOSCH_NT_USER="
+set "BOSCH_PASSWORD_B64="
 
 if "%NET_CHOICE%"=="1" goto :BOSCH_PROXY
 
@@ -450,6 +452,20 @@ goto :NO_PROXY
 set USE_PROXY=true
 
 set PROXY_URL=http://127.0.0.1:3128
+
+echo.
+set /p "BOSCH_NT_USER=%YELLOW%Enter your Bosch NT user: %RESET%"
+if not defined BOSCH_NT_USER (
+    echo %RED%[ERROR] A Bosch NT user is required.%RESET%
+    pause
+    goto :NET_PROXY_CHECK
+)
+for /f "delims=" %%P in ('powershell.exe -NoProfile -Command "$oldColor = $Host.UI.RawUI.ForegroundColor; try { $Host.UI.RawUI.ForegroundColor = 'Yellow'; $secure = Read-Host -Prompt 'Enter your Bosch password' -AsSecureString; $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try { [Console]::WriteLine([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)))) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) } } finally { $Host.UI.RawUI.ForegroundColor = $oldColor }"') do set "BOSCH_PASSWORD_B64=%%P"
+if not defined BOSCH_PASSWORD_B64 (
+    echo %RED%[ERROR] A Bosch password is required.%RESET%
+    pause
+    goto :NET_PROXY_CHECK
+)
 
 echo.
 
@@ -726,6 +742,10 @@ if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
 
 if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
 
+set "VM_EFFECTIVE_PROXY_URL=%VM_PROXY_URL%"
+
+if "%NET_CHOICE%"=="1" set "VM_EFFECTIVE_PROXY_URL=http://127.0.0.1:3128"
+
 :: =======================================================================
 :: Configure Cloud-Init and the CIDATA directory
 :: =======================================================================
@@ -742,8 +762,9 @@ if "%USE_PROXY%"=="true" echo proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\c
 if "%USE_PROXY%"=="true" echo apt:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 if "%USE_PROXY%"=="true" echo   proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo users:>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo   - default>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - name: boschrexroth>> "%PROJEKT_PFAD%instances\cidata\user-data"
-echo     groups: sudo, lxd>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo     groups: sudo>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     shell: /bin/bash>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     ssh_authorized_keys:>> "%PROJEKT_PFAD%instances\cidata\user-data"
@@ -763,6 +784,7 @@ echo   - git>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - curl>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo   - rsync>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - squashfs-tools>> "%PROJEKT_PFAD%instances\cidata\user-data"
 :: Generate the SDK provisioning script
@@ -827,9 +849,10 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 :SKIP_PROXY_CONFIG
 :: LXD remains the isolated environment for Snapcraft packing
 >> "%SDK_SH%" echo snap install lxd ^|^| snap refresh lxd
+>> "%SDK_SH%" echo if getent group lxd ^> /dev/null; then usermod -aG lxd boschrexroth; fi
 >> "%SDK_SH%" echo lxd init --auto --storage-backend=dir ^|^| true
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_PROXY_URL%" ^|^| true
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_https "%VM_PROXY_URL%" ^|^| true
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_EFFECTIVE_PROXY_URL%" ^|^| true
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_https "%VM_EFFECTIVE_PROXY_URL%" ^|^| true
 if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_ignore_hosts "localhost,127.0.0.1,10.0.2.2" ^|^| true
 >> "%SDK_SH%" echo # Patch APT sources for arm64 cross-compilation (prevents 404 errors)
 >> "%SDK_SH%" echo if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
@@ -874,6 +897,43 @@ if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_ignore_hos
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
+if "%NET_CHOICE%"=="1" (
+>> "%SDK_SH%" echo # Install and configure CNTLM last, after all SDK and Snapcraft downloads.
+>> "%SDK_SH%" echo # The SDK multiarch setup may leave only arm64 package indexes; restore an amd64 universe source for CNTLM.
+>> "%SDK_SH%" echo echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main universe" ^> /etc/apt/sources.list.d/cntlm-amd64.list
+>> "%SDK_SH%" echo if apt-get update ^&^& DEBIAN_FRONTEND=noninteractive apt-get install -y cntlm:amd64; then
+>> "%SDK_SH%" echo     CNTLM_PASSWORD="$(printf '%%s' '%BOSCH_PASSWORD_B64%' | base64 -d)"
+>> "%SDK_SH%" echo     CNTLM_HASH="$(cntlm -u '%BOSCH_NT_USER%' -d DE -p "$CNTLM_PASSWORD" -H 2>/tmp/cntlm-hash-error | awk '/^PassNTLMv2/{print $2}')"
+>> "%SDK_SH%" echo     unset CNTLM_PASSWORD
+>> "%SDK_SH%" echo     if [ -n "$CNTLM_HASH" ]; then
+>> "%SDK_SH%" echo         rm -f /tmp/cntlm-hash-error
+>> "%SDK_SH%" echo         cat ^<^< EOF ^| tee /etc/cntlm.conf
+>> "%SDK_SH%" echo Username        %BOSCH_NT_USER%
+>> "%SDK_SH%" echo Domain          DE
+>> "%SDK_SH%" echo PassNTLMv2      $CNTLM_HASH
+>> "%SDK_SH%" echo.
+>> "%SDK_SH%" echo Proxy           rb-proxy-de.bosch.com:8080
+>> "%SDK_SH%" echo Proxy           rb-proxy-special.bosch.com:8080
+>> "%SDK_SH%" echo NoProxy         localhost, 127.0.0.*, 10.*, 192.168.*, *.bosch.com
+>> "%SDK_SH%" echo Listen          3128
+>> "%SDK_SH%" echo EOF
+>> "%SDK_SH%" echo         chmod 600 /etc/cntlm.conf
+>> "%SDK_SH%" echo         systemctl enable cntlm
+>> "%SDK_SH%" echo         systemctl restart cntlm
+>> "%SDK_SH%" echo         if systemctl is-active --quiet cntlm; then
+>> "%SDK_SH%" echo             echo "CNTLM service started successfully"
+>> "%SDK_SH%" echo         else
+>> "%SDK_SH%" echo             echo "CNTLM service failed to start; continuing without switching the proxy" ^>^&2
+>> "%SDK_SH%" echo             systemctl status cntlm --no-pager ^>^&2
+>> "%SDK_SH%" echo         fi
+>> "%SDK_SH%" echo     else
+>> "%SDK_SH%" echo         echo "CNTLM hash generation failed; continuing without CNTLM" ^>^&2
+>> "%SDK_SH%" echo         cat /tmp/cntlm-hash-error ^>^&2
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo else
+>> "%SDK_SH%" echo     echo "CNTLM installation failed; continuing without CNTLM" ^>^&2
+>> "%SDK_SH%" echo fi
+)
 :: Embed the provisioning script in user-data
 echo write_files:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - path: /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
