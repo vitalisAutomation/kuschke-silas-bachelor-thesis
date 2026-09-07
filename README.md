@@ -60,6 +60,10 @@ After the settings have been entered in the terminal and a virtual machine has b
 
 The `raspi-preparation` directory contains `prepare_raspberry_pi.bat`. The script prepares a Raspberry Pi 5 with Ubuntu Server ARM64 so it can be used as a native ARM64 build system. It can also connect to a Raspberry Pi that has already been prepared.
 
+The SSH connection from the Windows development computer to the Raspberry Pi does not work over a VPN.
+
+The option to configure a proxy on the Raspberry Pi and download all required `apt` packages through it has not yet been tested. So far, the workflow has always been used with direct Wi-Fi access without a proxy. The check for missing Raspberry Pi Imager and Visual Studio Code installations has also not yet been tested.
+
 Before starting, install Raspberry Pi Imager and connect the SD card to the Windows development computer. The script checks for Visual Studio Code, the Remote-SSH extension and the required development extensions. Missing components can be installed automatically with administrator rights. An SSH key is generated once and reused for later connections.
 
 Start the script by double-clicking `raspi-preparation/prepare_raspberry_pi.bat`. The main menu provides two options:
