@@ -654,6 +654,8 @@ if not exist "%PROJEKT_PFAD%instances" mkdir "%PROJEKT_PFAD%instances" >nul 2>&1
 
 set "VM_FILE=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2"
 
+if exist "%VM_FILE%" del /f /q "%VM_FILE%" >nul 2>&1
+
 :: Select the download URL for the requested core version
 
 if "%CORE_VER%"=="22" (
@@ -676,11 +678,11 @@ echo(
 
 if "%USE_PROXY%"=="true" (
 
-    curl.exe -k -x %PROXY_URL% -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
+    curl.exe -k -f -x %PROXY_URL% -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
 
 ) else (
 
-    curl.exe -k -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
+    curl.exe -k -f -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
 
 )
 
@@ -753,7 +755,8 @@ echo %BLUE%[Cloud-Init]%RESET% Generating configuration files in the CIDATA fold
 :: Ensure that the CIDATA directory exists
 if not exist "%PROJEKT_PFAD%instances\cidata" mkdir "%PROJEKT_PFAD%instances\cidata" >nul 2>&1
 :: Create the required meta-data file
-echo instance-id: ctrlx-build-env-vm > "%PROJEKT_PFAD%instances\cidata\meta-data"
+set "CLOUD_INIT_INSTANCE_ID=ctrlx-build-env-%CORE_VER%-%RANDOM%-%RANDOM%"
+echo instance-id: %CLOUD_INIT_INSTANCE_ID% > "%PROJEKT_PFAD%instances\cidata\meta-data"
 echo local-hostname: ctrlx-sdk-vm >> "%PROJEKT_PFAD%instances\cidata\meta-data"
 :: Create user-data with credentials and the SSH public key
 echo #cloud-config> "%PROJEKT_PFAD%instances\cidata\user-data"
