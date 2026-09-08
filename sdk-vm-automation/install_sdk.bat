@@ -1300,7 +1300,7 @@ goto :EOF
     set /a EXTENSION_WAIT_COUNT=0
 :WAIT_FOR_CODE_SERVER
     set /a EXTENSION_WAIT_COUNT+=1
-    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "test -n $(if [ -d /home/boschrexroth/.vscode-server ]; then find /home/boschrexroth/.vscode-server -type f -name code-server -print -quit; fi)" >nul 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server -type f -name code-server -perm -u+x -print -quit 2>/dev/null); test -n \"$code_server\""
     if %errorlevel%==0 goto :CODE_SERVER_READY
     if %EXTENSION_WAIT_COUNT% GEQ 60 (
         echo %YELLOW%[VM Extensions] The VS Code Server did not become ready in time. Open the VM in VS Code once and run the script again.%RESET%
@@ -1323,7 +1323,7 @@ goto :EOF
     ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo resize2fs /dev/vda1 >/dev/null 2>&1"
     if errorlevel 1 echo %YELLOW%[Storage] Filesystem resize could not be completed.%RESET%
     echo %BLUE%[VM Extensions]%RESET% Installing extensions in the VM sequentially...
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "set -e; code_server=$(if [ -d /home/boschrexroth/.vscode-server ]; then find /home/boschrexroth/.vscode-server -type f -name code-server -print -quit; fi); test -n ${code_server:-}; export VSCODE_AGENT_FOLDER=/home/boschrexroth/.vscode-server; extension_dir=/home/boschrexroth/.vscode-server/extensions; mkdir -p $extension_dir; echo Using VS Code Server: $code_server; for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --extensions-dir $extension_dir --force; done; echo Installed VM extensions:; $code_server --list-extensions --extensions-dir $extension_dir" >> "install_debug.log" 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "set -eu; code_server=$(find /home/boschrexroth/.vscode-server -type f -name code-server -perm -u+x -print -quit 2>/dev/null); test -n \"$code_server\"; test -x \"$code_server\"; export VSCODE_AGENT_FOLDER=/home/boschrexroth/.vscode-server; extension_dir=/home/boschrexroth/.vscode-server/extensions; mkdir -p \"$extension_dir\"; echo Using VS Code Server: \"$code_server\"; for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing \"$extension\"; \"$code_server\" --install-extension \"$extension\" --extensions-dir \"$extension_dir\" --force; done; echo Installed VM extensions:; \"$code_server\" --list-extensions --extensions-dir \"$extension_dir\"" >> "install_debug.log" 2>&1
     if errorlevel 1 (
         echo %YELLOW%[VM Extensions] Installation failed. See install_debug.log for details.%RESET%
         exit /b 1
