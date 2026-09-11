@@ -830,6 +830,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo chmod +x /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%" https_proxy="%VM_PROXY_URL%" HTTP_PROXY="%VM_PROXY_URL%" HTTPS_PROXY="%VM_PROXY_URL%"
 :: Configure the proxy for interactive and non-interactive Bash sessions
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
@@ -900,8 +901,72 @@ if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_ignore_hos
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
+:: Install the ctrlX OS Agent Skill and configure VS Code Agent Skills before CNTLM.
+>> "%SDK_SH%" echo echo "Installing ctrlX OS Agent Skill for GitHub Copilot..."
+>> "%SDK_SH%" echo SKILL_REPO_DIR=/home/boschrexroth/.repo_anton
+>> "%SDK_SH%" echo SKILL_LOG=/var/log/ctrlx-agent-skills-install.log
+>> "%SDK_SH%" echo NODE_VERSION=22.20.0
+>> "%SDK_SH%" echo NODE_DIR=/opt/node-v$NODE_VERSION-linux-x64
+>> "%SDK_SH%" echo NODE_ARCHIVE=/tmp/node-v$NODE_VERSION-linux-x64.tar.xz
+>> "%SDK_SH%" echo NODE_URL="https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz"
+>> "%SDK_SH%" echo NODE_PROXY="${https_proxy:-${HTTPS_PROXY:-}}"
+>> "%SDK_SH%" echo if [ ! -x "$NODE_DIR/bin/npx" ]; then
+>> "%SDK_SH%" echo     if curl -fsSL --retry 3 --proxy "$NODE_PROXY" -o "$NODE_ARCHIVE" "$NODE_URL"; then
+>> "%SDK_SH%" echo         rm -rf "$NODE_DIR"
+>> "%SDK_SH%" echo         if tar -xJf "$NODE_ARCHIVE" -C /opt; then
+>> "%SDK_SH%" echo             rm -f "$NODE_ARCHIVE"
+>> "%SDK_SH%" echo         else
+>> "%SDK_SH%" echo             echo "Node.js archive extraction failed." ^>^&2
+>> "%SDK_SH%" echo         fi
+>> "%SDK_SH%" echo     else
+>> "%SDK_SH%" echo         echo "Node.js download failed; check proxy connectivity." ^>^&2
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo fi
+>> "%SDK_SH%" echo SKILLS_NPX="$NODE_DIR/bin/npx"
+>> "%SDK_SH%" echo if command -v git ^> /dev/null ^&^& [ -x "$SKILLS_NPX" ]; then
+>> "%SDK_SH%" echo     if [ -d "$SKILL_REPO_DIR/.git" ]; then
+>> "%SDK_SH%" echo         git -C "$SKILL_REPO_DIR" pull --ff-only ^>^> "$SKILL_LOG" 2^>^&1 ^|^| true
+>> "%SDK_SH%" echo     else
+>> "%SDK_SH%" echo         rm -rf "$SKILL_REPO_DIR"
+>> "%SDK_SH%" echo         git clone --depth 1 https://github.com/gmantoha/ctrlx-os-agent-skills.git "$SKILL_REPO_DIR" ^> "$SKILL_LOG" 2^>^&1
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo     chown -R boschrexroth:boschrexroth "$SKILL_REPO_DIR"
+>> "%SDK_SH%" echo     su - boschrexroth -c "$SKILLS_NPX --yes skills add gmantoha/ctrlx-os-agent-skills --skill ctrlx --agent github-copilot --global --copy --yes" ^>^> "$SKILL_LOG" 2^>^&1
+>> "%SDK_SH%" echo     VSCODE_SETTINGS=/home/boschrexroth/.vscode-server/data/Machine/settings.json
+>> "%SDK_SH%" echo     install -d -m 700 -o boschrexroth -g boschrexroth "$(dirname "$VSCODE_SETTINGS")"
+>> "%SDK_SH%" echo     cat ^> /tmp/merge-vscode-settings.js ^<^< 'EOF'
+>> "%SDK_SH%" echo const fs = require("fs");
+>> "%SDK_SH%" echo const settingsPath = process.argv[2];
+>> "%SDK_SH%" echo const settings = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, "utf8") : "{}";
 if "%NET_CHOICE%"=="1" (
->> "%SDK_SH%" echo # Install and configure CNTLM last, after all SDK and Snapcraft downloads.
+>> "%SDK_SH%" echo const skillLocations = '"chat.agentSkillsLocations": {\n        "~/.repo_anton": true,\n        "~/.copilot/skills": true,\n        "~/.agents/skills": true\n    },\n    "http.proxy": "http://127.0.0.1:3128",\n    "http.proxySupport": "override"';
+) else (
+>> "%SDK_SH%" echo const skillLocations = '"chat.agentSkillsLocations": {\n        "~/.repo_anton": true,\n        "~/.copilot/skills": true,\n        "~/.agents/skills": true\n    }';
+)
+>> "%SDK_SH%" echo const locationPattern = /"chat\.agentSkillsLocations"\s*:\s*\{[^{}]*\}/s;
+>> "%SDK_SH%" echo let updatedSettings;
+>> "%SDK_SH%" echo if (locationPattern.test(settings)) {
+>> "%SDK_SH%" echo     updatedSettings = settings.replace(locationPattern, skillLocations);
+>> "%SDK_SH%" echo } else {
+>> "%SDK_SH%" echo     const closingBrace = settings.lastIndexOf("}");
+>> "%SDK_SH%" echo     if (closingBrace ^< 0) throw new Error("VS Code settings are not a JSON object");
+>> "%SDK_SH%" echo     const prefix = settings.slice(0, closingBrace).trimEnd();
+>> "%SDK_SH%" echo     const suffix = settings.slice(closingBrace + 1);
+>> "%SDK_SH%" echo     const separator = prefix.endsWith("{") ? "" : ",";
+>> "%SDK_SH%" echo     updatedSettings = prefix + separator + "\n    " + skillLocations + "\n}" + suffix;
+>> "%SDK_SH%" echo }
+>> "%SDK_SH%" echo fs.writeFileSync(settingsPath, updatedSettings);
+>> "%SDK_SH%" echo EOF
+>> "%SDK_SH%" echo     "$NODE_DIR/bin/node" /tmp/merge-vscode-settings.js "$VSCODE_SETTINGS" ^>^> "$SKILL_LOG" 2^>^&1
+>> "%SDK_SH%" echo     rm -f /tmp/merge-vscode-settings.js
+>> "%SDK_SH%" echo     chown boschrexroth:boschrexroth "$VSCODE_SETTINGS"
+>> "%SDK_SH%" echo     chmod 600 "$VSCODE_SETTINGS"
+>> "%SDK_SH%" echo     echo "ctrlX OS Agent Skill and VS Code configuration installed."
+>> "%SDK_SH%" echo else
+>> "%SDK_SH%" echo     echo "ctrlX OS Agent Skill installation skipped: git or npx is unavailable." ^>^&2
+>> "%SDK_SH%" echo fi
+if "%NET_CHOICE%"=="1" (
+>> "%SDK_SH%" echo # Install and configure CNTLM after all SDK, Snapcraft, and Agent Skill downloads.
 >> "%SDK_SH%" echo # The SDK multiarch setup may leave only arm64 package indexes; restore an amd64 universe source for CNTLM.
 >> "%SDK_SH%" echo echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main universe" ^> /etc/apt/sources.list.d/cntlm-amd64.list
 >> "%SDK_SH%" echo if apt-get update ^&^& DEBIAN_FRONTEND=noninteractive apt-get install -y cntlm:amd64; then
@@ -910,7 +975,7 @@ if "%NET_CHOICE%"=="1" (
 >> "%SDK_SH%" echo     unset CNTLM_PASSWORD
 >> "%SDK_SH%" echo     if [ -n "$CNTLM_HASH" ]; then
 >> "%SDK_SH%" echo         rm -f /tmp/cntlm-hash-error
->> "%SDK_SH%" echo         cat ^<^< EOF ^| tee /etc/cntlm.conf
+>> "%SDK_SH%" echo         cat ^<^< EOF ^> /etc/cntlm.conf
 >> "%SDK_SH%" echo Username        %BOSCH_NT_USER%
 >> "%SDK_SH%" echo Domain          DE
 >> "%SDK_SH%" echo PassNTLMv2      $CNTLM_HASH
@@ -925,6 +990,11 @@ if "%NET_CHOICE%"=="1" (
 >> "%SDK_SH%" echo         systemctl restart cntlm
 >> "%SDK_SH%" echo         if systemctl is-active --quiet cntlm; then
 >> "%SDK_SH%" echo             echo "CNTLM service started successfully"
+>> "%SDK_SH%" echo             CNTLM_PROXY_URL=http://127.0.0.1:3128
+>> "%SDK_SH%" echo             export http_proxy="$CNTLM_PROXY_URL" https_proxy="$CNTLM_PROXY_URL" HTTP_PROXY="$CNTLM_PROXY_URL" HTTPS_PROXY="$CNTLM_PROXY_URL"
+>> "%SDK_SH%" echo             sed -i 's#http://10\.0\.2\.2:3128#http://127.0.0.1:3128#g' /etc/environment /etc/profile.d/proxy.sh /etc/bash.bashrc /etc/apt/apt.conf.d/99proxy
+>> "%SDK_SH%" echo             snap set system proxy.http="$CNTLM_PROXY_URL"
+>> "%SDK_SH%" echo             snap set system proxy.https="$CNTLM_PROXY_URL"
 >> "%SDK_SH%" echo         else
 >> "%SDK_SH%" echo             echo "CNTLM service failed to start; continuing without switching the proxy" ^>^&2
 >> "%SDK_SH%" echo             systemctl status cntlm --no-pager ^>^&2
