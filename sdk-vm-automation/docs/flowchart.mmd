@@ -73,7 +73,8 @@ flowchart TD
         ProxyType -- Bosch --> BoschProxy["RB Local Proxy Manager bestaetigen<br>PROXY_URL=127.0.0.1:3128"]
         ProxyType -- Firmen-Proxy --> CompanyProxy{"proxy.env<br>vorhanden?"}
         CompanyProxy -- Nein --> ProxyError["proxy.env Vorlage erzeugen<br>Abbruch zum Hauptmenue"] --> MainMenu
-        CompanyProxy -- Ja --> LoadProxy["proxy.env laden<br>PROXY_URL setzen"]
+        CompanyProxy -- Ja --> CntlM["CNTLM-Proxy konfigurieren und starten<br>lokalen Endpoint bereitstellen"]
+        CntlM --> LoadProxy["proxy.env laden<br>PROXY_URL auf CNTLM setzen"]
         ProxyType -- Direkt --> Direct["Direkte Internetverbindung"]
         BoschProxy --> DownloadVm
         LoadProxy --> DownloadVm
