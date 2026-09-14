@@ -795,6 +795,7 @@ set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 > "%SDK_SH%" echo #!/bin/bash
 >> "%SDK_SH%" echo install -d -m 755 -o boschrexroth -g boschrexroth /home/boschrexroth
+>> "%SDK_SH%" echo install -d -m 700 -o boschrexroth -g boschrexroth /home/boschrexroth/.vscode-server
 >> "%SDK_SH%" echo chown -R boschrexroth:boschrexroth /home/boschrexroth
 :: Generate the serial console autologin configuration
 >> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
@@ -1141,10 +1142,6 @@ echo %GREEN%====================================================================
 echo The VM is ready to use (Ubuntu Core %CORE_VER%).
 
 echo.
-
-echo %YELLOW%Press any key to start the VM now...%RESET%
-
-pause >nul
 
 if defined SEED_REBUILD_FOR_START (
     set "SEED_REBUILD_FOR_START="
