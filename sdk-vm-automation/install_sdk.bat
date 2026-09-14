@@ -794,6 +794,8 @@ echo   - squashfs-tools>> "%PROJEKT_PFAD%instances\cidata\user-data"
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 > "%SDK_SH%" echo #!/bin/bash
+>> "%SDK_SH%" echo install -d -m 755 -o boschrexroth -g boschrexroth /home/boschrexroth
+>> "%SDK_SH%" echo chown -R boschrexroth:boschrexroth /home/boschrexroth
 :: Generate the serial console autologin configuration
 >> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
 >> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I ^\$TERM" ^| tee /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
@@ -1337,6 +1339,9 @@ goto :EOF
     call :OPEN_VSCODE_REMOTE
     exit /b %errorlevel%
 
+:INSTALL_VM_EXTENSIONS
+    goto :INSTALL_VM_EXTENSIONS_IMPL
+
 :OPEN_VSCODE_REMOTE
     call :CHECK_VSCODE_PATH_ROBUST
     if "%VSCODE_OK%"=="No" (
@@ -1367,13 +1372,13 @@ goto :EOF
     echo %GREEN%[Auto Connect]%RESET% VS Code started and connecting to ctrlx-sdk-vm.
     exit /b 0
 
-:INSTALL_VM_EXTENSIONS
+:INSTALL_VM_EXTENSIONS_IMPL
     echo %BLUE%[VM Extensions]%RESET% Waiting for the Remote-SSH server to initialize...
     echo %YELLOW%[VM Extensions]%RESET% These extensions are installed in the VM's Remote Extension Host, not on Windows.
     set /a EXTENSION_WAIT_COUNT=0
 :WAIT_FOR_CODE_SERVER
     set /a EXTENSION_WAIT_COUNT+=1
-    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server -type f -name code-server -perm -u+x -print -quit 2>/dev/null); test -n \"$code_server\""
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server -type f -name code-server -perm -u+x -print -quit 2>/dev/null); test -n \"$code_server\"" >nul 2>&1
     if %errorlevel%==0 goto :CODE_SERVER_READY
     if %EXTENSION_WAIT_COUNT% GEQ 60 (
         echo %YELLOW%[VM Extensions] The VS Code Server did not become ready in time. Open the VM in VS Code once and run the script again.%RESET%
