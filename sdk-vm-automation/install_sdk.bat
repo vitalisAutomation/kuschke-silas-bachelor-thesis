@@ -1146,6 +1146,11 @@ echo %YELLOW%Press any key to start the VM now...%RESET%
 
 pause >nul
 
+if defined SEED_REBUILD_FOR_START (
+    set "SEED_REBUILD_FOR_START="
+    goto :START_QEMU_NOW
+)
+
 goto :START_QEMU_VM
 
 :: =======================================================================
@@ -1181,6 +1186,7 @@ echo(
 :: Always rebuild seed.iso from the current Cloud-Init files.
 if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
     echo %BLUE%[Cloud-Init]%RESET% Rebuilding seed.iso from the current CIDATA files...
+    set "SEED_REBUILD_FOR_START=1"
     goto :GENERATE_ISO
 )
 
