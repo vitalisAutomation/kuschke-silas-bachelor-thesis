@@ -1178,16 +1178,10 @@ echo %BLUE%=====================================================================
 
 echo(
 
-:: Recreate seed.iso when it is missing
-
-if exist "%PROJEKT_PFAD%instances\seed.iso" goto :START_QEMU_NOW
-
+:: Always rebuild seed.iso from the current Cloud-Init files.
 if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
-
-    echo %YELLOW%[Safety] seed.iso is missing. Generating it again...%RESET%
-
+    echo %BLUE%[Cloud-Init]%RESET% Rebuilding seed.iso from the current CIDATA files...
     goto :GENERATE_ISO
-
 )
 
 echo %RED%[ERROR] The Cloud-Init configuration is missing! Please download the VM again (option 2).%RESET%
@@ -1208,7 +1202,7 @@ if exist "%PROJEKT_PFAD%qemu\qemu-img.exe" (
 :: Start QEMU with boot output in a dedicated terminal
 :: whpx: Hardware acceleration via Windows Hypervisor Platform (works alongside VBS/Hyper-V).
 :: cache=writeback,aio=threads speeds up the IO heavy snap builds noticeably.
-start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -accel whpx,kernel-irqchip=off -m 16G -smp 12 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off,cache=writeback,aio=threads,discard=unmap"" -drive ""file=%PROJEKT_PFAD%instances\seed.iso,format=raw,if=ide,media=cdrom,readonly=on"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
+start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -accel whpx,kernel-irqchip=off -m 16G -smp 12 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off,cache=writeback,aio=threads,discard=unmap"" -drive ""file=%PROJEKT_PFAD%instances\seed.iso,format=raw,if=ide,media=cdrom,readonly=on"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
 if errorlevel 1 (
     echo %RED%[ERROR] QEMU could not be started.%RESET%
