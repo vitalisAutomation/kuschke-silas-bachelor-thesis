@@ -438,6 +438,8 @@ echo(
 set /p NET_CHOICE="%YELLOW%Choose an option (1, 2 or 3): %RESET%"
 
 set USE_PROXY=false
+set "BOSCH_NT_USER="
+set "BOSCH_PASSWORD_B64="
 
 if "%NET_CHOICE%"=="1" goto :BOSCH_PROXY
 
@@ -450,6 +452,20 @@ goto :NO_PROXY
 set USE_PROXY=true
 
 set PROXY_URL=http://127.0.0.1:3128
+
+echo.
+set /p "BOSCH_NT_USER=%YELLOW%Enter your Bosch NT user: %RESET%"
+if not defined BOSCH_NT_USER (
+    echo %RED%[ERROR] A Bosch NT user is required.%RESET%
+    pause
+    goto :NET_PROXY_CHECK
+)
+for /f "delims=" %%P in ('powershell.exe -NoProfile -Command "$oldColor = $Host.UI.RawUI.ForegroundColor; try { $Host.UI.RawUI.ForegroundColor = 'Yellow'; $secure = Read-Host -Prompt 'Enter your Bosch password' -AsSecureString; $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try { [Console]::WriteLine([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)))) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) } } finally { $Host.UI.RawUI.ForegroundColor = $oldColor }"') do set "BOSCH_PASSWORD_B64=%%P"
+if not defined BOSCH_PASSWORD_B64 (
+    echo %RED%[ERROR] A Bosch password is required.%RESET%
+    pause
+    goto :NET_PROXY_CHECK
+)
 
 echo.
 
@@ -638,6 +654,8 @@ if not exist "%PROJEKT_PFAD%instances" mkdir "%PROJEKT_PFAD%instances" >nul 2>&1
 
 set "VM_FILE=%PROJEKT_PFAD%instances\ubuntu-build-env-core%CORE_VER%.qcow2"
 
+if exist "%VM_FILE%" del /f /q "%VM_FILE%" >nul 2>&1
+
 :: Select the download URL for the requested core version
 
 if "%CORE_VER%"=="22" (
@@ -660,11 +678,11 @@ echo(
 
 if "%USE_PROXY%"=="true" (
 
-    curl.exe -k -x %PROXY_URL% -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
+    curl.exe -k -f -x %PROXY_URL% -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
 
 ) else (
 
-    curl.exe -k -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
+    curl.exe -k -f -L -# -o "%VM_FILE%" "%DOWNLOAD_URL%"
 
 )
 
@@ -726,6 +744,10 @@ if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%PROXY_URL:127.0.0.1=10.0.2.2%"
 
 if "%USE_PROXY%"=="true" set "VM_PROXY_URL=%VM_PROXY_URL:localhost=10.0.2.2%"
 
+set "VM_EFFECTIVE_PROXY_URL=%VM_PROXY_URL%"
+
+if "%NET_CHOICE%"=="1" set "VM_EFFECTIVE_PROXY_URL=http://127.0.0.1:3128"
+
 :: =======================================================================
 :: Configure Cloud-Init and the CIDATA directory
 :: =======================================================================
@@ -733,7 +755,8 @@ echo %BLUE%[Cloud-Init]%RESET% Generating configuration files in the CIDATA fold
 :: Ensure that the CIDATA directory exists
 if not exist "%PROJEKT_PFAD%instances\cidata" mkdir "%PROJEKT_PFAD%instances\cidata" >nul 2>&1
 :: Create the required meta-data file
-echo instance-id: ctrlx-build-env-vm > "%PROJEKT_PFAD%instances\cidata\meta-data"
+set "CLOUD_INIT_INSTANCE_ID=ctrlx-build-env-%CORE_VER%-%RANDOM%-%RANDOM%"
+echo instance-id: %CLOUD_INIT_INSTANCE_ID% > "%PROJEKT_PFAD%instances\cidata\meta-data"
 echo local-hostname: ctrlx-sdk-vm >> "%PROJEKT_PFAD%instances\cidata\meta-data"
 :: Create user-data with credentials and the SSH public key
 echo #cloud-config> "%PROJEKT_PFAD%instances\cidata\user-data"
@@ -742,8 +765,9 @@ if "%USE_PROXY%"=="true" echo proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\c
 if "%USE_PROXY%"=="true" echo apt:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 if "%USE_PROXY%"=="true" echo   proxy: %VM_PROXY_URL%>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo users:>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo   - default>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - name: boschrexroth>> "%PROJEKT_PFAD%instances\cidata\user-data"
-echo     groups: sudo, lxd>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo     groups: sudo>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     shell: /bin/bash>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     sudo: ALL=^(ALL^) NOPASSWD:ALL>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo     ssh_authorized_keys:>> "%PROJEKT_PFAD%instances\cidata\user-data"
@@ -763,12 +787,16 @@ echo   - git>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - curl>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - wget>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - make>> "%PROJEKT_PFAD%instances\cidata\user-data"
+echo   - rsync>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - unzip>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - squashfs-tools>> "%PROJEKT_PFAD%instances\cidata\user-data"
 :: Generate the SDK provisioning script
 set "SDK_SH=%PROJEKT_PFAD%instances\cidata\setup-sdk.sh"
 if exist "%SDK_SH%" del "%SDK_SH%" >nul 2>&1
 > "%SDK_SH%" echo #!/bin/bash
+>> "%SDK_SH%" echo install -d -m 755 -o boschrexroth -g boschrexroth /home/boschrexroth
+>> "%SDK_SH%" echo install -d -m 700 -o boschrexroth -g boschrexroth /home/boschrexroth/.vscode-server
+>> "%SDK_SH%" echo chown -R boschrexroth:boschrexroth /home/boschrexroth
 :: Generate the serial console autologin configuration
 >> "%SDK_SH%" echo mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
 >> "%SDK_SH%" echo echo -e "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin boschrexroth --noclear %%I ^\$TERM" ^| tee /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
@@ -805,6 +833,7 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 >> "%SDK_SH%" echo echo "export NO_PROXY=\"localhost,127.0.0.1,10.0.2.2,.bosch.com\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo echo "export TMPDIR=\"/tmp\"" ^| tee -a /etc/profile.d/proxy.sh
 >> "%SDK_SH%" echo chmod +x /etc/profile.d/proxy.sh
+>> "%SDK_SH%" echo export http_proxy="%VM_PROXY_URL%" https_proxy="%VM_PROXY_URL%" HTTP_PROXY="%VM_PROXY_URL%" HTTPS_PROXY="%VM_PROXY_URL%"
 :: Configure the proxy for interactive and non-interactive Bash sessions
 >> "%SDK_SH%" echo echo "export http_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
 >> "%SDK_SH%" echo echo "export https_proxy=\"%VM_PROXY_URL%\"" ^| tee -a /etc/bash.bashrc
@@ -827,9 +856,10 @@ if "%USE_PROXY%" neq "true" goto :SKIP_PROXY_CONFIG
 :SKIP_PROXY_CONFIG
 :: LXD remains the isolated environment for Snapcraft packing
 >> "%SDK_SH%" echo snap install lxd ^|^| snap refresh lxd
+>> "%SDK_SH%" echo if getent group lxd ^> /dev/null; then usermod -aG lxd boschrexroth; fi
 >> "%SDK_SH%" echo lxd init --auto --storage-backend=dir ^|^| true
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_PROXY_URL%" ^|^| true
-if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_https "%VM_PROXY_URL%" ^|^| true
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_http "%VM_EFFECTIVE_PROXY_URL%" ^|^| true
+if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_https "%VM_EFFECTIVE_PROXY_URL%" ^|^| true
 if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_ignore_hosts "localhost,127.0.0.1,10.0.2.2" ^|^| true
 >> "%SDK_SH%" echo # Patch APT sources for arm64 cross-compilation (prevents 404 errors)
 >> "%SDK_SH%" echo if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
@@ -874,6 +904,112 @@ if "%USE_PROXY%"=="true" >> "%SDK_SH%" echo lxc config set core.proxy_ignore_hos
 >> "%SDK_SH%" echo su - boschrexroth -c "./clone-install-sdk.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-required-packages.sh"
 >> "%SDK_SH%" echo su - boschrexroth -c "/home/boschrexroth/ctrlx-automation-sdk/scripts/install-snapcraft.sh"
+:: Install the ctrlX OS Agent Skill and configure VS Code Agent Skills before CNTLM.
+>> "%SDK_SH%" echo echo "Installing ctrlX OS Agent Skill for GitHub Copilot..."
+>> "%SDK_SH%" echo SKILL_REPO_DIR=/home/boschrexroth/.repo_anton
+>> "%SDK_SH%" echo SKILL_LOG=/var/log/ctrlx-agent-skills-install.log
+>> "%SDK_SH%" echo NODE_VERSION=22.20.0
+>> "%SDK_SH%" echo NODE_DIR=/opt/node-v$NODE_VERSION-linux-x64
+>> "%SDK_SH%" echo NODE_ARCHIVE=/tmp/node-v$NODE_VERSION-linux-x64.tar.xz
+>> "%SDK_SH%" echo NODE_URL="https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz"
+>> "%SDK_SH%" echo NODE_PROXY="${https_proxy:-${HTTPS_PROXY:-}}"
+>> "%SDK_SH%" echo if [ ! -x "$NODE_DIR/bin/npx" ]; then
+>> "%SDK_SH%" echo     if curl -fsSL --retry 3 --proxy "$NODE_PROXY" -o "$NODE_ARCHIVE" "$NODE_URL"; then
+>> "%SDK_SH%" echo         rm -rf "$NODE_DIR"
+>> "%SDK_SH%" echo         if tar -xJf "$NODE_ARCHIVE" -C /opt; then
+>> "%SDK_SH%" echo             rm -f "$NODE_ARCHIVE"
+>> "%SDK_SH%" echo         else
+>> "%SDK_SH%" echo             echo "Node.js archive extraction failed." ^>^&2
+>> "%SDK_SH%" echo         fi
+>> "%SDK_SH%" echo     else
+>> "%SDK_SH%" echo         echo "Node.js download failed; check proxy connectivity." ^>^&2
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo fi
+>> "%SDK_SH%" echo SKILLS_NPX="$NODE_DIR/bin/npx"
+>> "%SDK_SH%" echo if command -v git ^> /dev/null ^&^& [ -x "$SKILLS_NPX" ]; then
+>> "%SDK_SH%" echo     if [ -d "$SKILL_REPO_DIR/.git" ]; then
+>> "%SDK_SH%" echo         git -C "$SKILL_REPO_DIR" pull --ff-only ^>^> "$SKILL_LOG" 2^>^&1 ^|^| true
+>> "%SDK_SH%" echo     else
+>> "%SDK_SH%" echo         rm -rf "$SKILL_REPO_DIR"
+>> "%SDK_SH%" echo         git clone --depth 1 https://github.com/gmantoha/ctrlx-os-agent-skills.git "$SKILL_REPO_DIR" ^> "$SKILL_LOG" 2^>^&1
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo     chown -R boschrexroth:boschrexroth "$SKILL_REPO_DIR"
+>> "%SDK_SH%" echo     su - boschrexroth -c "$SKILLS_NPX --yes skills add gmantoha/ctrlx-os-agent-skills --skill ctrlx --agent github-copilot --global --copy --yes" ^>^> "$SKILL_LOG" 2^>^&1
+>> "%SDK_SH%" echo     VSCODE_SETTINGS=/home/boschrexroth/.vscode-server/data/Machine/settings.json
+>> "%SDK_SH%" echo     install -d -m 700 -o boschrexroth -g boschrexroth "$(dirname "$VSCODE_SETTINGS")"
+>> "%SDK_SH%" echo     cat ^> /tmp/merge-vscode-settings.js ^<^< 'EOF'
+>> "%SDK_SH%" echo const fs = require("fs");
+>> "%SDK_SH%" echo const settingsPath = process.argv[2];
+>> "%SDK_SH%" echo const settings = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, "utf8") : "{}";
+if "%NET_CHOICE%"=="1" (
+>> "%SDK_SH%" echo const skillLocations = '"chat.agentSkillsLocations": {\n        "~/.repo_anton": true,\n        "~/.copilot/skills": true,\n        "~/.agents/skills": true\n    },\n    "http.proxy": "http://127.0.0.1:3128",\n    "http.proxySupport": "override"';
+) else (
+>> "%SDK_SH%" echo const skillLocations = '"chat.agentSkillsLocations": {\n        "~/.repo_anton": true,\n        "~/.copilot/skills": true,\n        "~/.agents/skills": true\n    }';
+)
+>> "%SDK_SH%" echo const locationPattern = /"chat\.agentSkillsLocations"\s*:\s*\{[^{}]*\}/s;
+>> "%SDK_SH%" echo let updatedSettings;
+>> "%SDK_SH%" echo if (locationPattern.test(settings)) {
+>> "%SDK_SH%" echo     updatedSettings = settings.replace(locationPattern, skillLocations);
+>> "%SDK_SH%" echo } else {
+>> "%SDK_SH%" echo     const closingBrace = settings.lastIndexOf("}");
+>> "%SDK_SH%" echo     if (closingBrace ^< 0) throw new Error("VS Code settings are not a JSON object");
+>> "%SDK_SH%" echo     const prefix = settings.slice(0, closingBrace).trimEnd();
+>> "%SDK_SH%" echo     const suffix = settings.slice(closingBrace + 1);
+>> "%SDK_SH%" echo     const separator = prefix.endsWith("{") ? "" : ",";
+>> "%SDK_SH%" echo     updatedSettings = prefix + separator + "\n    " + skillLocations + "\n}" + suffix;
+>> "%SDK_SH%" echo }
+>> "%SDK_SH%" echo fs.writeFileSync(settingsPath, updatedSettings);
+>> "%SDK_SH%" echo EOF
+>> "%SDK_SH%" echo     "$NODE_DIR/bin/node" /tmp/merge-vscode-settings.js "$VSCODE_SETTINGS" ^>^> "$SKILL_LOG" 2^>^&1
+>> "%SDK_SH%" echo     rm -f /tmp/merge-vscode-settings.js
+>> "%SDK_SH%" echo     chown boschrexroth:boschrexroth "$VSCODE_SETTINGS"
+>> "%SDK_SH%" echo     chmod 600 "$VSCODE_SETTINGS"
+>> "%SDK_SH%" echo     echo "ctrlX OS Agent Skill and VS Code configuration installed."
+>> "%SDK_SH%" echo else
+>> "%SDK_SH%" echo     echo "ctrlX OS Agent Skill installation skipped: git or npx is unavailable." ^>^&2
+>> "%SDK_SH%" echo fi
+if "%NET_CHOICE%"=="1" (
+>> "%SDK_SH%" echo # Install and configure CNTLM after all SDK, Snapcraft, and Agent Skill downloads.
+>> "%SDK_SH%" echo # The SDK multiarch setup may leave only arm64 package indexes; restore an amd64 universe source for CNTLM.
+>> "%SDK_SH%" echo echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu noble main universe" ^> /etc/apt/sources.list.d/cntlm-amd64.list
+>> "%SDK_SH%" echo if apt-get update ^&^& DEBIAN_FRONTEND=noninteractive apt-get install -y cntlm:amd64; then
+>> "%SDK_SH%" echo     CNTLM_PASSWORD="$(printf '%%s' '%BOSCH_PASSWORD_B64%' | base64 -d)"
+>> "%SDK_SH%" echo     CNTLM_HASH="$(cntlm -u '%BOSCH_NT_USER%' -d DE -p "$CNTLM_PASSWORD" -H 2>/tmp/cntlm-hash-error | awk '/^PassNTLMv2/{print $2}')"
+>> "%SDK_SH%" echo     unset CNTLM_PASSWORD
+>> "%SDK_SH%" echo     if [ -n "$CNTLM_HASH" ]; then
+>> "%SDK_SH%" echo         rm -f /tmp/cntlm-hash-error
+>> "%SDK_SH%" echo         cat ^<^< EOF ^> /etc/cntlm.conf
+>> "%SDK_SH%" echo Username        %BOSCH_NT_USER%
+>> "%SDK_SH%" echo Domain          DE
+>> "%SDK_SH%" echo PassNTLMv2      $CNTLM_HASH
+>> "%SDK_SH%" echo.
+>> "%SDK_SH%" echo Proxy           rb-proxy-de.bosch.com:8080
+>> "%SDK_SH%" echo Proxy           rb-proxy-special.bosch.com:8080
+>> "%SDK_SH%" echo NoProxy         localhost, 127.0.0.*, 10.*, 192.168.*, *.bosch.com
+>> "%SDK_SH%" echo Listen          3128
+>> "%SDK_SH%" echo EOF
+>> "%SDK_SH%" echo         chmod 600 /etc/cntlm.conf
+>> "%SDK_SH%" echo         systemctl enable cntlm
+>> "%SDK_SH%" echo         systemctl restart cntlm
+>> "%SDK_SH%" echo         if systemctl is-active --quiet cntlm; then
+>> "%SDK_SH%" echo             echo "CNTLM service started successfully"
+>> "%SDK_SH%" echo             CNTLM_PROXY_URL=http://127.0.0.1:3128
+>> "%SDK_SH%" echo             export http_proxy="$CNTLM_PROXY_URL" https_proxy="$CNTLM_PROXY_URL" HTTP_PROXY="$CNTLM_PROXY_URL" HTTPS_PROXY="$CNTLM_PROXY_URL"
+>> "%SDK_SH%" echo             sed -i 's#http://10\.0\.2\.2:3128#http://127.0.0.1:3128#g' /etc/environment /etc/profile.d/proxy.sh /etc/bash.bashrc /etc/apt/apt.conf.d/99proxy
+>> "%SDK_SH%" echo             snap set system proxy.http="$CNTLM_PROXY_URL"
+>> "%SDK_SH%" echo             snap set system proxy.https="$CNTLM_PROXY_URL"
+>> "%SDK_SH%" echo         else
+>> "%SDK_SH%" echo             echo "CNTLM service failed to start; continuing without switching the proxy" ^>^&2
+>> "%SDK_SH%" echo             systemctl status cntlm --no-pager ^>^&2
+>> "%SDK_SH%" echo         fi
+>> "%SDK_SH%" echo     else
+>> "%SDK_SH%" echo         echo "CNTLM hash generation failed; continuing without CNTLM" ^>^&2
+>> "%SDK_SH%" echo         cat /tmp/cntlm-hash-error ^>^&2
+>> "%SDK_SH%" echo     fi
+>> "%SDK_SH%" echo else
+>> "%SDK_SH%" echo     echo "CNTLM installation failed; continuing without CNTLM" ^>^&2
+>> "%SDK_SH%" echo fi
+)
 :: Embed the provisioning script in user-data
 echo write_files:>> "%PROJEKT_PFAD%instances\cidata\user-data"
 echo   - path: /root/setup-sdk.sh>> "%PROJEKT_PFAD%instances\cidata\user-data"
@@ -1007,9 +1143,10 @@ echo The VM is ready to use (Ubuntu Core %CORE_VER%).
 
 echo.
 
-echo %YELLOW%Press any key to start the VM now...%RESET%
-
-pause >nul
+if defined SEED_REBUILD_FOR_START (
+    set "SEED_REBUILD_FOR_START="
+    goto :START_QEMU_NOW
+)
 
 goto :START_QEMU_VM
 
@@ -1043,16 +1180,11 @@ echo %BLUE%=====================================================================
 
 echo(
 
-:: Recreate seed.iso when it is missing
-
-if exist "%PROJEKT_PFAD%instances\seed.iso" goto :START_QEMU_NOW
-
+:: Always rebuild seed.iso from the current Cloud-Init files.
 if exist "%PROJEKT_PFAD%instances\cidata\user-data" (
-
-    echo %YELLOW%[Safety] seed.iso is missing. Generating it again...%RESET%
-
+    echo %BLUE%[Cloud-Init]%RESET% Rebuilding seed.iso from the current CIDATA files...
+    set "SEED_REBUILD_FOR_START=1"
     goto :GENERATE_ISO
-
 )
 
 echo %RED%[ERROR] The Cloud-Init configuration is missing! Please download the VM again (option 2).%RESET%
@@ -1073,7 +1205,7 @@ if exist "%PROJEKT_PFAD%qemu\qemu-img.exe" (
 :: Start QEMU with boot output in a dedicated terminal
 :: whpx: Hardware acceleration via Windows Hypervisor Platform (works alongside VBS/Hyper-V).
 :: cache=writeback,aio=threads speeds up the IO heavy snap builds noticeably.
-start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -accel whpx,kernel-irqchip=off -m 16G -smp 12 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off,cache=writeback,aio=threads,discard=unmap"" -cdrom ""%PROJEKT_PFAD%instances\seed.iso"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -smbios type=1,serial=""ds=nocloud"" -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
+start "ctrlx-sdk-vm-core%CORE_VER% boot console" cmd /c ""%QEMU_EXE%" -M q35 -accel whpx,kernel-irqchip=off -m 16G -smp 12 -drive ""file=%VM_IMAGE%,format=qcow2,if=virtio,file.locking=off,cache=writeback,aio=threads,discard=unmap"" -drive ""driver=raw,file=%PROJEKT_PFAD%instances\seed.iso,if=virtio,readonly=on"" -net nic,model=virtio -net user,hostfwd=tcp::11022-:22 -serial mon:stdio -display none 2> ""%PROJEKT_PFAD%qemu_error.log"""
 
 if errorlevel 1 (
     echo %RED%[ERROR] QEMU could not be started.%RESET%
@@ -1204,6 +1336,9 @@ goto :EOF
     call :OPEN_VSCODE_REMOTE
     exit /b %errorlevel%
 
+:INSTALL_VM_EXTENSIONS
+    goto :INSTALL_VM_EXTENSIONS_IMPL
+
 :OPEN_VSCODE_REMOTE
     call :CHECK_VSCODE_PATH_ROBUST
     if "%VSCODE_OK%"=="No" (
@@ -1234,13 +1369,13 @@ goto :EOF
     echo %GREEN%[Auto Connect]%RESET% VS Code started and connecting to ctrlx-sdk-vm.
     exit /b 0
 
-:INSTALL_VM_EXTENSIONS
+:INSTALL_VM_EXTENSIONS_IMPL
     echo %BLUE%[VM Extensions]%RESET% Waiting for the Remote-SSH server to initialize...
     echo %YELLOW%[VM Extensions]%RESET% These extensions are installed in the VM's Remote Extension Host, not on Windows.
     set /a EXTENSION_WAIT_COUNT=0
 :WAIT_FOR_CODE_SERVER
     set /a EXTENSION_WAIT_COUNT+=1
-    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "test -n $(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit)" >nul 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "code_server=$(find /home/boschrexroth/.vscode-server -type f -name code-server -perm -u+x -print -quit 2>/dev/null); test -n \"$code_server\"" >nul 2>&1
     if %errorlevel%==0 goto :CODE_SERVER_READY
     if %EXTENSION_WAIT_COUNT% GEQ 60 (
         echo %YELLOW%[VM Extensions] The VS Code Server did not become ready in time. Open the VM in VS Code once and run the script again.%RESET%
@@ -1263,7 +1398,7 @@ goto :EOF
     ssh -o BatchMode=yes -o ConnectTimeout=10 ctrlx-sdk-vm "sudo resize2fs /dev/vda1 >/dev/null 2>&1"
     if errorlevel 1 echo %YELLOW%[Storage] Filesystem resize could not be completed.%RESET%
     echo %BLUE%[VM Extensions]%RESET% Installing extensions in the VM sequentially...
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "set -e; code_server=$(find /home/boschrexroth/.vscode-server/bin -path '*/bin/code-server' -type f -perm -111 -print -quit); for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing $extension; $code_server --install-extension $extension --force; done; echo Installed VM extensions:; $code_server --list-extensions" >> "install_debug.log" 2>&1
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 ctrlx-sdk-vm "set -eu; code_server=$(find /home/boschrexroth/.vscode-server -type f -name code-server -perm -u+x -print -quit 2>/dev/null); test -n \"$code_server\"; test -x \"$code_server\"; export VSCODE_AGENT_FOLDER=/home/boschrexroth/.vscode-server; extension_dir=/home/boschrexroth/.vscode-server/extensions; mkdir -p \"$extension_dir\"; echo Using VS Code Server: \"$code_server\"; for extension in Angular.ng-template golang.go ms-dotnettools.csharp ms-python.python ms-vscode.cmake-tools ms-vscode.cpptools vscjava.vscode-java-pack twxs.cmake; do echo Installing \"$extension\"; \"$code_server\" --install-extension \"$extension\" --extensions-dir \"$extension_dir\" --force; done; echo Installed VM extensions:; \"$code_server\" --list-extensions --extensions-dir \"$extension_dir\"" >> "install_debug.log" 2>&1
     if errorlevel 1 (
         echo %YELLOW%[VM Extensions] Installation failed. See install_debug.log for details.%RESET%
         exit /b 1
