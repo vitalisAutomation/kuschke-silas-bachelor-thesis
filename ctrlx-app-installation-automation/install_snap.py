@@ -189,6 +189,37 @@ def wait_for_scheduler_state(
     return False
 
 
+def switch_scheduler_state_when_ready(
+    target_state: str, timeout_seconds: int = 300
+) -> bool:
+    """Wait for readiness and retry the state change until it succeeds."""
+    start_time = time.time()
+    print(
+        f"[Info] Waiting to switch Scheduler to '{target_state}' "
+        "when the system is ready..."
+    )
+    while time.time() - start_time < timeout_seconds:
+        if get_scheduler_state() == target_state:
+            print(f"[Success] Scheduler is already in '{target_state}' state.")
+            return True
+        remaining_time = timeout_seconds - (time.time() - start_time)
+        readiness_timeout = min(10, max(1, int(remaining_time)))
+        if wait_for_system_and_scheduler_ready(readiness_timeout):
+            if change_scheduler_state(target_state):
+                if wait_for_scheduler_state(target_state, readiness_timeout):
+                    return True
+        print(
+            "[Info] Scheduler state change is not available yet. "
+            "Device Admin may still be active; waiting for the next state check."
+        )
+        time.sleep(5)
+    print(
+        f"[Error] Timeout expired while switching Scheduler to "
+        f"'{target_state}'."
+    )
+    return False
+
+
 def get_installed_packages() -> list[dict] | None:
     """Retrieve the installed packages from the package manager."""
     ip = CTRLX_CONFIG["ip"]
@@ -344,10 +375,7 @@ def main() -> None:
             return
         if initial_state != "SERVICE":
             print("[Info] Switching to SERVICE mode for installation...")
-            if not (
-                change_scheduler_state("SERVICE")
-                and wait_for_scheduler_state("SERVICE")
-            ):
+            if not switch_scheduler_state_when_ready("SERVICE"):
                 print("[Error] Failed to switch to SERVICE mode. Aborting.")
                 return
         else:
@@ -366,21 +394,7 @@ def main() -> None:
                 f"\n[Finalize] Restoring initial Scheduler state "
                 f"'{initial_state}'..."
             )
-            restored = False
-            for attempt in range(1, 6):
-                wait_for_system_and_scheduler_ready()
-                if (
-                    change_scheduler_state(initial_state)
-                    and wait_for_scheduler_state(initial_state)
-                ):
-                    restored = True
-                    break
-                print(
-                    f"[Warning] Restore attempt {attempt}/5 failed. "
-                    "Device Admin may still be active. Retrying in 10s..."
-                )
-                time.sleep(10)
-            if not restored:
+            if not switch_scheduler_state_when_ready(initial_state):
                 print(
                     f"[Failure] Could not restore Scheduler state "
                     f"'{initial_state}'."
