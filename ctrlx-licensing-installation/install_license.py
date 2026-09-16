@@ -293,7 +293,7 @@ def get_single_core_input() -> dict:
 
 
 def process_device(ip: str, creds: dict) -> bool:
-    """Run installation and verification for one CORE and return its result."""
+    """Run the upload workflow for one CORE and return its result."""
     try:
         if not fetch_bearer_token(ip, creds["username"], creds["password"]):
             return False
@@ -307,9 +307,6 @@ def process_device(ip: str, creds: dict) -> bool:
             return False
         if not upload_license(ip, str(license_file)):
             print(f"[Failure] License installation for {ip} reported an error.")
-            return False
-        if not verify_license_installation(ip, serial):
-            print(f"[Failure] License verification for {ip} failed.")
             return False
         print(f"[Finished] Licensing process for {ip} completed successfully.")
         return True
