@@ -10,24 +10,29 @@ Source: Gemini 3.6 Flash
 Edited by: Silas Kuschke
 """
 
-import os
-import time
+# --- Standard library ---
+import copy
 import getpass
+import os
+import re
+import time
+
+# --- Third-party libraries ---
 import requests
 import urllib3
-import copy
-import re
 
 # Disable warnings for self-signed SSL certificates used by ctrlX CORE
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Global configuration and HTTP session initialization
+# --- Global configuration ---
 CTRLX_CONFIG = {}
+
+# --- Global session ---
 HTTP_SESSION = requests.Session()
 HTTP_SESSION.verify = False
 HTTP_SESSION.trust_env = False  # Bypass system proxies for local communication
 
-# Cache for the successfully detected Scheduler REST payload format
+# Cache for the successfully detected Scheduler REST payload format.
 WORKING_PAYLOAD_FORMAT = None
 
 
