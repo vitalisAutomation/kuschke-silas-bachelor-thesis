@@ -111,7 +111,7 @@ def test_verify_license_installation_finds_capability(license_module):
 def test_process_device_cleans_up_session(
     license_module, monkeypatch, license_file
 ):
-    """Run a successful device flow and always close the REST session."""
+    """Trust the upload result and always close the REST session."""
     monkeypatch.setattr(
         license_module,
         "fetch_bearer_token",
@@ -123,11 +123,8 @@ def test_process_device_cleans_up_session(
         Mock(return_value="1234567890123"),
     )
     monkeypatch.setattr(license_module, "upload_license", Mock(return_value=True))
-    monkeypatch.setattr(
-        license_module,
-        "verify_license_installation",
-        Mock(return_value=True),
-    )
+    verify_license = Mock(return_value=False)
+    monkeypatch.setattr(license_module, "verify_license_installation", verify_license)
 
     assert license_module.process_device(
         "192.0.2.10", {"username": "tester", "password": "secret"}
@@ -136,3 +133,4 @@ def test_process_device_cleans_up_session(
         "https://192.0.2.10/identity-manager/api/v2/auth/token",
         timeout=10,
     )
+    verify_license.assert_not_called()
