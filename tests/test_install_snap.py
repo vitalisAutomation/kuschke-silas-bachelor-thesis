@@ -9,6 +9,7 @@ Edited by: Silas Kuschke
 """
 
 # --- Test dependencies ---
+import builtins
 from unittest.mock import Mock
 
 import pytest
@@ -48,7 +49,7 @@ def test_get_snap_metadata(install_module, filename, expected):
 
 def test_configure_connection_uses_defaults(install_module, monkeypatch):
     """Use the documented defaults when connection prompts are empty."""
-    monkeypatch.setattr(install_module, "input", Mock(side_effect=["", ""]))
+    monkeypatch.setattr(builtins, "input", Mock(side_effect=["", ""]))
     monkeypatch.setattr(install_module.getpass, "getpass", Mock(return_value=""))
 
     install_module.configure_connection()
