@@ -111,7 +111,7 @@ The `ctrlx-licensing-installation` directory can install multiple license files 
     .\.venv\Scripts\Activate.ps1
     python .\install_license.py
 
-The script supports selecting one or more COREs. CORE IP addresses can also be stored automatically in a list to avoid entering them manually each time. Based on the serial numbers, the script identifies the corresponding license file and uploads it to the matching CORE. The script has been tested successfully several times, although testing was limited to one CORE.
+The script supports selecting one or more COREs. When requested, CORE IP addresses and usernames are stored in `ctrlx_cores.json`; passwords are stored through the operating system credential manager and are not written to a file. Based on the serial numbers, the script identifies the corresponding license file and uploads it to the matching CORE. The script has been tested successfully several times, although testing was limited to one CORE.
 
 ### ctrlX CORE Operating Mode Test
 

@@ -10,20 +10,24 @@ Source: Gemini 3.6 Flash
 Edited by: Silas Kuschke
 """
 
-import os
-import base64
 import getpass
+import json
+import os
+import re
+from pathlib import Path
+
+import keyring
 import requests
 import urllib3
-import json
-import time
 
 # Disable warnings for self-signed SSL certificates used by ctrlX CORE
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- Configuration ---
-ENV_FILE = "ctrlx_cores.env"
-LICENSE_FOLDER = "./licenses"
+BASE_DIR = Path(__file__).resolve().parent
+CORE_CONFIG_FILE = BASE_DIR / "ctrlx_cores.json"
+LICENSE_FOLDER = BASE_DIR / "licenses"
+KEYRING_SERVICE = "ctrlx-licensing-installation"
 
 # --- Global Session ---
 HTTP_SESSION = requests.Session()
@@ -41,55 +45,64 @@ def update_session_headers(ip: str):
     })
 
 
+def close_session(ip: str) -> None:
+    """Close the authenticated REST session and remove its bearer token."""
+    try:
+        HTTP_SESSION.delete(
+            f"https://{ip}/identity-manager/api/v2/auth/token",
+            timeout=10,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"[Warning] Could not close the REST session for {ip}: {e}")
+    finally:
+        HTTP_SESSION.headers.pop("Authorization", None)
+
+
 def load_cores() -> dict:
     """
-    Loads CORE configurations from the secure .env file.
+    Loads CORE addresses and usernames from the local JSON configuration.
+
+    Passwords are retrieved from the operating system credential store and are
+    never written to the configuration file.
     
     Returns:
         dict: A dictionary containing saved IP configurations and credentials.
     """
     cores = {}
-    if not os.path.exists(ENV_FILE):
+    if not CORE_CONFIG_FILE.exists():
         return cores
-    with open(ENV_FILE, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, val = line.split("=", 1)
-            if key.startswith("CORE_"):
-                ip = key[5:].replace("_", ".")
-                try:
-                    decoded = base64.b64decode(val).decode("utf-8")
-                    user, password = decoded.split(":", 1)
-                    cores[ip] = {"username": user, "password": password}
-                except (base64.binascii.Error, ValueError):
-                    continue
+    try:
+        with CORE_CONFIG_FILE.open("r", encoding="utf-8") as f:
+            entries = json.load(f)
+        for entry in entries:
+            ip = entry["ip"]
+            username = entry["username"]
+            password = keyring.get_password(KEYRING_SERVICE, ip)
+            if password is not None:
+                cores[ip] = {"username": username, "password": password}
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, keyring.errors.KeyringError) as e:
+        print(f"[Warning] Could not load saved CORE configurations: {e}")
     return cores
 
 
 def save_core(ip: str, user: str, password: str) -> None:
     """
-    Saves a CORE configuration securely to the .env file.
+    Saves a CORE username to JSON and its password to the OS credential store.
     """
-    key = f"CORE_{ip.replace('.', '_')}"
-    plain_creds = f"{user}:{password}"
-    encoded_creds = base64.b64encode(plain_creds.encode("utf-8")).decode("utf-8")
-    lines = []
-    updated = False
-    if os.path.exists(ENV_FILE):
-        with open(ENV_FILE, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            for i, line in enumerate(lines):
-                if line.startswith(f"{key}="):
-                    lines[i] = f"{key}={encoded_creds}\n"
-                    updated = True
-                    break
-    if not updated:
-        lines.append(f"{key}={encoded_creds}\n")
-    with open(ENV_FILE, "w", encoding="utf-8") as f:
-        f.writelines(lines)
-    print(f"[Info] Credentials for {ip} saved to {ENV_FILE}")
+    try:
+        keyring.set_password(KEYRING_SERVICE, ip, password)
+        entries = []
+        if CORE_CONFIG_FILE.exists():
+            with CORE_CONFIG_FILE.open("r", encoding="utf-8") as f:
+                entries = json.load(f)
+        entries = [entry for entry in entries if entry.get("ip") != ip]
+        entries.append({"ip": ip, "username": user})
+        with CORE_CONFIG_FILE.open("w", encoding="utf-8") as f:
+            json.dump(entries, f, indent=2)
+            f.write("\n")
+        print(f"[Info] CORE '{ip}' saved; password stored in the OS credential store.")
+    except (OSError, json.JSONDecodeError, TypeError, keyring.errors.KeyringError) as e:
+        print(f"[Error] Could not save credentials for {ip}: {e}")
 
 
 def fetch_bearer_token(ip: str, user: str, password: str) -> bool:
@@ -132,10 +145,11 @@ def fetch_serial_number(ip: str) -> str | None:
         else:
             serial = raw_val
 
-        if serial:
-            serial_str = str(serial).strip('"')
+        serial_str = str(serial).strip('"') if serial is not None else ""
+        if re.fullmatch(r"\d{13}", serial_str):
             print(f"[Success] Fetched serial number via Typeplate: {serial_str}")
             return serial_str
+        print("[Error] Retrieved device ID is not a 13-digit serial number.")
             
     except requests.exceptions.RequestException as e:
         print(f"[Error] Could not fetch serial number: {e}")
@@ -147,82 +161,80 @@ def fetch_serial_number(ip: str) -> str | None:
 
 def upload_license(ip: str, file_path: str) -> bool:
     """
-    Uploads the license file using the confirmed PUT method and correct endpoint.
-    
-    This function parses the server's change report to dynamically identify
-    which licenses were added or if the license was already processed.
-    
-    Args:
-        ip (str): The IP address of the target ctrlX CORE.
-        file_path (str): The local path to the .bin license file.
-        
+    Uploads a license file and reports the server's change result.
+
     Returns:
-        bool: True if the upload was successful, False otherwise.
+        bool: True when the license was accepted or already active.
     """
-    # Endpoint and query parameters confirmed via browser cURL analysis
     url = f"https://{ip}/license-manager/api/v1/capabilities?withChangeReport=true"
     filename = os.path.basename(file_path)
-
     print(f"\n[Upload] Uploading '{filename}' via PUT to the correct endpoint...")
 
     try:
-        with open(file_path, "rb") as f:
-            files = {"file": (filename, f, "application/octet-stream")}
-            
-            # Replicate the precise browser headers to bypass security checks
+        with open(file_path, "rb") as license_stream:
+            files = {"file": (filename, license_stream, "application/octet-stream")}
             headers = {
                 "Accept": "application/json",
                 "Origin": f"https://{ip}",
                 "Referer": f"https://{ip}/package-manager/licenses",
             }
-
             response = HTTP_SESSION.put(
-                url,
-                headers=headers,
-                files=files,
-                timeout=60
+                url, headers=headers, files=files, timeout=60
             )
 
-            # A HTTP 400 with 'already processed' diagnostic code is a functional success,
-            # indicating that the API communication is perfect but the license is already active.
-            if response.status_code == 400:
-                try:
-                    err_data = response.json()
-                    diag_code = err_data.get("detailedDiagnosisCode", "")
-                    # '0C7A0202' is the ctrlX error code for "license already processed"
-                    if diag_code == "0C7A0202" or "already processed" in err_data.get("dynamicDescription", ""):
-                        print(f"[SUCCESS] License '{filename}' is already active/installed on the device.")
-                        return True
-                except (ValueError, KeyError):
-                    pass
+        if response.status_code == 400:
+            try:
+                error_data = response.json()
+                if not isinstance(error_data, dict):
+                    return False
+                already_processed = (
+                    error_data.get("detailedDiagnosisCode") == "0C7A0202"
+                    or "already processed" in error_data.get("dynamicDescription", "").lower()
+                )
+                if already_processed:
+                    print(f"[SUCCESS] License '{filename}' is already active.")
+                    return True
+            except (AttributeError, TypeError, ValueError):
+                pass
 
-            if response.status_code in [200, 201, 204]:
-                print(f"[SUCCESS] License file '{filename}' was successfully processed.")
-                try:
-                    change_report = response.json()
-                    added_licenses = change_report.get("added", [])
-                    
-                    if added_licenses:
-                        print("\n[Report] New licenses added to the device:")
-                        for lic in added_licenses:
-                            lic_name = lic.get("name") or lic.get("id") or "Unknown License"
-                            print(f"  -> + {lic_name}")
-                    else:
-                        print("[Report] No new licenses were added (already up-to-date).")
-                except ValueError:
-                    print(f"[Diag] Server response (not JSON): {response.text}")
-                return True
+        if response.status_code not in [200, 201, 204]:
+            print(f"[Error] Server rejected the upload with status {response.status_code}.")
+            try:
+                error_data = response.json()
+                reason = (
+                    error_data.get("dynamicDescription", response.text)
+                    if isinstance(error_data, dict)
+                    else response.text
+                )
+            except (AttributeError, TypeError, ValueError):
+                reason = response.text
+            print(f"[Diag] Reason: {reason}")
+            return False
+
+        print(f"[SUCCESS] License file '{filename}' was successfully processed.")
+        try:
+            change_report = response.json()
+            added_licenses = (
+                change_report.get("added", [])
+                if isinstance(change_report, dict)
+                else []
+            )
+            if added_licenses:
+                print("\n[Report] New licenses added to the device:")
+                for license_info in added_licenses:
+                    license_name = (
+                        license_info.get("name")
+                        or license_info.get("id")
+                        or "Unknown License"
+                    )
+                    print(f"  -> + {license_name}")
             else:
-                print(f"[Error] Server rejected the upload with status {response.status_code}.")
-                try:
-                    err_json = response.json()
-                    print(f"[Diag] Reason: {err_json.get('dynamicDescription', response.text)}")
-                except ValueError:
-                    print(f"[Diag] Server response: {response.text}")
-                return False
-
-    except requests.exceptions.RequestException as e:
-        print(f"[FATAL] A network error occurred: {e}")
+                print("[Report] No new licenses were added (already up-to-date).")
+        except (AttributeError, TypeError, ValueError):
+            print(f"[Diag] Server response (not JSON): {response.text}")
+        return True
+    except (OSError, requests.exceptions.RequestException) as e:
+        print(f"[Error] Could not upload license file: {e}")
         return False
 
 
@@ -276,33 +288,30 @@ def get_single_core_input() -> dict:
     print("\n--- Configure ctrlX CORE Connection (Press Enter for Default) ---")
     ip = input("Enter IP Address [192.168.1.1]: ").strip() or "192.168.1.1"
     user = input("Enter Username [boschrexroth]: ").strip() or "boschrexroth"
-    password = getpass.getpass("Enter Password [boschrexroth]: ").strip() or "boschrexroth"
+    password = getpass.getpass("Enter Password: ").strip()
     return {"ip": ip, "username": user, "password": password}
 
 
-def process_device(ip: str, creds: dict) -> None:
-    """
-    Runs the full license installation and verification pipeline for a device.
-    """
-    if not fetch_bearer_token(ip, creds["username"], creds["password"]):
-        return
-
-    serial = fetch_serial_number(ip)
-    if not serial:
-        print("[Fatal] Could not determine device serial number. Aborting.")
-        return
-
-    license_file = os.path.join(LICENSE_FOLDER, f"{serial}.bin")
-    if not os.path.exists(license_file):
-        print(f"[Error] License file '{license_file}' not found.")
-        return
-
-    # Trigger the upload. The verification of the processed licenses
-    # is now handled dynamically within the upload function's response report.
-    if upload_license(ip, license_file):
+def process_device(ip: str, creds: dict) -> bool:
+    """Run the upload workflow for one CORE and return its result."""
+    try:
+        if not fetch_bearer_token(ip, creds["username"], creds["password"]):
+            return False
+        serial = fetch_serial_number(ip)
+        if not serial:
+            print("[Fatal] Could not determine device serial number. Aborting.")
+            return False
+        license_file = LICENSE_FOLDER / f"{serial}.bin"
+        if not license_file.is_file():
+            print(f"[Error] License file '{license_file}' not found.")
+            return False
+        if not upload_license(ip, str(license_file)):
+            print(f"[Failure] License installation for {ip} reported an error.")
+            return False
         print(f"[Finished] Licensing process for {ip} completed successfully.")
-    else:
-        print(f"[Failure] License installation for {ip} reported an error.")
+        return True
+    finally:
+        close_session(ip)
 
 
 def main():
@@ -313,15 +322,15 @@ def main():
     print(" ctrlX CORE License Deployment Automation Script")
     print("=" * 50)
 
-    if not os.path.exists(LICENSE_FOLDER):
-        os.makedirs(LICENSE_FOLDER)
+    if not LICENSE_FOLDER.exists():
+        LICENSE_FOLDER.mkdir(parents=True)
         print(f"[Info] Created license directory: '{LICENSE_FOLDER}'")
 
     saved_cores = load_cores()
 
     print("\nSelect Deployment Mode:")
     print("1) Single ctrlX CORE")
-    print("2) Multiple ctrlX COREs from .env file")
+    print("2) Multiple ctrlX COREs from saved configuration")
 
     try:
         choice = input("Enter choice (1 or 2): ").strip() or "1"
@@ -334,11 +343,16 @@ def main():
                     save_core(creds["ip"], creds["username"], creds["password"])
         elif choice == "2":
             if not saved_cores:
-                print(f"\n[Warning] No devices in '{ENV_FILE}'. Add one first.")
+                print(f"\n[Warning] No saved devices in '{CORE_CONFIG_FILE}'. Add one first.")
                 return
+            results = {}
             for ip, creds in saved_cores.items():
                 print(f"\n>>> Processing CORE at {ip} <<<")
-                process_device(ip, creds)
+                results[ip] = process_device(ip, creds)
+            print("\nDeployment summary:")
+            for ip, successful in results.items():
+                status = "SUCCESS" if successful else "FAILED"
+                print(f"  {ip}: {status}")
         else:
             print("[Error] Invalid choice.")
     except KeyboardInterrupt:
