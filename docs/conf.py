@@ -3,19 +3,16 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-import os
 import sys
 from pathlib import Path
 
 # -- Path setup --------------------------------------------------------------
-import os
-import sys
-
-# Hardcoded absolute paths to guarantee Sphinx autodoc finds the modules on Windows
-sys.path.insert(0, r"C:\development\bachelor-thesis-silas-kuschke\ctrlx-test-app-for-deployment\backend")
-sys.path.insert(0, r"C:\development\bachelor-thesis-silas-kuschke\ctrlx-app-installation-automation")
-sys.path.insert(0, r"C:\development\bachelor-thesis-silas-kuschke\ctrlx-flask-app-test")
-sys.path.insert(0, r"C:\development\bachelor-thesis-silas-kuschke\ctrlx-licensing-installation")
+DOCS_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = DOCS_DIR.parent
+sys.path.insert(0, str(PROJECT_DIR / "ctrlx-test-app-for-deployment" / "backend"))
+sys.path.insert(0, str(PROJECT_DIR / "ctrlx-app-installation-automation"))
+sys.path.insert(0, str(PROJECT_DIR / "ctrlx-flask-app-test"))
+sys.path.insert(0, str(PROJECT_DIR / "ctrlx-licensing-installation"))
 
 
 # -- Project information -----------------------------------------------------
@@ -58,4 +55,5 @@ autodoc_mock_imports = [
     "dotenv",
     "eventlet",
     "getpass",
+    "keyring",
 ]

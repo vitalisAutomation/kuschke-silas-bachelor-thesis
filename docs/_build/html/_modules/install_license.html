@@ -81,20 +81,24 @@
 <span class="sd">Edited by: Silas Kuschke</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">getpass</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">keyring</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">urllib3</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
 <span class="c1"># Disable warnings for self-signed SSL certificates used by ctrlX CORE</span>
 <span class="n">urllib3</span><span class="o">.</span><span class="n">disable_warnings</span><span class="p">(</span><span class="n">urllib3</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">InsecureRequestWarning</span><span class="p">)</span>
 
 <span class="c1"># --- Configuration ---</span>
-<span class="n">ENV_FILE</span> <span class="o">=</span> <span class="s2">&quot;ctrlx_cores.env&quot;</span>
-<span class="n">LICENSE_FOLDER</span> <span class="o">=</span> <span class="s2">&quot;./licenses&quot;</span>
+<span class="n">BASE_DIR</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span>
+<span class="n">CORE_CONFIG_FILE</span> <span class="o">=</span> <span class="n">BASE_DIR</span> <span class="o">/</span> <span class="s2">&quot;ctrlx_cores.json&quot;</span>
+<span class="n">LICENSE_FOLDER</span> <span class="o">=</span> <span class="n">BASE_DIR</span> <span class="o">/</span> <span class="s2">&quot;licenses&quot;</span>
+<span class="n">KEYRING_SERVICE</span> <span class="o">=</span> <span class="s2">&quot;ctrlx-licensing-installation&quot;</span>
 
 <span class="c1"># --- Global Session ---</span>
 <span class="n">HTTP_SESSION</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
@@ -115,32 +119,48 @@
 
 
 
+<div class="viewcode-block" id="close_session">
+<a class="viewcode-back" href="../modules.html#install_license.close_session">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">close_session</span><span class="p">(</span><span class="n">ip</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Close the authenticated REST session and remove its bearer token.&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/identity-manager/api/v2/auth/token&quot;</span><span class="p">,</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Warning] Could not close the REST session for </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;Authorization&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+
+
+
 <div class="viewcode-block" id="load_cores">
 <a class="viewcode-back" href="../modules.html#install_license.load_cores">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">load_cores</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Loads CORE configurations from the secure .env file.</span>
+<span class="sd">    Loads CORE addresses and usernames from the local JSON configuration.</span>
+
+<span class="sd">    Passwords are retrieved from the operating system credential store and are</span>
+<span class="sd">    never written to the configuration file.</span>
 <span class="sd">    </span>
 <span class="sd">    Returns:</span>
 <span class="sd">        dict: A dictionary containing saved IP configurations and credentials.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">cores</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">ENV_FILE</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">CORE_CONFIG_FILE</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
         <span class="k">return</span> <span class="n">cores</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">ENV_FILE</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
-            <span class="n">line</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">line</span> <span class="ow">or</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;=&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
-                <span class="k">continue</span>
-            <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;CORE_&quot;</span><span class="p">):</span>
-                <span class="n">ip</span> <span class="o">=</span> <span class="n">key</span><span class="p">[</span><span class="mi">5</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="s2">&quot;.&quot;</span><span class="p">)</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">decoded</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-                    <span class="n">user</span><span class="p">,</span> <span class="n">password</span> <span class="o">=</span> <span class="n">decoded</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-                    <span class="n">cores</span><span class="p">[</span><span class="n">ip</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">user</span><span class="p">,</span> <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="n">password</span><span class="p">}</span>
-                <span class="k">except</span> <span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">binascii</span><span class="o">.</span><span class="n">Error</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
-                    <span class="k">continue</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">CORE_CONFIG_FILE</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">entries</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
+            <span class="n">ip</span> <span class="o">=</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">]</span>
+            <span class="n">username</span> <span class="o">=</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">]</span>
+            <span class="n">password</span> <span class="o">=</span> <span class="n">keyring</span><span class="o">.</span><span class="n">get_password</span><span class="p">(</span><span class="n">KEYRING_SERVICE</span><span class="p">,</span> <span class="n">ip</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">password</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">cores</span><span class="p">[</span><span class="n">ip</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">username</span><span class="p">,</span> <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="n">password</span><span class="p">}</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="n">keyring</span><span class="o">.</span><span class="n">errors</span><span class="o">.</span><span class="n">KeyringError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Warning] Could not load saved CORE configurations: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">cores</span></div>
 
 
@@ -149,26 +169,22 @@
 <a class="viewcode-back" href="../modules.html#install_license.save_core">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">save_core</span><span class="p">(</span><span class="n">ip</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">user</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">password</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Saves a CORE configuration securely to the .env file.</span>
+<span class="sd">    Saves a CORE username to JSON and its password to the OS credential store.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;CORE_</span><span class="si">{</span><span class="n">ip</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;_&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="n">plain_creds</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">user</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">password</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="n">encoded_creds</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">plain_creds</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
-    <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="n">updated</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">ENV_FILE</span><span class="p">):</span>
-        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">ENV_FILE</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-            <span class="n">lines</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
-            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">=&quot;</span><span class="p">):</span>
-                    <span class="n">lines</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">encoded_creds</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-                    <span class="n">updated</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="k">break</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">updated</span><span class="p">:</span>
-        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">encoded_creds</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">ENV_FILE</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-        <span class="n">f</span><span class="o">.</span><span class="n">writelines</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Credentials for </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2"> saved to </span><span class="si">{</span><span class="n">ENV_FILE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">keyring</span><span class="o">.</span><span class="n">set_password</span><span class="p">(</span><span class="n">KEYRING_SERVICE</span><span class="p">,</span> <span class="n">ip</span><span class="p">,</span> <span class="n">password</span><span class="p">)</span>
+        <span class="n">entries</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">CORE_CONFIG_FILE</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">with</span> <span class="n">CORE_CONFIG_FILE</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="n">entries</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="n">entries</span> <span class="o">=</span> <span class="p">[</span><span class="n">entry</span> <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span> <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ip&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">ip</span><span class="p">]</span>
+        <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;ip&quot;</span><span class="p">:</span> <span class="n">ip</span><span class="p">,</span> <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">user</span><span class="p">})</span>
+        <span class="k">with</span> <span class="n">CORE_CONFIG_FILE</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] CORE &#39;</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">&#39; saved; password stored in the OS credential store.&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="n">keyring</span><span class="o">.</span><span class="n">errors</span><span class="o">.</span><span class="n">KeyringError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Could not save credentials for </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
 
 
 
@@ -217,10 +233,11 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">serial</span> <span class="o">=</span> <span class="n">raw_val</span>
 
-        <span class="k">if</span> <span class="n">serial</span><span class="p">:</span>
-            <span class="n">serial_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">serial</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+        <span class="n">serial_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">serial</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="n">serial</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\d</span><span class="si">{13}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">serial_str</span><span class="p">):</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Success] Fetched serial number via Typeplate: </span><span class="si">{</span><span class="n">serial_str</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">serial_str</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] Retrieved device ID is not a 13-digit serial number.&quot;</span><span class="p">)</span>
             
     <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Could not fetch serial number: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -235,82 +252,80 @@
 <a class="viewcode-back" href="../modules.html#install_license.upload_license">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">upload_license</span><span class="p">(</span><span class="n">ip</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Uploads the license file using the confirmed PUT method and correct endpoint.</span>
-<span class="sd">    </span>
-<span class="sd">    This function parses the server&#39;s change report to dynamically identify</span>
-<span class="sd">    which licenses were added or if the license was already processed.</span>
-<span class="sd">    </span>
-<span class="sd">    Args:</span>
-<span class="sd">        ip (str): The IP address of the target ctrlX CORE.</span>
-<span class="sd">        file_path (str): The local path to the .bin license file.</span>
-<span class="sd">        </span>
+<span class="sd">    Uploads a license file and reports the server&#39;s change result.</span>
+
 <span class="sd">    Returns:</span>
-<span class="sd">        bool: True if the upload was successful, False otherwise.</span>
+<span class="sd">        bool: True when the license was accepted or already active.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Endpoint and query parameters confirmed via browser cURL analysis</span>
     <span class="n">url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/license-manager/api/v1/capabilities?withChangeReport=true&quot;</span>
     <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
-
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Upload] Uploading &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; via PUT to the correct endpoint...&quot;</span><span class="p">)</span>
 
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-            <span class="n">files</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;file&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="s2">&quot;application/octet-stream&quot;</span><span class="p">)}</span>
-            
-            <span class="c1"># Replicate the precise browser headers to bypass security checks</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">license_stream</span><span class="p">:</span>
+            <span class="n">files</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;file&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">license_stream</span><span class="p">,</span> <span class="s2">&quot;application/octet-stream&quot;</span><span class="p">)}</span>
             <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
                 <span class="s2">&quot;Accept&quot;</span><span class="p">:</span> <span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;Origin&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;Referer&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">/package-manager/licenses&quot;</span><span class="p">,</span>
             <span class="p">}</span>
-
             <span class="n">response</span> <span class="o">=</span> <span class="n">HTTP_SESSION</span><span class="o">.</span><span class="n">put</span><span class="p">(</span>
-                <span class="n">url</span><span class="p">,</span>
-                <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span>
-                <span class="n">files</span><span class="o">=</span><span class="n">files</span><span class="p">,</span>
-                <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span>
+                <span class="n">url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">files</span><span class="o">=</span><span class="n">files</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span>
             <span class="p">)</span>
 
-            <span class="c1"># A HTTP 400 with &#39;already processed&#39; diagnostic code is a functional success,</span>
-            <span class="c1"># indicating that the API communication is perfect but the license is already active.</span>
-            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">400</span><span class="p">:</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">err_data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-                    <span class="n">diag_code</span> <span class="o">=</span> <span class="n">err_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;detailedDiagnosisCode&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                    <span class="c1"># &#39;0C7A0202&#39; is the ctrlX error code for &quot;license already processed&quot;</span>
-                    <span class="k">if</span> <span class="n">diag_code</span> <span class="o">==</span> <span class="s2">&quot;0C7A0202&quot;</span> <span class="ow">or</span> <span class="s2">&quot;already processed&quot;</span> <span class="ow">in</span> <span class="n">err_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;dynamicDescription&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
-                        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SUCCESS] License &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; is already active/installed on the device.&quot;</span><span class="p">)</span>
-                        <span class="k">return</span> <span class="kc">True</span>
-                <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">KeyError</span><span class="p">):</span>
-                    <span class="k">pass</span>
+        <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">400</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">error_data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error_data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+                <span class="n">already_processed</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">error_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;detailedDiagnosisCode&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;0C7A0202&quot;</span>
+                    <span class="ow">or</span> <span class="s2">&quot;already processed&quot;</span> <span class="ow">in</span> <span class="n">error_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;dynamicDescription&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">already_processed</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SUCCESS] License &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; is already active.&quot;</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+                <span class="k">pass</span>
 
-            <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="mi">201</span><span class="p">,</span> <span class="mi">204</span><span class="p">]:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SUCCESS] License file &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; was successfully processed.&quot;</span><span class="p">)</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">change_report</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-                    <span class="n">added_licenses</span> <span class="o">=</span> <span class="n">change_report</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;added&quot;</span><span class="p">,</span> <span class="p">[])</span>
-                    
-                    <span class="k">if</span> <span class="n">added_licenses</span><span class="p">:</span>
-                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Report] New licenses added to the device:&quot;</span><span class="p">)</span>
-                        <span class="k">for</span> <span class="n">lic</span> <span class="ow">in</span> <span class="n">added_licenses</span><span class="p">:</span>
-                            <span class="n">lic_name</span> <span class="o">=</span> <span class="n">lic</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">lic</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;Unknown License&quot;</span>
-                            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  -&gt; + </span><span class="si">{</span><span class="n">lic_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-                    <span class="k">else</span><span class="p">:</span>
-                        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Report] No new licenses were added (already up-to-date).&quot;</span><span class="p">)</span>
-                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
-                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Diag] Server response (not JSON): </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">response</span><span class="o">.</span><span class="n">status_code</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">200</span><span class="p">,</span> <span class="mi">201</span><span class="p">,</span> <span class="mi">204</span><span class="p">]:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Server rejected the upload with status </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">error_data</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+                <span class="n">reason</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">error_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;dynamicDescription&quot;</span><span class="p">,</span> <span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error_data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+                    <span class="k">else</span> <span class="n">response</span><span class="o">.</span><span class="n">text</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+                <span class="n">reason</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">text</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Diag] Reason: </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[SUCCESS] License file &#39;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2">&#39; was successfully processed.&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">change_report</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+            <span class="n">added_licenses</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">change_report</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;added&quot;</span><span class="p">,</span> <span class="p">[])</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">change_report</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+                <span class="k">else</span> <span class="p">[]</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">added_licenses</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Report] New licenses added to the device:&quot;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">license_info</span> <span class="ow">in</span> <span class="n">added_licenses</span><span class="p">:</span>
+                    <span class="n">license_name</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">license_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+                        <span class="ow">or</span> <span class="n">license_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span>
+                        <span class="ow">or</span> <span class="s2">&quot;Unknown License&quot;</span>
+                    <span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  -&gt; + </span><span class="si">{</span><span class="n">license_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Server rejected the upload with status </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">err_json</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Diag] Reason: </span><span class="si">{</span><span class="n">err_json</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dynamicDescription&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
-                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Diag] Server response: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-                <span class="k">return</span> <span class="kc">False</span>
-
-    <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[FATAL] A network error occurred: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Report] No new licenses were added (already up-to-date).&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Diag] Server response (not JSON): </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">RequestException</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] Could not upload license file: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 
 
@@ -370,36 +385,33 @@
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- Configure ctrlX CORE Connection (Press Enter for Default) ---&quot;</span><span class="p">)</span>
     <span class="n">ip</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter IP Address [192.168.1.1]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;192.168.1.1&quot;</span>
     <span class="n">user</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter Username [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
-    <span class="n">password</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">&quot;Enter Password [boschrexroth]: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;boschrexroth&quot;</span>
+    <span class="n">password</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">&quot;Enter Password: &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
     <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;ip&quot;</span><span class="p">:</span> <span class="n">ip</span><span class="p">,</span> <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">user</span><span class="p">,</span> <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="n">password</span><span class="p">}</span></div>
 
 
 
 <div class="viewcode-block" id="process_device">
 <a class="viewcode-back" href="../modules.html#install_license.process_device">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">process_device</span><span class="p">(</span><span class="n">ip</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">creds</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Runs the full license installation and verification pipeline for a device.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">fetch_bearer_token</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="n">creds</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span> <span class="n">creds</span><span class="p">[</span><span class="s2">&quot;password&quot;</span><span class="p">]):</span>
-        <span class="k">return</span>
-
-    <span class="n">serial</span> <span class="o">=</span> <span class="n">fetch_serial_number</span><span class="p">(</span><span class="n">ip</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">serial</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Fatal] Could not determine device serial number. Aborting.&quot;</span><span class="p">)</span>
-        <span class="k">return</span>
-
-    <span class="n">license_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">LICENSE_FOLDER</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">serial</span><span class="si">}</span><span class="s2">.bin&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">license_file</span><span class="p">):</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] License file &#39;</span><span class="si">{</span><span class="n">license_file</span><span class="si">}</span><span class="s2">&#39; not found.&quot;</span><span class="p">)</span>
-        <span class="k">return</span>
-
-    <span class="c1"># Trigger the upload. The verification of the processed licenses</span>
-    <span class="c1"># is now handled dynamically within the upload function&#39;s response report.</span>
-    <span class="k">if</span> <span class="n">upload_license</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="n">license_file</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">process_device</span><span class="p">(</span><span class="n">ip</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">creds</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run the upload workflow for one CORE and return its result.&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">fetch_bearer_token</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="n">creds</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span> <span class="n">creds</span><span class="p">[</span><span class="s2">&quot;password&quot;</span><span class="p">]):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">serial</span> <span class="o">=</span> <span class="n">fetch_serial_number</span><span class="p">(</span><span class="n">ip</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">serial</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Fatal] Could not determine device serial number. Aborting.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">license_file</span> <span class="o">=</span> <span class="n">LICENSE_FOLDER</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">serial</span><span class="si">}</span><span class="s2">.bin&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">license_file</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Error] License file &#39;</span><span class="si">{</span><span class="n">license_file</span><span class="si">}</span><span class="s2">&#39; not found.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">upload_license</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">license_file</span><span class="p">)):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Failure] License installation for </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2"> reported an error.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Finished] Licensing process for </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2"> completed successfully.&quot;</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Failure] License installation for </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2"> reported an error.&quot;</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">close_session</span><span class="p">(</span><span class="n">ip</span><span class="p">)</span></div>
 
 
 
@@ -413,15 +425,15 @@
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; ctrlX CORE License Deployment Automation Script&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">LICENSE_FOLDER</span><span class="p">):</span>
-        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">LICENSE_FOLDER</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">LICENSE_FOLDER</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">LICENSE_FOLDER</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Info] Created license directory: &#39;</span><span class="si">{</span><span class="n">LICENSE_FOLDER</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
 
     <span class="n">saved_cores</span> <span class="o">=</span> <span class="n">load_cores</span><span class="p">()</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Select Deployment Mode:&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;1) Single ctrlX CORE&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2) Multiple ctrlX COREs from .env file&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2) Multiple ctrlX COREs from saved configuration&quot;</span><span class="p">)</span>
 
     <span class="k">try</span><span class="p">:</span>
         <span class="n">choice</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s2">&quot;Enter choice (1 or 2): &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
@@ -434,11 +446,16 @@
                     <span class="n">save_core</span><span class="p">(</span><span class="n">creds</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">],</span> <span class="n">creds</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span> <span class="n">creds</span><span class="p">[</span><span class="s2">&quot;password&quot;</span><span class="p">])</span>
         <span class="k">elif</span> <span class="n">choice</span> <span class="o">==</span> <span class="s2">&quot;2&quot;</span><span class="p">:</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">saved_cores</span><span class="p">:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Warning] No devices in &#39;</span><span class="si">{</span><span class="n">ENV_FILE</span><span class="si">}</span><span class="s2">&#39;. Add one first.&quot;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[Warning] No saved devices in &#39;</span><span class="si">{</span><span class="n">CORE_CONFIG_FILE</span><span class="si">}</span><span class="s2">&#39;. Add one first.&quot;</span><span class="p">)</span>
                 <span class="k">return</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">ip</span><span class="p">,</span> <span class="n">creds</span> <span class="ow">in</span> <span class="n">saved_cores</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&gt;&gt;&gt; Processing CORE at </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2"> &lt;&lt;&lt;&quot;</span><span class="p">)</span>
-                <span class="n">process_device</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="n">creds</span><span class="p">)</span>
+                <span class="n">results</span><span class="p">[</span><span class="n">ip</span><span class="p">]</span> <span class="o">=</span> <span class="n">process_device</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span> <span class="n">creds</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Deployment summary:&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">ip</span><span class="p">,</span> <span class="n">successful</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;SUCCESS&quot;</span> <span class="k">if</span> <span class="n">successful</span> <span class="k">else</span> <span class="s2">&quot;FAILED&quot;</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">ip</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[Error] Invalid choice.&quot;</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
