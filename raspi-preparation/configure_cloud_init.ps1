@@ -52,6 +52,18 @@ function ConvertTo-YamlSingleQuoted {
     return "'" + $Value.Replace("'", "''") + "'"
 }
 
+$piProxy = $null
+if ($env:PI_USE_PROXY -eq 'true') {
+    $piProxy = $env:PI_PROXY_URL
+    if ([string]::IsNullOrWhiteSpace($piProxy)) {
+        throw 'The Raspberry Pi proxy URL is missing.'
+    }
+    $proxyUri = $null
+    if (-not [Uri]::TryCreate($piProxy, [UriKind]::Absolute, [ref]$proxyUri) -or $proxyUri.Scheme -notin @('http', 'https')) {
+        throw 'The Raspberry Pi proxy URL must be an absolute HTTP or HTTPS URL.'
+    }
+}
+
 # Quote user-provided values before embedding them in Cloud-Init YAML.
 $publicKey = (Get-Content -LiteralPath $publicKeyPath -Raw).Trim()
 $ssidYaml = ConvertTo-YamlSingleQuoted $ssid
@@ -167,7 +179,7 @@ $userData += @(
     "    permissions: '0755'"
     '    content: |'
     '      #!/bin/bash'
-    '      set +e'
+    '      set -e'
     '      LOG=/mnt/ctrlx-logs/ctrlx-provisioning.log'
     '      if ! mountpoint -q /mnt/ctrlx-logs; then LOG=/var/log/ctrlx-provisioning.log; fi'
     '      exec > >(tee -a "$LOG") 2>&1'
@@ -187,6 +199,10 @@ $userData += @(
     '        echo "network attempt $attempt failed"'
     '        sleep 2'
     '      done'
+    '      if ! curl --connect-timeout 3 -fsS https://archive.ubuntu.com/ >/dev/null; then'
+    '        echo "Network did not become available after 30 attempts."'
+    '        exit 1'
+    '      fi'
     '      if [ "$(dpkg --print-architecture)" = "arm64" ]; then'
     '        for architecture in $(dpkg --print-foreign-architectures); do'
     '          case "$architecture" in amd64|i386) dpkg --remove-architecture "$architecture" ;; esac'
@@ -194,13 +210,19 @@ $userData += @(
     '      fi'
     '      echo "==== apt update ===="'
     '      apt-get -o DPkg::Lock::Timeout=600 update'
-    '      echo "apt-get update exit code: $?"'
     '      echo "==== apt upgrade ===="'
     '      DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -y upgrade'
-    '      echo "apt-get upgrade exit code: $?"'
     '      echo "==== package installation ===="'
     '      DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y iw git unzip curl wget make squashfs-tools snapd openssh-server avahi-daemon'
-    '      echo "apt-get install exit code: $?"'
+    '      . /etc/profile.d/ctrlx-proxy.sh 2>/dev/null || true'
+    '      if command -v snap >/dev/null 2>&1 && [ -n "${http_proxy:-}" ]; then'
+    '        systemctl restart snapd.socket snapd.service || true'
+    '        for attempt in $(seq 1 12); do'
+    '          snap set system proxy.http="$http_proxy" proxy.https="${https_proxy:-$http_proxy}" && break'
+    '          echo "snapd proxy configuration attempt $attempt failed"'
+    '          sleep 5'
+    '        done'
+    '      fi'
     '      systemctl enable --now ssh'
     '      systemctl enable --now avahi-daemon'
     '      echo "==== ctrlX provisioning finished $(date -Is) ===="'
@@ -227,12 +249,18 @@ $userData += @(
     ('      ExecStart=-/sbin/agetty --autologin ' + $username + ' --noclear %I $TERM')
 )
 
-if ($env:PI_USE_PROXY -eq 'true') {
-    $piProxy = $env:PI_PROXY_URL
-    if ([string]::IsNullOrWhiteSpace($piProxy)) {
-        throw 'The Raspberry Pi proxy URL is missing.'
-    }
+if ($null -ne $piProxy) {
     $userData += @(
+        '  - path: /etc/profile.d/ctrlx-proxy.sh'
+        "    permissions: '0644'"
+        '    content: |'
+        '      export http_proxy=' + (ConvertTo-YamlSingleQuoted $piProxy)
+        '      export https_proxy=' + (ConvertTo-YamlSingleQuoted $piProxy)
+        '      export HTTP_PROXY=' + (ConvertTo-YamlSingleQuoted $piProxy)
+        '      export HTTPS_PROXY=' + (ConvertTo-YamlSingleQuoted $piProxy)
+        '      export no_proxy='
+        '      export NO_PROXY='
+        ''
         'apt:'
         "  proxy: $piProxy"
         '  conf:'
@@ -258,9 +286,9 @@ $userData += @(
     '  - /usr/local/sbin/ctrlx-provisioning.sh'
     "  - mkdir -p /home/$username"
     "  - chown ${username}:${username} /home/$username"
-    "  - su - $username -c `"wget https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh`""
-    "  - su - $username -c `"chmod a+x clone-install-sdk.sh`""
-    "  - su - $username -c `"./clone-install-sdk.sh`""
+    "  - su - $username -c `"wget --tries=5 --timeout=30 --waitretry=5 -O /home/$username/clone-install-sdk.sh https://raw.githubusercontent.com/boschrexroth/ctrlx-automation-sdk/main/scripts/clone-install-sdk.sh`""
+    "  - su - $username -c `"chmod a+x /home/$username/clone-install-sdk.sh`""
+    "  - su - $username -c `"cd /home/$username && ./clone-install-sdk.sh`""
     "  - su - $username -c `"/home/$username/ctrlx-automation-sdk/scripts/install-required-packages.sh`""
     "  - su - $username -c `"/home/$username/ctrlx-automation-sdk/scripts/install-snapcraft.sh`""
     '  - /usr/local/sbin/ctrlx-cloud-init-debug.sh'
