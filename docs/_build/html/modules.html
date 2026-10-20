@@ -19,7 +19,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="Welcome to the ctrlX Dashboard Documentation!" href="index.html" /> 
+    <link rel="prev" title="ctrlX Automation Scripts Documentation" href="index.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -77,6 +77,8 @@
              
   <section id="project-api-reference">
 <h1>Project API Reference<a class="headerlink" href="#project-api-reference" title="Link to this heading"></a></h1>
+<p>This page is generated from the current Python modules. The sections below add
+the operational context that is not visible in individual function signatures.</p>
 <section id="core-dashboard-backend">
 <h2>Core Dashboard Backend<a class="headerlink" href="#core-dashboard-backend" title="Link to this heading"></a></h2>
 <p>Minimal demo application for testing ctrlX CORE REST interactions.</p>
@@ -173,6 +175,30 @@ the request fails.</p>
 </section>
 <section id="snap-installation-automation">
 <h2>Snap Installation Automation<a class="headerlink" href="#snap-installation-automation" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">install_snap.py</span></code> installs a local <code class="docutils literal notranslate"><span class="pre">.snap</span></code> package through the ctrlX CORE
+Package Manager REST API.</p>
+<p>Workflow:</p>
+<ol class="arabic simple">
+<li><p>Enter the CORE address, username, password, and local snap path.</p></li>
+<li><p>Validate the snap filename as
+<code class="docutils literal notranslate"><span class="pre">&lt;name&gt;_&lt;version&gt;_&lt;architecture&gt;.snap</span></code>.</p></li>
+<li><p>Authenticate through
+<code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/identity-manager/api/v2/auth/token</span></code>.</p></li>
+<li><p>Read the current Scheduler state and package version.</p></li>
+<li><p>Switch to <code class="docutils literal notranslate"><span class="pre">SERVICE</span></code> mode when required, waiting for the system and
+scheduler to become ready.</p></li>
+<li><p>Upload the snap through
+<code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/package-manager/api/v1/packages?force=true</span></code>.</p></li>
+<li><p>Poll the Package Manager until the requested version is installed.</p></li>
+<li><p>Restore the original Scheduler state and delete the REST token.</p></li>
+</ol>
+<p>The script tries several payload formats when changing the Scheduler state to
+support different ctrlX OS versions. A successful format is cached for the
+remainder of the process.</p>
+<p>Security note: the session currently sets <code class="docutils literal notranslate"><span class="pre">verify</span> <span class="pre">=</span> <span class="pre">False</span></code> and disables
+certificate warnings. This protects neither the CORE identity nor the
+credentials and bearer token against a man-in-the-middle attack. A trusted
+CORE certificate or CA bundle should be configured instead.</p>
 <p>ctrlX CORE App (Snap) Deployment Automation Script.</p>
 <p>This module provides a robust command-line interface to automate the
 installation and management of Snap applications on Bosch Rexroth ctrlX CORE
@@ -218,8 +244,26 @@ installation and Data Layer requests can be authorized automatically.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_installed_package_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">package_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_installed_package_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Retrieve the installed version of a package by its snap name.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_installed_packages</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_installed_packages"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Retrieve the installed packages from the package manager.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
 <span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_scheduler_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_scheduler_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Retrieve the current Scheduler operating state from the Data Layer.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">get_snap_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">snap_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#get_snap_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Extract the snap name and version from a standard snap filename.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -230,14 +274,26 @@ installation and Data Layer requests can be authorized automatically.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">install_snap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">snap_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#install_snap"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Uploads the Snap and monitors the installation task.</p>
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">install_snap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">snap_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">package_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#install_snap"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Upload the Snap and verify the installed package version.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py">
 <span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_snap.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Execute the full automated app installation workflow.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">switch_scheduler_state_when_ready</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#switch_scheduler_state_when_ready"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Wait for readiness and retry the state change until it succeeds.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">wait_for_package_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">package_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#wait_for_package_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Poll installed packages until the target version is available.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -254,15 +310,55 @@ Waits until both are False. Uses ‘is not True’ for robust
 backwards-compatibility if nodes are not supported.</p>
 </dd></dl>
 
-<dl class="py function">
-<dt class="sig sig-object py">
-<span class="sig-prename descclassname"><span class="pre">install_snap.</span></span><span class="sig-name descname"><span class="pre">wait_for_task_completion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_snap.html#wait_for_task_completion"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Poll the task status endpoint until the installation task is complete.</p>
-</dd></dl>
-
 </section>
 <section id="license-installation-automation">
 <h2>License Installation Automation<a class="headerlink" href="#license-installation-automation" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">install_license.py</span></code> installs offline license capability response files for
+one or more saved CORE devices.</p>
+<p>Preparation:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt>Place files named <code class="docutils literal notranslate"><span class="pre">&lt;13-digit-serial&gt;.bin</span></code> in the local <code class="docutils literal notranslate"><span class="pre">licenses</span></code></dt><dd><p>directory.</p>
+</dd>
+</dl>
+</li>
+<li><p>The JSON configuration stores only CORE addresses and usernames.</p></li>
+<li><dl class="simple">
+<dt>Passwords are stored through the operating-system credential manager using</dt><dd><p><code class="docutils literal notranslate"><span class="pre">keyring</span></code>.</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p>Single-device workflow:</p>
+<ol class="arabic simple">
+<li><p>Enter the CORE address, username, and password.</p></li>
+<li><dl class="simple">
+<dt>Authenticate through</dt><dd><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/identity-manager/api/v2/auth/token</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><p>Read the 13-digit device identifier from the Data Layer typeplate node.</p></li>
+<li><p>Select the matching <code class="docutils literal notranslate"><span class="pre">licenses/&lt;serial&gt;.bin</span></code> file.</p></li>
+<li><dl class="simple">
+<dt>Upload it as multipart form data through</dt><dd><p><code class="docutils literal notranslate"><span class="pre">PUT</span> <span class="pre">/license-manager/api/v1/capabilities?withChangeReport=true</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><p>Delete the REST token in a <code class="docutils literal notranslate"><span class="pre">finally</span></code> block.</p></li>
+</ol>
+<p>Multi-device mode loads the saved devices and processes them sequentially.
+The upload treats the documented/observed diagnosis code <code class="docutils literal notranslate"><span class="pre">0C7A0202</span></code> and an
+<code class="docutils literal notranslate"><span class="pre">already</span> <span class="pre">processed</span></code> message as an idempotent success.</p>
+<p>The module also provides <code class="docutils literal notranslate"><span class="pre">verify_license_installation</span></code> for checking active
+capabilities, but the current <code class="docutils literal notranslate"><span class="pre">process_device</span></code> workflow does not call it
+after upload. Therefore a successful upload message is not by itself a
+verified license activation.</p>
+<p>Security note: TLS certificate verification is currently disabled globally by
+<code class="docutils literal notranslate"><span class="pre">HTTP_SESSION.verify</span> <span class="pre">=</span> <span class="pre">False</span></code>. For secure operation, configure
+<code class="docutils literal notranslate"><span class="pre">requests</span></code> with a trusted CA or CORE certificate, for example
+<code class="docutils literal notranslate"><span class="pre">HTTP_SESSION.verify</span> <span class="pre">=</span> <span class="pre">&quot;certs/core-ca.pem&quot;</span></code>. Never export or distribute the
+CORE’s private key. The configuration and license directories are excluded
+from version control by the repository’s <code class="docutils literal notranslate"><span class="pre">.gitignore</span></code>.</p>
 <p>ctrlX CORE License Deployment Automation Script.</p>
 <p>This module provides a command-line interface to automate the installation
 of license capability responses (.bin files) on Bosch Rexroth ctrlX CORE devices
@@ -270,6 +366,12 @@ via the REST API. It supports single or multi-device installation, secure
 credentials storage, and automatic 13-digit serial number retrieval.</p>
 <p>Source: Gemini 3.6 Flash
 Edited by: Silas Kuschke</p>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">close_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_license.html#close_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Close the authenticated REST session and remove its bearer token.</p>
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py">
 <span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">fetch_bearer_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_license.html#fetch_bearer_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
@@ -291,7 +393,9 @@ Edited by: Silas Kuschke</p>
 <dl class="py function">
 <dt class="sig sig-object py">
 <span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">load_cores</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="_modules/install_license.html#load_cores"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Loads CORE configurations from the secure .env file.</p>
+<dd><p>Loads CORE addresses and usernames from the local JSON configuration.</p>
+<p>Passwords are retrieved from the operating system credential store and are
+never written to the configuration file.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p>A dictionary containing saved IP configurations and credentials.</p>
@@ -310,14 +414,14 @@ Edited by: Silas Kuschke</p>
 
 <dl class="py function">
 <dt class="sig sig-object py">
-<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">process_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">creds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_license.html#process_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Runs the full license installation and verification pipeline for a device.</p>
+<span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">process_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">creds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_license.html#process_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Run the upload workflow for one CORE and return its result.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py">
 <span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">save_core</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/install_license.html#save_core"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Saves a CORE configuration securely to the .env file.</p>
+<dd><p>Saves a CORE username to JSON and its password to the OS credential store.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -329,21 +433,13 @@ Edited by: Silas Kuschke</p>
 <dl class="py function">
 <dt class="sig sig-object py">
 <span class="sig-prename descclassname"><span class="pre">install_license.</span></span><span class="sig-name descname"><span class="pre">upload_license</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="_modules/install_license.html#upload_license"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Uploads the license file using the confirmed PUT method and correct endpoint.</p>
-<p>This function parses the server’s change report to dynamically identify
-which licenses were added or if the license was already processed.</p>
+<dd><p>Uploads a license file and reports the server’s change result.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>ip</strong> (<em>str</em>) – The IP address of the target ctrlX CORE.</p></li>
-<li><p><strong>file_path</strong> (<em>str</em>) – The local path to the .bin license file.</p></li>
-</ul>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>True when the license was accepted or already active.</p>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if the upload was successful, False otherwise.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>bool</p>
 </dd>
 </dl>
 </dd></dl>
@@ -361,7 +457,7 @@ which licenses were added or if the license was already processed.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="index.html" class="btn btn-neutral float-left" title="Welcome to the ctrlX Dashboard Documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="index.html" class="btn btn-neutral float-left" title="ctrlX Automation Scripts Documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
 
   <hr/>

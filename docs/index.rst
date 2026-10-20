@@ -3,13 +3,18 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to the ctrlX Dashboard Documentation!
-=============================================
+ctrlX Automation Scripts Documentation
+======================================
 
-This documentation provides a comprehensive overview of the backend architecture, 
-the Secure WebSocket (WSS) and HTTPS API design, and the integration of the 
-Bosch Rexroth ctrlX CORE Data Layer. It serves as technical documentation 
-for the bachelor thesis.
+This documentation describes the Python automation scripts used with Bosch
+Rexroth ctrlX CORE devices. It covers snap deployment, offline license
+installation, REST authentication, Data Layer access, and the relevant device
+state transitions.
+
+The scripts communicate with the CORE through HTTPS REST endpoints. The current
+implementation disables TLS certificate verification for development devices;
+this is documented as a security limitation in the API reference and should not
+be used unchanged in production networks.
 
 .. toctree::
    :maxdepth: 2

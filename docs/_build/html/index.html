@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to the ctrlX Dashboard Documentation! &mdash; bachelor-thesis-silas-kuschke 1.0.0 documentation</title>
+  <title>ctrlX Automation Scripts Documentation &mdash; bachelor-thesis-silas-kuschke 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
@@ -60,7 +60,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Welcome to the ctrlX Dashboard Documentation!</li>
+      <li class="breadcrumb-item active">ctrlX Automation Scripts Documentation</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -70,12 +70,16 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="welcome-to-the-ctrlx-dashboard-documentation">
-<h1>Welcome to the ctrlX Dashboard Documentation!<a class="headerlink" href="#welcome-to-the-ctrlx-dashboard-documentation" title="Link to this heading"></a></h1>
-<p>This documentation provides a comprehensive overview of the backend architecture,
-the Secure WebSocket (WSS) and HTTPS API design, and the integration of the
-Bosch Rexroth ctrlX CORE Data Layer. It serves as technical documentation
-for the bachelor thesis.</p>
+  <section id="ctrlx-automation-scripts-documentation">
+<h1>ctrlX Automation Scripts Documentation<a class="headerlink" href="#ctrlx-automation-scripts-documentation" title="Link to this heading"></a></h1>
+<p>This documentation describes the Python automation scripts used with Bosch
+Rexroth ctrlX CORE devices. It covers snap deployment, offline license
+installation, REST authentication, Data Layer access, and the relevant device
+state transitions.</p>
+<p>The scripts communicate with the CORE through HTTPS REST endpoints. The current
+implementation disables TLS certificate verification for development devices;
+this is documented as a security limitation in the API reference and should not
+be used unchanged in production networks.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
